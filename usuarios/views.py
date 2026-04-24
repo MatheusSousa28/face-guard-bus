@@ -15,7 +15,7 @@ def login_view(request):
         if usuario is not None:
             if usuario.is_aprovado or usuario.is_superuser:
                 auth_login(request, usuario) #inicia a sessão e cria o cookie de login
-                return redirect('painel_home')
+                return redirect('home')
             else:
                 #senha certa mas a instituição ainda não aprovou
                 messages.warning(request, 'Sua conta ainda aguarda aprovação da instituição.')
