@@ -1,0 +1,26 @@
+{% extends 'base.html' %} {% block content %}
+    <div class="bg-white p-8 rounded-lg shadow">
+        
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Painel de Controle</h2>
+
+        {% if is_instituicao %}
+            <div class="bg-blue-50 border-l-4 border-blue-700 p-4 mb-4">
+                <h3 class="font-bold text-blue-700">Acesso Administrativo (Instituição)</h3>
+                <p>Aqui você poderá ver os alertas críticos, aprovar o cadastro de pais e gerenciar veículos escolares.</p>
+            </div>
+            
+        {% elif is_responsavel %}
+            <div class="bg-blue-50 border-l-4 border-blue-700 p-4 mb-4">
+                <h3 class="font-bold text-blue-700">Acesso do Responsável</h3>
+                <p>Aqui você verá o status de embarque e desembarque dos seus filhos.</p>
+            </div>
+            
+        {% elif is_motorista %}
+            <div class="bg-blue-50 border-l-4 border-blue-700 p-4 mb-4">
+                <h3 class="font-bold text-blue-700">Acesso do Motorista</h3>
+                <p>Aqui você iniciará e finalizará as suas rotas do dia.</p>
+            </div>
+        {% endif %}
+
+    </div>
+{% endblock %}
