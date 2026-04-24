@@ -4,17 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FaceGuard Bus</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Poppins', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body class="bg-gray-100 min-h-screen font-sans flex flex-col">
+<body class="font-sans bg-gray-100 min-h-screen font-sans flex flex-col">
 
     <nav class="bg-blue-800 p-4 shadow-2xl">
         <div class="container mx-auto flex justify-between items-center text-white">
-            <h1 class="text-xl font-bold">🚌 FaceGuard Bus</h1>
+            <h1 class="font-display text-xl font-bold">🚌 FaceGuard Bus</h1>
             <div class="space-x-4">
                 {% if user.is_authenticated %}
-                    <span class="text-blue-200">Olá, {{ user.first_name }}</span>
-                    <a href="/login" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded">Sair</a>
+                    <span class="text-gray-100">Olá, {{ user.first_name }}</span>
+                    <a href="/login" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded font-display font-semibold">Sair</a>
                 {% endif %}
             </div>
         </div>
