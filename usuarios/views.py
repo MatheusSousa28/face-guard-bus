@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login as auth_login
+from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 
 def login_view(request):
@@ -24,3 +25,17 @@ def login_view(request):
 
     #se a requisição for GET (o usuário apenas digitou o site no navegador), mostra a tela vazia
     return render(request, 'usuarios/login.html')
+
+#o login requiered protege a página, se não estiver logado, vai pro login
+@login_required(login_url='login') 
+def painel_home(request):
+    usuario = request.user
+    
+    #pegando perfil do usuário p manadr pra home
+    contexto = {
+        'is_instituicao': hasattr(usuario, 'instituicao') or usuario.is_superuser,
+        'is_responsavel': hasattr(usuario, 'responsavel'),
+        'is_motorista': hasattr(usuario, 'motorista'),
+    }
+    
+    return render(request, 'usuarios/home.html', contexto)

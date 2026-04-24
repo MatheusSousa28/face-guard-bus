@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FaceGuard Bus</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans flex flex-col">
+
+    <nav class="bg-blue-800 p-4 shadow-2xl">
+        <div class="container mx-auto flex justify-between items-center text-white">
+            <h1 class="text-xl font-bold">🚌 FaceGuard Bus</h1>
+            <div class="space-x-4">
+                {% if user.is_authenticated %}
+                    <span class="text-blue-200">Olá, {{ user.first_name }}</span>
+                    <a href="/login" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded">Sair</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto mt-8 p-4 flex-grow">
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <footer class="bg-gray-800 text-white text-center p-4 mt-auto">
+        <p class="text-sm">Sistema FaceGuard Bus &copy; 2026</p>
+    </footer>
+
+</body>
+</html>

@@ -10,6 +10,9 @@ class Usuario(AbstractUser):
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username'] 
 
+    first_name = models.CharField("primeiro nome", max_length=150, blank=False)
+    last_name = models.CharField("sobrenome", max_length=150, blank=False)
+
     def __str__(self):
         return self.email
 
