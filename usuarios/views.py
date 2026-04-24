@@ -22,5 +22,5 @@ def login_view(request):
             #senha ou email errados
             messages.error(request, 'Email ou senha incorretos.')
 
-    # Se a requisição for GET (o usuário apenas digitou o site no navegador), mostra a tela vazia
+    #se a requisição for GET (o usuário apenas digitou o site no navegador), mostra a tela vazia
     return render(request, 'usuarios/login.html')
