@@ -29,7 +29,7 @@ class Instituicao(models.Model):
 class Responsavel(models.Model):
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE)
     cpf = models.CharField(max_length=11, unique=True)
-    foto = models.ImageField(upload_to='fotos_responsaveis/', null=True, blank=True)
+    foto_perfil = models.ImageField(upload_to='fotos_responsaveis/', null=False, blank=False)
 
     class Meta:
         verbose_name_plural = "Responsáveis"
@@ -40,7 +40,7 @@ class Responsavel(models.Model):
 class Motorista(models.Model):
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE)
     cpf = models.CharField(max_length=11, unique=True)
-    foto = models.ImageField(upload_to='fotos_motoristas/', null=True, blank=True)
+    foto_perfil = models.ImageField(upload_to='fotos_motoristas/', null=True, blank=True)
 
     def __str__(self):
         return f"Motorista: {self.usuario.first_name}"

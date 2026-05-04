@@ -2,6 +2,9 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login as auth_login
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from .models import Usuario, Responsavel 
+from django.db import transaction
+import re
 
 def login_view(request):
     #se o usuário clicou no botão entrar então ele enviou um formulário
@@ -39,3 +42,75 @@ def painel_home(request):
     }
     
     return render(request, 'usuarios/home.html', contexto)
+
+def cadastro_responsavel(request):
+    if request.method == 'POST':
+        nome = request.POST.get('first_name', '').strip()
+        sobrenome = request.POST.get('last_name', '').strip()
+        email = request.POST.get('email', '').strip()
+        cpf = request.POST.get('cpf', '')
+        senha = request.POST.get('senha')
+        confirmar_senha = request.POST.get('confirmar_senha')        
+        foto = request.FILES.get('foto_perfil')
+
+
+        if len(nome) < 2 or len(nome) > 50:
+            messages.error(request, 'O nome deve ter entre 2 e 50 caracteres.')
+            return redirect('cadastro')
+            
+        if len(sobrenome) < 2 or len(sobrenome) > 100:
+            messages.error(request, 'O sobrenome deve ter entre 2 e 100 caracteres.')
+            return redirect('cadastro')
+
+        if senha != confirmar_senha:
+            messages.error(request, 'As senhas não coincidem.')
+            return redirect('cadastro')
+
+        regex_senha = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$'
+        if not re.match(regex_senha, senha):
+            messages.error(request, 'A senha deve ter no mínimo 8 caracteres, contendo maiúsculas, minúsculas, números e pelo menos um símbolo (@$!%*?&).')
+            return redirect('cadastro')
+
+        regex_email = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        if not re.match(regex_email, email):
+            messages.error(request, 'Digite um formato de e-mail válido.')
+            return redirect('cadastro')
+
+        #tirando traços e pontos caso o usuario tenha digitado
+        cpf_limpo = re.sub(r'[^0-9]', '', cpf)
+        if len(cpf_limpo) != 11:
+            messages.error(request, 'O CPF deve conter exatamente 11 números.')
+            return redirect('cadastro')
+
+        #verifica se o e-mail ou CPF já existem no banco
+        if Usuario.objects.filter(email=email).exists():
+            messages.error(request, 'Este e-mail já está cadastrado.')
+            return redirect('cadastro')
+            
+        if Responsavel.objects.filter(cpf=cpf_limpo).exists():
+            messages.error(request, 'Este CPF já está cadastrado no sistema.')
+            return redirect('cadastro')
+
+        try:
+            with transaction.atomic():
+                #cria o login
+                novo_usuario = Usuario.objects.create_user(
+                    username=email,
+                    email=email,
+                    password=senha,
+                    first_name=nome,
+                    last_name=sobrenome
+                )
+                
+                #cria o perfil e amarra ao login
+                Responsavel.objects.create(usuario=novo_usuario, cpf=cpf_limpo, foto_perfil=foto)
+
+            messages.success(request, 'Cadastro realizado com sucesso! Aguarde a aprovação da instituição.')
+            return redirect('login')
+
+        except Exception as e:
+            #se der erro em uma das criações, dá rollback
+            messages.error(request, f'Erro interno ao criar cadastro: {str(e)}')
+            return redirect('cadastro')
+
+    return render(request, 'usuarios/cadastro.html')
