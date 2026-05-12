@@ -5,6 +5,7 @@ from django.contrib import messages
 from .models import Usuario, Responsavel 
 from django.db import transaction
 import re
+from alunos.models import Aluno
 
 def login_view(request):
     #se o usuário clicou no botão entrar então ele enviou um formulário
@@ -30,18 +31,26 @@ def login_view(request):
     return render(request, 'usuarios/login.html')
 
 #o login requiered protege a página, se não estiver logado, vai pro login
-@login_required(login_url='login') 
+@login_required(login_url='login')
 def painel_home(request):
     usuario = request.user
     
-    #pegando perfil do usuário p manadr pra home
-    contexto = {
-        'is_instituicao': hasattr(usuario, 'instituicao') or usuario.is_superuser,
-        'is_responsavel': hasattr(usuario, 'responsavel'),
-        'is_motorista': hasattr(usuario, 'motorista'),
-    }
-    
-    return render(request, 'usuarios/home.html', contexto)
+    if hasattr(usuario, 'instituicao') or usuario.is_superuser:
+        return render(request, 'usuarios/home_instituicao.html')
+
+    elif hasattr(usuario, 'motorista'):
+        return render(request, 'usuarios/home_motorista.html')
+
+    elif hasattr(usuario, 'responsavel'):
+        meus_alunos = Aluno.objects.filter(responsavel=usuario.responsavel)
+        
+        contexto = {
+            'alunos': meus_alunos
+        }
+        return render(request, 'usuarios/home_responsavel.html', contexto)
+
+    # Caso o usuário não tenha perfil (erro de cadastro)
+    return render(request, 'usuarios/home_generica.html')
 
 def cadastro_responsavel(request):
     if request.method == 'POST':

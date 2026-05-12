@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+            <h1 class="font-display text-3xl font-bold text-gray-900">Olá, {{ user.first_name }}</h1>
+            <p class="text-gray-500">Gerencie o monitoramento de seus filhos no transporte escolar.</p>
+        </div>
+        
+        <a href="{% url 'cadastro_aluno' %}" class="inline-flex items-center justify-center px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition duration-200">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Novo Aluno
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for aluno in alunos %}
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition">
+                <div class="flex items-center space-x-4 mb-4">
+                    {% if aluno.foto_perfil %}
+                        <img src="{{ aluno.foto_perfil.url }}"  class="h-16 w-16 rounded-full object-cover border-2 border-blue-50">
+                    {% else %}
+                        <div class="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 font-bold text-xl">
+                            {{ aluno.nome|slice:":1" }}
+                        </div>
+                    {% endif %}
+                    
+                    <div>
+                        <h3 class="font-display font-bold text-gray-900 leading-tight">{{ aluno.nome }}</h3>
+                        <p class="text-sm text-gray-500">{{ aluno.idade }} anos</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl mb-4">
+                    <span class="text-xs font-semibold text-gray-500 uppercase">Status de aprovação:</span>
+                    {% if aluno.is_aprovado %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">
+                            Aprovado
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700">
+                            Pendente
+                        </span>
+                    {% endif %}
+                </div>
+
+                <button class="w-full py-2 text-sm font-semibold text-blue-600 border border-blue-100 rounded-lg hover:bg-blue-50 transition">
+                    Ver Localização
+                </button>
+            </div>
+        {% empty %}
+            <div class="col-span-full py-20 text-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-3xl">
+                <div class="text-5xl mb-4">🚌</div>
+                <h3 class="text-lg font-bold text-gray-900">Nenhum aluno encontrado</h3>
+                <p class="text-gray-500 max-w-xs mx-auto mb-6">Cadastre seus filhos para começar a monitorar o trajeto escolar em tempo real.</p>
+                <a href="{% url 'cadastro_aluno' %}" class="text-blue-600 font-bold hover:underline">Começar cadastro agora</a>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
