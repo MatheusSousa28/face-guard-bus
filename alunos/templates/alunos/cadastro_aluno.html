@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
+    <h2 class="font-display text-2xl font-bold text-blue-600 mb-6 text-center">Cadastrar Aluno e Biometria</h2>
+
+    <form method="POST" id="form-aluno" class="space-y-6">
+        {% csrf_token %}
+        
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Nome do Aluno</label>
+                <input type="text" name="nome" required class="w-full px-4 py-2 border rounded focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Idade</label>
+                <input type="number" name="idade" required min="1" max="30" class="w-full px-4 py-2 border rounded focus:ring-blue-500">
+            </div>
+        </div>
+
+        <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center bg-gray-50">
+            <h3 class="font-medium text-gray-800 mb-2">Captura Facial</h3>
+            <p class="text-sm text-gray-500 mb-4">Posicione o rosto do aluno no centro da câmera em um local bem iluminado.</p>
+
+            <div class="relative w-full max-w-sm mx-auto aspect-square bg-black rounded-lg overflow-hidden mb-4">
+                <video id="video" autoplay playsinline class="w-full h-full object-cover transform scale-x-[-1]"></video>
+                
+                <div class="absolute inset-0 border-4 border-blue-500/50 rounded-full m-8 pointer-events-none"></div>
+                
+                <canvas id="canvas" class="hidden"></canvas>
+                <img id="foto_preview" class="hidden absolute inset-0 w-full h-full object-cover transform scale-x-[-1]" />
+            </div>
+
+            <div class="flex justify-center space-x-4">
+                <button type="button" id="btn-capturar" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition">
+                    📸 Tirar Foto
+                </button>
+                <button type="button" id="btn-refazer" class="hidden bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded shadow transition">
+                    🔄 Refazer
+                </button>
+            </div>
+        </div>
+
+        <input type="hidden" name="foto_base64" id="foto_base64" required>
+
+        <div class="flex items-start mt-4">
+            <input type="checkbox" name="termo" required id="termo" class="mt-1 mr-2 text-blue-600 focus:ring-blue-500 rounded">
+            <label for="termo" class="text-sm text-gray-600">
+                Autorizo a coleta e armazenamento dos dados faciais do menor para fins exclusivos de segurança e monitoramento de embarque/desembarque escolar, conforme LGPD.
+            </label>
+        </div>
+
+        <button type="submit" id="btn-salvar" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition opacity-50 cursor-not-allowed" disabled>
+            Salvar Aluno
+        </button>
+    </form>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const fotoPreview = document.getElementById('foto_preview');
+    const btnCapturar = document.getElementById('btn-capturar');
+    const btnRefazer = document.getElementById('btn-refazer');
+    const inputBase64 = document.getElementById('foto_base64');
+    const btnSalvar = document.getElementById('btn-salvar');
+
+    // 1. Pede permissão e liga a câmera
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+        .then(stream => {
+            video.srcObject = stream;
+        })
+        .catch(err => {
+            console.error("Erro ao acessar câmera: ", err);
+            alert("Não foi possível acessar a câmera. Verifique as permissões do navegador.");
+        });
+
+    // 2. Quando clicar em Tirar Foto
+    btnCapturar.addEventListener('click', () => {
+        // Define o tamanho do canvas igual ao do vídeo
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        // Desenha o frame atual do vídeo no canvas
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Transforma o desenho em texto Base64 (A mágica de dados)
+        const dataURL = canvas.toDataURL('image/jpeg', 0.9); // 0.9 é a qualidade (90%)
+        
+        // Exibe a foto congelada na tela
+        fotoPreview.src = dataURL;
+        fotoPreview.classList.remove('hidden');
+        
+        // Coloca o texto Base64 no input invisível para o Django ler no POST
+        inputBase64.value = dataURL;
+
+        // Esconde o botão de capturar, mostra o de refazer e libera o de salvar
+        btnCapturar.classList.add('hidden');
+        btnRefazer.classList.remove('hidden');
+        btnSalvar.classList.remove('opacity-50', 'cursor-not-allowed');
+        btnSalvar.disabled = false;
+    });
+
+    // 3. Quando clicar em Refazer
+    btnRefazer.addEventListener('click', () => {
+        fotoPreview.classList.add('hidden');
+        inputBase64.value = "";
+        
+        btnCapturar.classList.remove('hidden');
+        btnRefazer.classList.add('hidden');
+        btnSalvar.classList.add('opacity-50', 'cursor-not-allowed');
+        btnSalvar.disabled = true;
+    });
+</script>
+{% endblock %}
