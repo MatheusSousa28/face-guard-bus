@@ -62,22 +62,22 @@
             .then(res => res.json())
             .then(dados => {
                 if (dados.status === 'sucesso') {
-                    // Feedback Visual de Sucesso
                     painelStatus.innerHTML = `✅ ${dados.tipo}: ${dados.aluno} autorizado!`;
                     painelStatus.className = "absolute top-10 z-50 bg-green-600 text-white px-8 py-4 rounded-full border-2 border-green-400 text-xl font-bold scale-110 transition-transform duration-300";
                     
                 } else if (dados.status === 'desconhecido') {
-                    // Feedback Visual de Alerta
                     painelStatus.innerHTML = `⚠️ Face Desconhecida!`;
                     painelStatus.className = "absolute top-10 z-50 bg-red-600 text-white px-8 py-4 rounded-full border-2 border-red-400 text-xl font-bold";
                     
+                } else if (dados.status === 'carencia') {
+                    painelStatus.innerHTML = `⏳ ${dados.aluno}, você já registrou passagem!`;
+                    painelStatus.className = "absolute top-10 z-50 bg-yellow-500 text-white px-8 py-4 rounded-full border-2 border-yellow-400 text-xl font-bold";
                 } else if (dados.status === 'erro') {
                     // NOVO: Feedback Visual de Erro (Ex: Nenhuma rota ativa)
                     painelStatus.innerHTML = `❌ Erro do Sistema: ${dados.mensagem}`;
                     painelStatus.className = "absolute top-10 z-50 bg-orange-600 text-white px-8 py-4 rounded-full border-2 border-orange-400 text-xl font-bold";
                     
                 } else {
-                    // Volta ao normal (Nenhum rosto na tela)
                     painelStatus.innerHTML = `📷 Câmera Ativa: Analisando rostos...`;
                     painelStatus.className = "absolute top-10 z-50 bg-black/80 text-white px-8 py-4 rounded-full border-2 border-gray-600 text-xl font-bold tracking-wider";
                 }
