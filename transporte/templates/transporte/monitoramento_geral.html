@@ -26,6 +26,7 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa);
 
         let marcadores = {}; // Objeto para controlar os marcadores por ID de veículo
+        let primeiraVez = true;
         
         const iconeOnibus = L.icon({
             iconUrl: 'https://cdn-icons-png.flaticon.com/512/3448/3448339.png',
@@ -52,6 +53,11 @@
                             marcadores[v.veiculo_id] = L.marker(pos, {icon: iconeOnibus})
                                 .addTo(mapa)
                                 .bindPopup(info);
+                        }
+                        if (primeiraVez && veiculosAtuais.length > 0) {
+                            // Pega o primeiro ônibus da lista e centraliza a câmera nele com zoom 16
+                            mapa.setView([veiculosAtuais[0].latitude, veiculosAtuais[0].longitude], 16);
+                            primeiraVez = false; // Garante que não vai roubar a tela do usuário depois
                         }
                     });
 
