@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
+        <div class="p-6 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <div>
+                <h2 class="font-display text-2xl font-bold text-gray-800">Monitoramento da Frota</h2>
+                <p class="text-sm text-gray-500">Visualização em tempo real de todos os veículos ativos.</p>
+            </div>
+            <div id="contador-frota" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">
+                0 Veículos Ativos
+            </div>
+        </div>
+
+        <div id="mapa-frota" class="w-full h-[600px] z-10"></div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let mapa = L.map('mapa-frota').setView([-15.7801, -47.9292], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa);
+
+        let marcadores = {}; // Objeto para controlar os marcadores por ID de veículo
+        
+        const iconeOnibus = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/3448/3448339.png',
+            iconSize: [35, 35],
+            iconAnchor: [17, 17],
+            popupAnchor: [0, -15]
+        });
+
+        function atualizarFrota() {
+            fetch('/transporte/api/frota/')
+                .then(response => response.json())
+                .then(dados => {
+                    const veiculosAtuais = dados.veiculos;
+                    document.getElementById('contador-frota').innerText = `${veiculosAtuais.length} Veículos Ativos`;
+
+                    // 1. Atualiza ou cria novos marcadores
+                    veiculosAtuais.forEach(v => {
+                        const pos = [v.latitude, v.longitude];
+                        const info = `<b>${v.modelo}</b><br>Placa: ${v.placa}<br>Motorista: ${v.motorista}<br>Lido em: ${v.atualizado_em}`;
+
+                        if (marcadores[v.veiculo_id]) {
+                            marcadores[v.veiculo_id].setLatLng(pos).getPopup().setContent(info);
+                        } else {
+                            marcadores[v.veiculo_id] = L.marker(pos, {icon: iconeOnibus})
+                                .addTo(mapa)
+                                .bindPopup(info);
+                        }
+                    });
+
+                    // 2. Remove marcadores de veículos que saíram de rota
+                    const idsServidor = veiculosAtuais.map(v => v.veiculo_id);
+                    Object.keys(marcadores).forEach(id => {
+                        if (!idsServidor.includes(parseInt(id))) {
+                            mapa.removeLayer(marcadores[id]);
+                            delete marcadores[id];
+                        }
+                    });
+                });
+        }
+
+        setInterval(atualizarFrota, 3000);
+        atualizarFrota();
+    });
+</script>
+{% endblock %}

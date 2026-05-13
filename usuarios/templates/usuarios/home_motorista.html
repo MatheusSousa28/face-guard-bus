@@ -8,13 +8,96 @@
             <h2 class="font-display text-2xl font-bold text-gray-800">Painel do Motorista</h2>
         </div>
 
-        <div class="bg-blue-50 border-l-4 border-blue-700 p-4 mb-4 rounded-r-md">
-            <h3 class="font-display font-bold text-blue-700 text-lg mb-1">Central de Rotas</h3>
-            <p class="text-gray-700">Nesta tela você poderá iniciar e finalizar as suas rotas do dia, além de monitorar o funcionamento da câmera de biometria.</p>
-        </div>
-
-        <div class="mt-8 flex justify-center">
+        {% if rota_ativa %}
+            <div class="bg-green-50 border-l-4 border-green-600 p-6 mb-6 rounded-r-md flex justify-between items-center">
+                <div>
+                    <h3 class="font-display font-bold text-green-800 text-xl mb-1">Rota em Andamento</h3>
+                    <p class="text-green-700 font-medium">Veículo: {{ rota_ativa.veiculo.modelo }} ({{ rota_ativa.veiculo.placa }})</p>
+                    <p class="text-sm text-green-600 mt-1">
+                        <span class="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse mr-1"></span>
+                        Transmissão GPS Ativa
+                    </p>
+                </div>
+                
+                <form action="{% url 'finalizar_rota' %}" method="POST">
+                    {% csrf_token %}
+                    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow transition">
+                        Encerrar Rota
+                    </button>
+                </form>
             </div>
+
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Função para pegar e enviar a localização
+                    function enviarLocalizacao() {
+                        if ("geolocation" in navigator) {
+                            navigator.geolocation.getCurrentPosition(
+                                function(position) {
+                                    const dados = {
+                                        latitude: position.coords.latitude,
+                                        longitude: position.coords.longitude
+                                    };
+
+                                    // Envia para a api 
+                                    fetch('/transporte/api/gps/', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                        },
+                                        body: JSON.stringify(dados)
+                                    })
+                                    .then(response => console.log('GPS atualizado!'))
+                                    .catch(error => console.error('Erro de rede ao enviar GPS:', error));
+                                },
+                                function(error) {
+                                    console.error("Erro ao obter GPS: ", error.message);
+                                },
+                                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 } // Força o GPS do hardware
+                            );
+                        } else {
+                            console.error("Geolocalização não é suportada por este navegador.");
+                        }
+                    }
+
+                    // Envia imediatamente quando carrega a página
+                    enviarLocalizacao();
+                    
+                    // Fica enviando a cada 3 segundos
+                    setInterval(enviarLocalizacao, 3000);
+                });
+            </script>
+
+        {% else %}
+            <div class="bg-blue-50 border-l-4 border-blue-700 p-4 mb-8 rounded-r-md">
+                <h3 class="font-display font-bold text-blue-700 text-lg mb-1">Iniciar Nova Rota</h3>
+                <p class="text-gray-700">Selecione o veículo autorizado para dar início ao monitoramento e ligar a câmera de embarque.</p>
+            </div>
+
+            <form action="{% url 'iniciar_rota' %}" method="POST" class="max-w-md mx-auto space-y-6 bg-gray-50 p-6 rounded-xl border border-gray-200">
+                {% csrf_token %}
+                
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Selecione o Veículo</label>
+                    <select name="veiculo_id" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
+                        <option value="" disabled selected>-- Escolha um ônibus/van --</option>
+                        {% for veiculo in veiculos %}
+                            <option value="{{ veiculo.id }}">{{ veiculo.modelo }} - Placa: {{ veiculo.placa }}</option>
+                        {% empty %}
+                            <option value="" disabled>Nenhum veículo vinculado ao seu perfil.</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition text-lg flex justify-center items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Iniciar Viagem e Ligar GPS
+                </button>
+            </form>
+        {% endif %}
 
     </div>
 </div>

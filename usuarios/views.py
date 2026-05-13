@@ -6,6 +6,7 @@ from .models import Usuario, Responsavel
 from django.db import transaction
 import re
 from alunos.models import Aluno
+from transporte.models import Rota
 
 def login_view(request):
     #se o usuário clicou no botão entrar então ele enviou um formulário
@@ -39,7 +40,19 @@ def painel_home(request):
         return render(request, 'usuarios/home_instituicao.html')
 
     elif hasattr(usuario, 'motorista'):
-        return render(request, 'usuarios/home_motorista.html')
+        motorista = usuario.motorista
+        
+        #busca a rota ativa (se existir)
+        rota_ativa = Rota.objects.filter(motorista=motorista, ativa=True).first()
+        
+        #busca veículos autorizados para o motorista
+        veiculos = motorista.veiculos.all()
+        
+        contexto = {
+            'rota_ativa': rota_ativa,
+            'veiculos': veiculos
+        }
+        return render(request, 'usuarios/home_motorista.html', contexto)
 
     elif hasattr(usuario, 'responsavel'):
         meus_alunos = Aluno.objects.filter(responsavel=usuario.responsavel)

@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<div class="max-w-6xl mx-auto px-4 py-8">
+    <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+        
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="font-display text-2xl font-bold text-gray-800 flex items-center">
+                <span class="text-3xl mr-2">🚌</span> Rastreamento ao Vivo
+            </h2>
+            <div id="status-badge" class="px-4 py-2 rounded-full font-bold text-sm bg-gray-200 text-gray-600 animate-pulse">
+                Aguardando conexão...
+            </div>
+        </div>
+
+        <div id="mapa-onibus" class="w-full h-[500px] rounded-lg border-2 border-gray-300 z-10"></div>
+        
+        <p class="text-sm text-gray-500 mt-4 text-right">Última atualização: <span id="hora-atualizacao">--:--:--</span></p>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+
+        //Inicializa o mapa centralizado no Brasil (ou na sua cidade)
+        // [Latitude, Longitude], Zoom
+        let mapa = L.map('mapa-onibus').setView([-15.7801, -47.9292], 13);
+
+        // 2. Adiciona os "ladrilhos" do mapa (As ruas do OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(mapa);
+
+        // 3. Cria um ícone personalizado para o ônibus
+        let iconeOnibus = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/3448/3448339.png', // Um png de ônibus na web
+            iconSize: [40, 40],
+            iconAnchor: [20, 20],
+        });
+
+        // Variável para guardar o marcador no mapa
+        let marcadorOnibus = null;
+
+        // Função que vai no Django perguntar onde o ônibus está
+        function buscarPosicao() {
+            fetch(`/transporte/api/posicao/${VEICULO_ID}/`)
+                .then(response => response.json())
+                .then(dados => {
+                    let badge = document.getElementById('status-badge');
+                    
+                    if (dados.status === 'online') {
+                        // Atualiza o visual para "Em Rota"
+                        badge.className = "px-4 py-2 rounded-full font-bold text-sm bg-green-100 text-green-700";
+                        badge.innerText = "Em Rota";
+                        document.getElementById('hora-atualizacao').innerText = dados.atualizado_em;
+
+                        let novaPosicao = [dados.latitude, dados.longitude];
+
+                        if (marcadorOnibus === null) {
+                            // Se for a primeira vez, cria o pino no mapa
+                            marcadorOnibus = L.marker(novaPosicao, {icon: iconeOnibus}).addTo(mapa);
+                            mapa.setView(novaPosicao, 16); // Dá um zoom perto do ônibus
+                        } else {
+                            // Se já existir, só move o pino suavemente
+                            marcadorOnibus.setLatLng(novaPosicao);
+                            mapa.panTo(novaPosicao); // A câmera segue o ônibus
+                        }
+                    } else {
+                        badge.className = "px-4 py-2 rounded-full font-bold text-sm bg-red-100 text-red-700";
+                        badge.innerText = "Veículo Offline";
+                    }
+                })
+                .catch(error => console.error("Erro ao buscar mapa:", error));
+        }
+
+        // Busca assim que a página carrega
+        buscarPosicao();
+        
+        // Fica perguntando ao servidor a cada 3 segundos (3000ms)
+        setInterval(buscarPosicao, 3000);
+    });
+</script>
+{% endblock %}
