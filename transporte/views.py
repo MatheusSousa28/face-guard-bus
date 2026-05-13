@@ -7,7 +7,10 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import Rota, Localizacao
 from django.contrib import messages
 from monitoramento.models import Evento 
-
+import base64
+import numpy as np
+from django.core.files.base import ContentFile
+import face_recognition
 
 @login_required(login_url='login')
 def iniciar_rota(request):
@@ -50,6 +53,13 @@ def finalizar_rota(request):
         motorista_logado = request.user.motorista
         #busca a rota que está marcada como ativa
         rota_ativa = Rota.objects.filter(motorista=motorista_logado, ativa=True).first()
+
+        alunos_embarcados = Evento.objects.filter(rota=rota_ativa, tipo='embarque').count()
+        alunos_desembarcados = Evento.objects.filter(rota=rota_ativa, tipo='desembarque').count()
+
+        if alunos_embarcados > alunos_desembarcados:
+            messages.error(request, "Atenção! Ainda existem alunos dentro do veículo.")
+            return redirect('home')
         
         if rota_ativa:
             rota_ativa.ativa = False
@@ -143,8 +153,8 @@ def monitoramento_instituicao(request):
 
 @login_required(login_url='login')
 def api_todas_posicoes(request):
-    """ Retorna a localização de todos os ônibus que estão em rota no momento """
-    # Apenas Instituição ou Admin
+    # Retorna a localização de todos os ônibus que estão em rota no momento
+    # Autorização penas para Instituição ou Admin
     if not (hasattr(request.user, 'instituicao') or request.user.is_superuser):
         return JsonResponse({'error': 'Acesso negado'}, status=403)
 
@@ -165,3 +175,102 @@ def api_todas_posicoes(request):
             })
 
     return JsonResponse({'veiculos': lista_posicoes})
+
+#api que detecta a face do aluno no embarque/desembarque
+@csrf_exempt
+def api_reconhecimento(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            img_base64 = data.get('imagem')
+            
+            #Recupera a rota ativa do motorista logado
+            rota_ativa = Rota.objects.filter(motorista__usuario=request.user, ativa=True).first()
+            if not rota_ativa:
+                return JsonResponse({'status': 'erro', 'mensagem': 'Nenhuma rota ativa.'}, status=400)
+
+            #Decodifica a imagem recebida da catraca
+            format, imgstr = img_base64.split(';base64,')
+            ext = format.split('/')[-1]
+            arquivo_imagem = ContentFile(base64.b64decode(imgstr), name=f"temp_captura.{ext}")
+
+            #Carrega a imagem e extrai a biometria (encoding)
+            imagem_carregada = face_recognition.load_image_file(arquivo_imagem)
+            encodings_capturados = face_recognition.face_encodings(imagem_carregada)
+
+            if not encodings_capturados:
+                return JsonResponse({'status': 'nenhum_rosto'})
+
+            encoding_atual = encodings_capturados[0]
+
+            #Busca apenas alunos autorizados para este veículo para otimizar
+            alunos_autorizados = rota_ativa.veiculo.alunos_autorizados.all()
+            
+            aluno_reconhecido = None
+            for aluno in alunos_autorizados:
+                
+                dados_brutos = aluno.dados_faciais
+                
+                #Se o banco devolveu um texto, converte de volta para lista
+                if isinstance(dados_brutos, str):
+                    dados_brutos = json.loads(dados_brutos)
+                
+                #Transforma em array NumPy garantindo que são números decimais
+                conhecido_encoding = np.array(dados_brutos, dtype=float)
+                
+                #Compara as faces
+                match = face_recognition.compare_faces([conhecido_encoding], encoding_atual, tolerance=0.5)
+                
+                if match[0]:
+                    aluno_reconhecido = aluno
+                    break
+
+            if aluno_reconhecido:
+                # Busca o último evento deste aluno nesta rota específica
+                ultimo_evento = Evento.objects.filter(
+                    rota=rota_ativa, 
+                    aluno=aluno_reconhecido
+                ).order_by('-data_hora').first()
+
+                # Se não tem evento ou o último foi desembarque -> Novo Embarque
+                if not ultimo_evento or ultimo_evento.tipo == 'desembarque':
+                    tipo_evento = 'embarque'
+                else:
+                    tipo_evento = 'desembarque'
+
+                # Cria o registro do evento
+                Evento.objects.create(
+                    rota=rota_ativa,
+                    aluno=aluno_reconhecido,
+                    tipo=tipo_evento,
+                    foto_capturada=arquivo_imagem,
+                    autorizado=True
+                )
+
+                return JsonResponse({
+                    'status': 'sucesso',
+                    'tipo': tipo_evento.capitalize(),
+                    'aluno': aluno_reconhecido.nome
+                })
+            else:
+                # Caso a face não seja de um aluno autorizado ou seja desconhecida
+                Evento.objects.create(
+                    rota=rota_ativa,
+                    tipo='desconhecido',
+                    foto_capturada=arquivo_imagem,
+                    autorizado=False
+                )
+                return JsonResponse({'status': 'desconhecido'})
+
+        except Exception as e:
+            return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
+
+    return JsonResponse({'status': 'metodo_invalido'}, status=405)
+
+@login_required(login_url='login')
+def simulador_catraca(request):
+    #view apenas para renderizar a tela preta com a webcam
+    if not hasattr(request.user, 'motorista'):
+        messages.error(request, "Acesso Negado: Apenas motoristas logados podem operar a catraca do veículo.")
+        return redirect('home')
+    return render(request, 'transporte/catraca.html')

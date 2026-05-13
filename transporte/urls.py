@@ -8,4 +8,6 @@ urlpatterns = [
     path('api/posicao/<int:veiculo_id>/', views.api_posicao_onibus, name='api_posicao_onibus'),
     path('monitoramento-geral/', views.monitoramento_instituicao, name='monitoramento_geral'),
     path('api/frota/', views.api_todas_posicoes, name='api_frota'),
+    path('api/reconhecimento/', views.api_reconhecimento, name='api_reconhecimento'),
+    path('catraca/', views.simulador_catraca, name='simulador_catraca'),
 ]
