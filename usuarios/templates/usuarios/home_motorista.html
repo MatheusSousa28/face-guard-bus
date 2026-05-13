@@ -19,7 +19,7 @@
                     </p>
                 </div>
                 
-                <form action="{% url 'finalizar_rota' %}" method="POST">
+                <form action="{% url 'finalizar_rota' %}"  method="POST">
                     {% csrf_token %}
                     <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow transition">
                         Encerrar Rota
@@ -74,7 +74,7 @@
                 <p class="text-gray-700">Selecione o veículo autorizado para dar início ao monitoramento e ligar a câmera de embarque.</p>
             </div>
 
-            <form action="{% url 'iniciar_rota' %}" method="POST" class="max-w-md mx-auto space-y-6 bg-gray-50 p-6 rounded-xl border border-gray-200">
+            <form action="{% url 'iniciar_rota' %}" id="form-iniciar-rota" method="POST" class="max-w-md mx-auto space-y-6 bg-gray-50 p-6 rounded-xl border border-gray-200">
                 {% csrf_token %}
                 
                 <div>
@@ -97,8 +97,81 @@
                     Iniciar Viagem e Ligar GPS
                 </button>
             </form>
-        {% endif %}
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const formIniciar = document.getElementById('form-iniciar-rota');
 
+                    if (formIniciar) {
+                        formIniciar.addEventListener('submit', function(e) {
+                            // 1. SEQUESTRA O FORMULÁRIO (Impede de ir pro Django)
+                            e.preventDefault(); 
+
+                            const btn = formIniciar.querySelector('button[type="submit"]');
+                            const textoOriginal = btn.innerHTML;
+                            
+                            // 2. Feedback visual de carregamento
+                            btn.innerHTML = '⏳ Verificando GPS...';
+                            btn.disabled = true;
+                            btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+                            // 3. Tenta pegar o GPS
+                            if ("geolocation" in navigator) {
+                                navigator.geolocation.getCurrentPosition(
+                                    function(position) {
+                                        // SUCESSO! O motorista permitiu o GPS.
+                                        // Agora sim, enviamos o formulário para o Django criar a rota.
+                                        formIniciar.submit();
+                                    },
+                                    function(error) {
+                                        // ERRO OU NEGADO! 
+                                        // Volta o botão ao normal
+                                        btn.innerHTML = textoOriginal;
+                                        btn.disabled = false;
+                                        btn.classList.remove('opacity-75', 'cursor-not-allowed');
+
+                                        // Dispara o Snackbar Vermelho usando JavaScript puro
+                                        mostrarErroGps("❌ Acesso ao GPS negado. Você precisa permitir a localização para iniciar a viagem.");
+                                    },
+                                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                                );
+                            } else {
+                                mostrarErroGps("❌ Seu navegador não suporta GPS.");
+                            }
+                        });
+                    }
+
+                    // Função para criar o Snackbar no padrão que você já usa
+                    function mostrarErroGps(mensagem) {
+                        // Verifica se a div container já existe, se não, cria
+                        let container = document.getElementById('snackbar-container');
+                        if (!container) {
+                            container = document.createElement('div');
+                            container.id = 'snackbar-container';
+                            container.className = 'fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none';
+                            document.body.appendChild(container);
+                        }
+
+                        const snackbar = document.createElement('div');
+                        snackbar.className = "snackbar transition-all duration-500 transform translate-y-10 opacity-0 pointer-events-auto flex items-center justify-between p-4 rounded shadow-2xl max-w-sm text-sm font-semibold bg-red-600 text-white";
+                        snackbar.innerHTML = `
+                            <span>${mensagem}</span>
+                            <button onclick="this.parentElement.remove()" class="ml-4 text-white hover:text-gray-200 focus:outline-none text-lg leading-none">&times;</button>
+                        `;
+
+                        container.appendChild(snackbar);
+
+                        // Animação de entrada
+                        setTimeout(() => snackbar.classList.remove('translate-y-10', 'opacity-0'), 100);
+
+                        // Animação de saída (some depois de 5 segundos)
+                        setTimeout(() => {
+                            snackbar.classList.add('opacity-0', 'translate-y-10');
+                            setTimeout(() => snackbar.remove(), 500);
+                        }, 5000);
+                    }
+                });
+            </script>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
