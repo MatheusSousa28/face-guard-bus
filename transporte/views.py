@@ -11,6 +11,7 @@ import base64
 import numpy as np
 from django.core.files.base import ContentFile
 import face_recognition
+from datetime import timedelta
 
 @login_required(login_url='login')
 def iniciar_rota(request):
@@ -226,32 +227,37 @@ def api_reconhecimento(request):
                     break
 
             if aluno_reconhecido:
+                if aluno_reconhecido:
                 # Busca o último evento deste aluno nesta rota específica
-                ultimo_evento = Evento.objects.filter(
-                    rota=rota_ativa, 
-                    aluno=aluno_reconhecido
-                ).order_by('-data_hora').first()
+                    ultimo_evento = Evento.objects.filter(
+                        rota=rota_ativa, 
+                        aluno=aluno_reconhecido
+                    ).order_by('-data_hora').first()
 
-                # Se não tem evento ou o último foi desembarque -> Novo Embarque
-                if not ultimo_evento or ultimo_evento.tipo == 'desembarque':
-                    tipo_evento = 'embarque'
-                else:
-                    tipo_evento = 'desembarque'
+                    #se o mesmo aluno registrou um evento muito recentemente, o sistema bloqueia a ação
+                    if ultimo_evento:
+                        tempo_passado = timezone.now() - ultimo_evento.data_hora
+                        # Define a carência em segundos (Ex: 60 segundos para a demonstração)
+                        # No mundo real, você colocaria algo como 300 (5 minutos)
+                        if tempo_passado.total_seconds() < 60:
+                            return JsonResponse({
+                                'status': 'carencia',
+                                'aluno': aluno_reconhecido.nome
+                            })
 
-                # Cria o registro do evento
-                Evento.objects.create(
-                    rota=rota_ativa,
-                    aluno=aluno_reconhecido,
-                    tipo=tipo_evento,
-                    foto_capturada=arquivo_imagem,
-                    autorizado=True
-                )
+                    if not ultimo_evento or ultimo_evento.tipo == 'desembarque':
+                        tipo_evento = 'embarque'
+                    else:
+                        tipo_evento = 'desembarque'
 
-                return JsonResponse({
-                    'status': 'sucesso',
-                    'tipo': tipo_evento.capitalize(),
-                    'aluno': aluno_reconhecido.nome
-                })
+                    # Cria o registro do evento
+                    Evento.objects.create(
+                        rota=rota_ativa,
+                        aluno=aluno_reconhecido,
+                        tipo=tipo_evento,
+                        foto_capturada=arquivo_imagem,
+                        autorizado=True
+                    )
             else:
                 # Caso a face não seja de um aluno autorizado ou seja desconhecida
                 Evento.objects.create(
