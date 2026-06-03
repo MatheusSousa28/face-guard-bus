@@ -9,8 +9,9 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
-
+import os
 from pathlib import Path
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,11 +20,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-_a$ce7j1@_m0*u17nn2an-7*_5u__oi2085j%k^k8acp$k2&#y'
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY', 
+    'django-insecure-desenvolvimento-local-faceguard-bus-2026'
+)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('AMBIENTE_PRODUCAO') != 'True'
 
 ALLOWED_HOSTS = []
 
@@ -77,12 +79,20 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+
+if SUPABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(SUPABASE_URL, conn_max_age=600)
     }
-}
+# Se a variável não existir (PC local), usa o SQLite local
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -120,6 +130,13 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+ALLOWED_HOSTS = ['*']
+
+# Permite que os formulários de login e os POSTs da câmera funcionem na nuvem
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.hf.space',
+]
 
 AUTH_USER_MODEL = 'usuarios.Usuario'
 import os
