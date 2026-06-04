@@ -24,6 +24,10 @@ COPY --chown=user . /app
 
 # Atualiza o instalador e baixa as dependências (dlib, face_recognition, django...)
 RUN pip install --no-cache-dir --upgrade pip
+
+ENV CMAKE_BUILD_PARALLEL_LEVEL=1
+ENV MAX_JOBS=1
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 #O Hugging expõe a porta 7860 por padrão
