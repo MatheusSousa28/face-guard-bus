@@ -139,7 +139,26 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 AUTH_USER_MODEL = 'usuarios.Usuario'
-import os
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+#puxa as chaves do ambiente 
+AWS_ACCESS_KEY_ID = os.environ.get('SUPABASE_S3_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.environ.get('SUPABASE_S3_SECRET_ACCESS_KEY')
+
+if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
+    #configurações do bucket
+    AWS_STORAGE_BUCKET_NAME = 'faceGuard-bus-media' 
+    AWS_S3_ENDPOINT_URL = 'https://swuwsalalsjyouupfpna.storage.supabase.co/storage/v1/s3'
+    AWS_S3_REGION_NAME = 'sa-east-1' 
+    
+    AWS_DEFAULT_ACL = 'private'
+    AWS_QUERYSTRING_AUTH = True #ativa as urls assinadas criptografadas
+    AWS_QUERYSTRING_EXPIRE = 3600 #foto expira do navegador em 1 hora 
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
