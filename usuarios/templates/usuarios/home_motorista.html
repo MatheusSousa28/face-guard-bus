@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+    <div class="bg-white p-8 rounded-lg shadow">
+        
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="font-display text-2xl font-bold text-gray-800">Painel do Motorista</h2>
+        </div>
+
+        {% if rota_ativa %}
+            <div class="bg-green-50 border-l-4 border-green-600 p-6 mb-6 rounded-r-md flex justify-between items-center">
+                <div>
+                    <h3 class="font-display font-bold text-green-800 text-xl mb-1">Rota em Andamento</h3>
+                    <p class="text-green-700 font-medium">Veículo: {{ rota_ativa.veiculo.modelo }} ({{ rota_ativa.veiculo.placa }})</p>
+                    <p class="text-sm text-green-600 mt-1">
+                        <span class="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse mr-1"></span>
+                        Transmissão GPS Ativa
+                    </p>
+                </div>
+                
+                <form action="{% url 'finalizar_rota' %}"  method="POST">
+                    {% csrf_token %}
+                    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow transition">
+                        Encerrar Rota
+                    </button>
+                </form>
+            </div>
+
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Função para pegar e enviar a localização
+                    function enviarLocalizacao() {
+                        if ("geolocation" in navigator) {
+                            navigator.geolocation.getCurrentPosition(
+                                function(position) {
+                                    const dados = {
+                                        latitude: position.coords.latitude,
+                                        longitude: position.coords.longitude
+                                    };
+
+                                    // Envia para a api 
+                                    fetch('/transporte/api/gps/', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                        },
+                                        body: JSON.stringify(dados)
+                                    })
+                                    .then(response => console.log('GPS atualizado!'))
+                                    .catch(error => console.error('Erro de rede ao enviar GPS:', error));
+                                },
+                                function(error) {
+                                    console.error("Erro ao obter GPS: ", error.message);
+                                },
+                                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 } // Força o GPS do hardware
+                            );
+                        } else {
+                            console.error("Geolocalização não é suportada por este navegador.");
+                        }
+                    }
+
+                    // Envia imediatamente quando carrega a página
+                    enviarLocalizacao();
+                    
+                    // Fica enviando a cada 3 segundos
+                    setInterval(enviarLocalizacao, 3000);
+                });
+            </script>
+
+        {% else %}
+            <div class="bg-blue-50 border-l-4 border-blue-700 p-4 mb-8 rounded-r-md">
+                <h3 class="font-display font-bold text-blue-700 text-lg mb-1">Iniciar Nova Rota</h3>
+                <p class="text-gray-700">Selecione o veículo autorizado para dar início ao monitoramento e ligar a câmera de embarque.</p>
+            </div>
+
+            <form action="{% url 'iniciar_rota' %}" id="form-iniciar-rota" method="POST" class="max-w-md mx-auto space-y-6 bg-gray-50 p-6 rounded-xl border border-gray-200">
+                {% csrf_token %}
+                
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Selecione o Veículo</label>
+                    <select name="veiculo_id" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
+                        <option value="" disabled selected>-- Escolha um ônibus/van --</option>
+                        {% for veiculo in veiculos %}
+                            <option value="{{ veiculo.id }}">{{ veiculo.modelo }} - Placa: {{ veiculo.placa }}</option>
+                        {% empty %}
+                            <option value="" disabled>Nenhum veículo vinculado ao seu perfil.</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition text-lg flex justify-center items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Iniciar Viagem e Ligar GPS
+                </button>
+            </form>
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const formIniciar = document.getElementById('form-iniciar-rota');
+
+                    if (formIniciar) {
+                        formIniciar.addEventListener('submit', function(e) {
+                            // 1. SEQUESTRA O FORMULÁRIO (Impede de ir pro Django)
+                            e.preventDefault(); 
+
+                            const btn = formIniciar.querySelector('button[type="submit"]');
+                            const textoOriginal = btn.innerHTML;
+                            
+                            // 2. Feedback visual de carregamento
+                            btn.innerHTML = '⏳ Verificando GPS...';
+                            btn.disabled = true;
+                            btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+                            // 3. Tenta pegar o GPS
+                            if ("geolocation" in navigator) {
+                                navigator.geolocation.getCurrentPosition(
+                                    function(position) {
+                                        // SUCESSO! O motorista permitiu o GPS.
+                                        // Agora sim, enviamos o formulário para o Django criar a rota.
+                                        formIniciar.submit();
+                                    },
+                                    function(error) {
+                                        // ERRO OU NEGADO! 
+                                        // Volta o botão ao normal
+                                        btn.innerHTML = textoOriginal;
+                                        btn.disabled = false;
+                                        btn.classList.remove('opacity-75', 'cursor-not-allowed');
+
+                                        // Dispara o Snackbar Vermelho usando JavaScript puro
+                                        mostrarErroGps("❌ Acesso ao GPS negado. Você precisa permitir a localização para iniciar a viagem.");
+                                    },
+                                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                                );
+                            } else {
+                                mostrarErroGps("❌ Seu navegador não suporta GPS.");
+                            }
+                        });
+                    }
+
+                    // Função para criar o Snackbar no padrão que você já usa
+                    function mostrarErroGps(mensagem) {
+                        // Verifica se a div container já existe, se não, cria
+                        let container = document.getElementById('snackbar-container');
+                        if (!container) {
+                            container = document.createElement('div');
+                            container.id = 'snackbar-container';
+                            container.className = 'fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none';
+                            document.body.appendChild(container);
+                        }
+
+                        const snackbar = document.createElement('div');
+                        snackbar.className = "snackbar transition-all duration-500 transform translate-y-10 opacity-0 pointer-events-auto flex items-center justify-between p-4 rounded shadow-2xl max-w-sm text-sm font-semibold bg-red-600 text-white";
+                        snackbar.innerHTML = `
+                            <span>${mensagem}</span>
+                            <button onclick="this.parentElement.remove()" class="ml-4 text-white hover:text-gray-200 focus:outline-none text-lg leading-none">&times;</button>
+                        `;
+
+                        container.appendChild(snackbar);
+
+                        // Animação de entrada
+                        setTimeout(() => snackbar.classList.remove('translate-y-10', 'opacity-0'), 100);
+
+                        // Animação de saída (some depois de 5 segundos)
+                        setTimeout(() => {
+                            snackbar.classList.add('opacity-0', 'translate-y-10');
+                            setTimeout(() => snackbar.remove(), 500);
+                        }, 5000);
+                    }
+                });
+            </script>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
