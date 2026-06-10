@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
+        <div class="p-6 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <div>
+                <h2 class="font-display text-2xl font-bold text-gray-800">🚌 Monitoramento em Tempo Real</h2>
+                <p class="text-sm text-gray-500">Localização e status de embarque atualizados ao vivo.</p>
+            </div>
+            <div id="contador-frota" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-md">
+                Aguardando conexão...
+            </div>
+        </div>
+
+        <div id="mapa-frota" class="w-full h-[600px] z-10"></div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializa o mapa com a permissão do navegador
+        let mapa = null;
+        let marcadores = {}; 
+        let primeiraVez = true;
+
+        const iconeOnibus = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/3448/3448339.png',
+            iconSize: [35, 35],
+            iconAnchor: [17, 17],
+            popupAnchor: [0, -15]
+        });
+
+        // 1. A trava rigorosa de Geolocation antes de iniciar o mapa
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const userLat = position.coords.latitude;
+                    const userLng = position.coords.longitude;
+                    
+                    // Inicia o mapa focado no usuário
+                    mapa = L.map('mapa-frota').setView([userLat, userLng], 14);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa);
+                    
+                    // Só começa a buscar os ônibus DEPOIS que o mapa carregar
+                    setInterval(atualizarFrota, 3000);
+                    atualizarFrota();
+                },
+                (error) => {
+                    alert("A permissão de localização é necessária para exibir o mapa corretamente.");
+                    // Inicia em um local padrão caso o usuário negue
+                    mapa = L.map('mapa-frota').setView([-15.7801, -47.9292], 13);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa);
+                    setInterval(atualizarFrota, 3000);
+                    atualizarFrota();
+                }
+            );
+        }
+
+        // 2. Função que busca os dados unificados no Django
+        function atualizarFrota() {
+            // Se o mapa não ligou ainda, não faz a requisição
+            if (!mapa) return; 
+
+            fetch('/transporte/api/mapa-unificado/')
+                .then(response => response.json())
+                .then(dados => {
+                    const veiculosAtuais = dados.veiculos || [];
+                    
+                    let contador = document.getElementById('contador-frota');
+                    if (veiculosAtuais.length === 0) {
+                        contador.innerText = `Nenhum veículo em rota`;
+                        contador.className = "bg-gray-500 text-white px-4 py-2 rounded-lg font-bold shadow-md";
+                    } else {
+                        contador.innerText = `${veiculosAtuais.length} Veículo(s) no Mapa`;
+                        contador.className = "bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-md animate-pulse";
+                    }
+
+                    veiculosAtuais.forEach(v => {
+                        const pos = [v.latitude, v.longitude];
+                        
+                        // Monta o Pop-up com Fotos e Histórico dinâmico
+                        let conteudoPopup = `
+                            <div style="min-width: 220px; font-family: sans-serif;">
+                                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                    ${v.motorista_foto ? `<img src="${v.motorista_foto}" style="width:40px; height:40px; border-radius:50%; margin-right:10px; object-fit:cover;">` : ''}
+                                    <div>
+                                        <strong style="font-size: 14px;">Motorista: ${v.motorista}</strong><br>
+                                        <span style="font-size: 11px; color: gray;">${v.modelo} (${v.placa})</span>
+                                    </div>
+                                </div>
+                                
+                                <hr style="margin: 5px 0;">
+                                <strong style="font-size: 13px; color: #16a34a;">✅ Alunos a Bordo:</strong>
+                                <ul style="list-style: none; padding: 0; margin: 5px 0; max-height: 100px; overflow-y: auto;">
+                                    ${v.alunos_abordo.length > 0 ? 
+                                        v.alunos_abordo.map(a => `
+                                        <li style="display: flex; align-items: center; margin-bottom: 4px; font-size: 12px;">
+                                            ${a.foto ? `<img src="${a.foto}" style="width:24px; height:24px; border-radius:50%; margin-right:8px; object-fit:cover;">` : ''}
+                                            ${a.nome} às ${a.hora}
+                                        </li>`).join('') 
+                                        : '<li style="font-size: 12px; color: gray;">Nenhum aluno a bordo.</li>'
+                                    }
+                                </ul>
+
+                                <hr style="margin: 5px 0;">
+                                <strong style="font-size: 13px; color: #4b5563;">📜 Histórico da Rota:</strong>
+                                <ul style="list-style: none; padding: 0; margin: 5px 0; max-height: 100px; overflow-y: auto;">
+                                    ${v.historico.length > 0 ? 
+                                        v.historico.map(h => `
+                                        <li style="font-size: 11px; color: #6b7280; border-left: 2px solid ${h.tipo === 'Embarcou' ? '#16a34a' : '#dc2626'}; padding-left: 5px; margin-bottom: 3px;">
+                                            <b>${h.tipo}</b>: ${h.nome} (${h.hora})
+                                        </li>`).join('')
+                                        : '<li style="font-size: 12px; color: gray;">Nenhum evento.</li>'
+                                    }
+                                </ul>
+                                <div style="font-size: 10px; color: #9ca3af; text-align: right; margin-top: 8px;">Atualizado às ${v.atualizado_em}</div>
+                            </div>`;
+
+                        if (marcadores[v.veiculo_id]) {
+                            marcadores[v.veiculo_id].setLatLng(pos);
+                            marcadores[v.veiculo_id].getPopup().setContent(conteudoPopup);
+                        } else {
+                            marcadores[v.veiculo_id] = L.marker(pos, {icon: iconeOnibus})
+                                .addTo(mapa)
+                                .bindPopup(conteudoPopup);
+                        }
+                        
+                        if (primeiraVez && veiculosAtuais.length > 0) {
+                            mapa.setView(pos, 15);
+                            primeiraVez = false;
+                        }
+                    });
+
+                    // Remove veículos que não estão mais na rota (ou que o pai não tem mais acesso)
+                    const idsServidor = veiculosAtuais.map(v => v.veiculo_id);
+                    Object.keys(marcadores).forEach(id => {
+                        if (!idsServidor.includes(parseInt(id))) {
+                            mapa.removeLayer(marcadores[id]);
+                            delete marcadores[id];
+                        }
+                    });
+                });
+        }
+    });
+</script>
+{% endblock %}

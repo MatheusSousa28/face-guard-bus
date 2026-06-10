@@ -102,48 +102,6 @@ def receber_localizacao(request):
     return JsonResponse({'status': 'metodo_invalido'}, status=405)
 
 @login_required(login_url='login')
-def api_posicao_onibus(request, veiculo_id):
-    usuario = request.user
-    
-    #acesso total p superuser/instituição
-    is_admin = hasattr(usuario, 'instituicao') or usuario.is_superuser
-    
-    #responsaveis so podem ver rotas de seus filhos
-    pode_ver = False
-    
-    if is_admin:
-        pode_ver = True
-    elif hasattr(usuario, 'responsavel'):
-        # Verifica se algum filho deste responsável está embarcado neste veículo
-        filhos_no_veiculo = Evento.objects.filter(
-            rota__veiculo_id=veiculo_id,
-            rota__ativa=True,
-            aluno__responsavel=usuario.responsavel,
-            tipo='embarque'
-        ).exclude(
-            #excluímos se o aluno já tiver um evento de desembarque posterior
-            id__in=Evento.objects.filter(aluno__responsavel=usuario.responsavel, tipo='desembarque').values('id')
-        ).exists()
-        
-        if filhos_no_veiculo:
-            pode_ver = True
-
-    #entrega da localização apenas se autorizado
-    if pode_ver:
-        rota_ativa = Rota.objects.filter(veiculo_id=veiculo_id, ativa=True).first()
-        if rota_ativa:
-            ultima_posicao = Localizacao.objects.filter(rota=rota_ativa).order_by('-timestamp').first()
-            if ultima_posicao:
-                return JsonResponse({
-                    'status': 'online',
-                    'latitude': float(ultima_posicao.latitude),
-                    'longitude': float(ultima_posicao.longitude),
-                    'atualizado_em': ultima_posicao.timestamp.strftime('%H:%M:%S')
-                })
-    
-    return JsonResponse({'status': 'acesso_negado'}, status=403)
-
-@login_required(login_url='login')
 def monitoramento_instituicao(request):
     # Apenas escola ou admin
     if not (hasattr(request.user, 'instituicao') or request.user.is_superuser):
@@ -151,31 +109,6 @@ def monitoramento_instituicao(request):
         
     rotas_ativas = Rota.objects.filter(ativa=True).select_related('veiculo', 'motorista')
     return render(request, 'transporte/monitoramento_geral.html', {'rotas': rotas_ativas})
-
-@login_required(login_url='login')
-def api_todas_posicoes(request):
-    # Retorna a localização de todos os ônibus que estão em rota no momento
-    # Autorização penas para Instituição ou Admin
-    if not (hasattr(request.user, 'instituicao') or request.user.is_superuser):
-        return JsonResponse({'error': 'Acesso negado'}, status=403)
-
-    rotas_ativas = Rota.objects.filter(ativa=True)
-    lista_posicoes = []
-
-    for rota in rotas_ativas:
-        ultima_pos = Localizacao.objects.filter(rota=rota).order_by('-timestamp').first()
-        if ultima_pos:
-            lista_posicoes.append({
-                'veiculo_id': rota.veiculo.id,
-                'placa': rota.veiculo.placa,
-                'modelo': rota.veiculo.modelo,
-                'motorista': rota.motorista.usuario.get_full_name(),
-                'latitude': float(ultima_pos.latitude),
-                'longitude': float(ultima_pos.longitude),
-                'atualizado_em': ultima_pos.timestamp.strftime('%H:%M:%S')
-            })
-
-    return JsonResponse({'veiculos': lista_posicoes})
 
 #api que detecta a face do aluno no embarque/desembarque
 @csrf_exempt
@@ -280,3 +213,82 @@ def simulador_catraca(request):
         messages.error(request, "Acesso Negado: Apenas motoristas logados podem operar a catraca do veículo.")
         return redirect('home')
     return render(request, 'transporte/catraca.html')
+
+@login_required(login_url='login')
+def api_frota_mapa_unificada(request):
+    usuario = request.user
+    is_admin = hasattr(usuario, 'instituicao') or usuario.is_superuser
+    is_responsavel = hasattr(usuario, 'responsavel')
+
+    # Proteção de acesso
+    if not (is_admin or is_responsavel):
+        return JsonResponse({'error': 'Acesso negado'}, status=403)
+
+    rotas_ativas = Rota.objects.filter(ativa=True).select_related('veiculo', 'motorista', 'motorista__usuario')
+    lista_veiculos = []
+
+    for rota in rotas_ativas:
+        ultima_pos = Localizacao.objects.filter(rota=rota).order_by('-timestamp').first()
+        if not ultima_pos:
+            continue
+
+        # Busca todos os eventos dessa rota
+        eventos_rota = Evento.objects.filter(rota=rota).select_related('aluno').order_by('data_hora')
+        
+        # Filtro Rigoroso: Se for Pai, corta os eventos para sobrar APENAS os dos filhos dele
+        if is_responsavel and not is_admin:
+            eventos_rota = eventos_rota.filter(aluno__responsavel=usuario.responsavel)
+
+        # Descobre o status atual de cada aluno a bordo (varrendo do mais antigo pro mais novo)
+        status_atual_alunos = {}
+        for ev in eventos_rota:
+            if ev.aluno:
+                status_atual_alunos[ev.aluno] = ev
+
+        # Separa apenas quem está a bordo AGORA
+        alunos_abordo = []
+        for aluno, ev in status_atual_alunos.items():
+            if ev.tipo == 'embarque':
+                alunos_abordo.append({
+                    'nome': aluno.nome,
+                    'foto': aluno.foto_perfil.url if aluno.foto_perfil else '',
+                    'hora': ev.data_hora.strftime('%H:%M:%S')
+                })
+
+        #o pai NÃO VÊ o ônibus no mapa se o filho dele não estiver a bordo
+        if is_responsavel and not is_admin and not alunos_abordo:
+            continue
+
+        # Monta o histórico completo de entrada/saída (Pais veem só dos filhos, Instituição vê de todos)
+        historico = []
+        for ev in eventos_rota.order_by('-data_hora'):
+            if ev.aluno:
+                historico.append({
+                    'nome': ev.aluno.nome,
+                    'tipo': 'Embarcou' if ev.tipo == 'embarque' else 'Desembarcou',
+                    'hora': ev.data_hora.strftime('%H:%M:%S')
+                })
+
+        # Prepara a foto do motorista
+        motorista_foto = ''
+        if rota.motorista and rota.motorista.foto_perfil:
+            motorista_foto = rota.motorista.foto_perfil.url
+
+        lista_veiculos.append({
+            'veiculo_id': rota.veiculo.id,
+            'placa': rota.veiculo.placa,
+            'modelo': rota.veiculo.modelo,
+            'motorista': rota.motorista.usuario.first_name if rota.motorista else 'Desconhecido',
+            'motorista_foto': motorista_foto,
+            'latitude': float(ultima_pos.latitude),
+            'longitude': float(ultima_pos.longitude),
+            'atualizado_em': ultima_pos.timestamp.strftime('%H:%M:%S'),
+            'alunos_abordo': alunos_abordo,
+            'historico': historico,
+        })
+
+    return JsonResponse({'veiculos': lista_veiculos})
+
+@login_required(login_url='login')
+def tela_mapa_unificado(request):
+    return render(request, 'transporte/mapa_unificado.html')
