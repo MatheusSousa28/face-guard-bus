@@ -48,6 +48,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -129,7 +130,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 ALLOWED_HOSTS = ['*']
 
@@ -140,25 +142,30 @@ CSRF_TRUSTED_ORIGINS = [
 
 AUTH_USER_MODEL = 'usuarios.Usuario'
 
-#puxa as chaves do ambiente 
+# Puxa as chaves do ambiente 
 AWS_ACCESS_KEY_ID = os.environ.get('SUPABASE_S3_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.environ.get('SUPABASE_S3_SECRET_ACCESS_KEY')
 
+#configuração de storages
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage", 
+    },
+}
+
+# Se achou as chaves, joga as fotos (default) para o Supabase
 if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
-    #configurações do bucket
+    # Configurações do bucket
     AWS_STORAGE_BUCKET_NAME = 'faceGuard-bus-media' 
     AWS_S3_ENDPOINT_URL = 'https://swuwsalalsjyouupfpna.storage.supabase.co/storage/v1/s3'
     AWS_S3_REGION_NAME = 'sa-east-1' 
     
     AWS_DEFAULT_ACL = 'private'
-    AWS_QUERYSTRING_AUTH = True #ativa as urls assinadas criptografadas
-    AWS_QUERYSTRING_EXPIRE = 3600 #foto expira do navegador em 1 hora 
+    AWS_QUERYSTRING_AUTH = True # Ativa as urls assinadas criptografadas
+    AWS_QUERYSTRING_EXPIRE = 3600 # Foto expira do navegador em 1 hora 
 
-    STORAGES = {
-        "default": {
-            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
-        },
-        "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-        },
-    }
+    # Sobrescreve apenas o motor de mídia, mantendo o WhiteNoise intacto pro CSS
+    STORAGES["default"]["BACKEND"] = "storages.backends.s3boto3.S3Boto3Storage"
