@@ -32,7 +32,7 @@
             <div class="space-x-4">
                 {% if user.is_authenticated %}
                     <span class="text-gray-100">Olá, {{ user.first_name }}</span>
-                    <a href="/login" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded font-display font-semibold">Sair</a>
+                    <a href="{% url 'login' %}" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded font-display font-semibold">Sair</a>
                 {% endif %}
             </div>
         </div>
