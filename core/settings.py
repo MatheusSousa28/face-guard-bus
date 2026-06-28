@@ -164,8 +164,10 @@ if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
     AWS_S3_REGION_NAME = 'sa-east-1' 
     
     AWS_DEFAULT_ACL = 'private'
-    AWS_QUERYSTRING_AUTH = True # Ativa as urls assinadas criptografadas
-    AWS_QUERYSTRING_EXPIRE = 3600 # Foto expira do navegador em 1 hora 
+    AWS_QUERYSTRING_AUTH = True 
+    AWS_QUERYSTRING_EXPIRE = 3600 
+    
+    AWS_S3_SIGNATURE_VERSION = 's3v4'
+    AWS_S3_FILE_OVERWRITE = False
 
-    # Sobrescreve apenas o motor de mídia, mantendo o WhiteNoise intacto pro CSS
     STORAGES["default"]["BACKEND"] = "storages.backends.s3boto3.S3Boto3Storage"
