@@ -84,7 +84,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 
 if SUPABASE_URL:
     DATABASES = {
-        'default': dj_database_url.parse(SUPABASE_URL, conn_max_age=600)
+        'default': dj_database_url.parse(SUPABASE_URL, conn_max_age=0)
     }
 # Se a variável não existir (PC local), usa o SQLite local
 else:
