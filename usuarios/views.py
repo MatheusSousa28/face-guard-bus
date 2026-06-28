@@ -1,8 +1,8 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login as auth_login
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import Usuario, Responsavel 
+from .models import Usuario, Responsavel, Motorista
 from django.db import transaction
 import re
 from alunos.models import Aluno
@@ -136,3 +136,42 @@ def cadastro_responsavel(request):
             return redirect('cadastro')
 
     return render(request, 'usuarios/cadastro.html')
+
+@login_required(login_url='login')
+def painel_instituicao_aprovacoes(request):
+    # Trava de segurança
+    if not hasattr(request.user, 'instituicao'):
+        return redirect('home')
+
+    # Busca todo mundo que o is_aprovado é False
+    responsaveis = Responsavel.objects.filter(usuario__is_aprovado=False)
+    motoristas = Motorista.objects.filter(usuario__is_aprovado=False)
+    alunos = Aluno.objects.filter(is_aprovado=False)
+
+    contexto = {
+        'responsaveis_pendentes': responsaveis,
+        'motoristas_pendentes': motoristas,
+        'alunos_pendentes': alunos,
+    }
+    return render(request, 'usuarios/painel_aprovacoes.html', contexto)
+
+@login_required(login_url='login')
+def aprovar_cadastro(request, tipo, obj_id):
+    if not hasattr(request.user, 'instituicao'):
+        return redirect('home')
+
+    if tipo == 'responsavel':
+        obj = get_object_or_404(Responsavel, id=obj_id)
+        obj.usuario.is_aprovado = True
+        obj.usuario.save()
+    elif tipo == 'motorista':
+        obj = get_object_or_404(Motorista, id=obj_id)
+        obj.usuario.is_aprovado = True
+        obj.usuario.save()
+    elif tipo == 'aluno':
+        obj = get_object_or_404(Aluno, id=obj_id)
+        obj.is_aprovado = True
+        obj.save()
+
+    messages.success(request, f"Cadastro aprovado com sucesso!")
+    return redirect('painel_aprovacoes')
