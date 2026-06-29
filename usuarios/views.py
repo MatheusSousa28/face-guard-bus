@@ -175,3 +175,21 @@ def aprovar_cadastro(request, tipo, obj_id):
 
     messages.success(request, f"Cadastro aprovado com sucesso!")
     return redirect('painel_aprovacoes')
+
+@login_required(login_url='login')
+def reprovar_cadastro(request, tipo, obj_id):
+    if not hasattr(request.user, 'instituicao'):
+        return redirect('home')
+
+    if tipo == 'responsavel':
+        obj = get_object_or_404(Responsavel, id=obj_id)
+        obj.usuario.delete() 
+    elif tipo == 'motorista':
+        obj = get_object_or_404(Motorista, id=obj_id)
+        obj.usuario.delete()
+    elif tipo == 'aluno':
+        obj = get_object_or_404(Aluno, id=obj_id)
+        obj.delete()
+
+    messages.error(request, f"Cadastro rejeitado e removido do sistema.")
+    return redirect('painel_aprovacoes')
