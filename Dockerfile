@@ -1,4 +1,4 @@
-FROM animcogn/face_recognition:python3.9-slim
+FROM python:3.10-slim
 
 RUN useradd -m -u 1000 user
 USER user
@@ -10,6 +10,8 @@ COPY --chown=user requirements.txt /app/
 
 RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
+
+RUN pip install --no-cache-dir --no-deps face_recognition==1.3.0
 
 COPY --chown=user . /app
 
