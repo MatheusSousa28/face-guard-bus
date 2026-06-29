@@ -16,7 +16,8 @@ urlpatterns = [
     
     path('alunos/cadastrar/', alunos_views.cadastro_aluno, name='cadastro_aluno'),
 
-    path('transporte/', include('transporte.urls'))
+    path('transporte/', include('transporte.urls')),
+    path('usuarios/', include('usuarios.urls')),
 ]
 
 #necessario pro django exibir as imagens carregadas por usuarios

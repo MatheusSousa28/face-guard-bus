@@ -23,7 +23,10 @@
                         <p class="text-xs text-gray-500">Resp: {{ aluno.responsavel.usuario.first_name }}</p>
                     </div>
                 </div>
-                <a href="{% url 'aprovar_cadastro' 'aluno' aluno.id %}" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm">Aprovar</a>
+                <div class="flex flex-col gap-2 ml-4">
+                    <a href="{% url 'aprovar_cadastro' 'aluno' aluno.id %}" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm text-center transition">Aprovar</a>
+                    <a href="{% url 'reprovar_cadastro' 'aluno' aluno.id %}" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-bold text-sm text-center transition">Reprovar</a>
+                </div>
             </div>
         {% empty %}
             <p class="text-gray-500 italic col-span-3">Nenhum aluno aguardando aprovação.</p>
@@ -43,7 +46,10 @@
                         <p class="text-xs text-gray-500">CPF: {{ resp.cpf }}</p>
                     </div>
                 </div>
-                <a href="{% url 'aprovar_cadastro' 'responsavel' resp.id %}" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm">Aprovar</a>
+                <div class="flex flex-col gap-2 ml-4">
+                    <a href="{% url 'aprovar_cadastro' 'responsavel' resp.id %}" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm text-center transition">Aprovar</a>
+                    <a href="{% url 'reprovar_cadastro' 'responsavel' resp.id %}" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-bold text-sm text-center transition">Reprovar</a>
+                </div>
             </div>
         {% empty %}
             <p class="text-gray-500 italic col-span-3">Nenhum responsável aguardando aprovação.</p>
@@ -63,7 +69,10 @@
                         <p class="text-xs text-gray-500">CPF: {{ mot.cpf }}</p>
                     </div>
                 </div>
-                <a href="{% url 'aprovar_cadastro' 'motorista' mot.id %}" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm">Aprovar</a>
+                <div class="flex flex-col gap-2 ml-4">
+                    <a href="{% url 'aprovar_cadastro' 'motorista' mot.id %}" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm text-center transition">Aprovar</a>
+                    <a href="{% url 'reprovar_cadastro' 'motorista' mot.id %}" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-bold text-sm text-center transition">Reprovar</a>
+                </div>
             </div>
         {% empty %}
             <p class="text-gray-500 italic col-span-3">Nenhum motorista aguardando aprovação.</p>
