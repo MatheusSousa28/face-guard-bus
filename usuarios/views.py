@@ -37,7 +37,7 @@ def painel_home(request):
     usuario = request.user
     
     if hasattr(usuario, 'instituicao') or usuario.is_superuser:
-        return render(request, 'usuarios/home_instituicao_teste.html')
+        return render(request, 'usuarios/home_instituicao.html')
 
     elif hasattr(usuario, 'motorista'):
         motorista = usuario.motorista
