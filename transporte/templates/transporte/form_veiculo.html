@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-8">
+    <h2 class="text-2xl font-bold text-gray-900 mb-6">{% if veiculo %}Editar Veículo{% else %}Cadastrar Novo Veículo{% endif %}</h2>
+
+    <form method="POST" enctype="multipart/form-data" class="bg-white p-6 rounded-xl shadow-md space-y-6">
+        {% csrf_token %}
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-bold text-gray-700">Modelo (Ex: Sprinter, Marcopolo)</label>
+                <input type="text" name="modelo" value="{{ veiculo.modelo|default:'' }}" required class="w-full mt-1 border border-gray-300 rounded p-2">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700">Placa</label>
+                <input type="text" name="placa" value="{{ veiculo.placa|default:'' }}" required class="w-full mt-1 border border-gray-300 rounded p-2 uppercase">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700">Cor</label>
+                <input type="text" name="cor" value="{{ veiculo.cor|default:'' }}" required class="w-full mt-1 border border-gray-300 rounded p-2">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700">Capacidade de Alunos</label>
+                <input type="number" name="capacidade" value="{{ veiculo.capacidade|default:'' }}" required class="w-full mt-1 border border-gray-300 rounded p-2">
+            </div>
+            <div class="col-span-2">
+                <label class="block text-sm font-bold text-gray-700">Foto do Veículo (Opcional)</label>
+                <input type="file" name="foto" accept="image/*" class="w-full mt-1 border border-gray-300 rounded p-2">
+            </div>
+        </div>
+
+        <div class="border-t pt-4 mt-6">
+            <h3 class="font-bold text-lg text-gray-800 mb-3">Vincular Motoristas Autorizados</h3>
+            <p class="text-sm text-gray-500 mb-4">Selecione quais motoristas têm permissão para iniciar rotas com este veículo.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {% for motorista in motoristas %}
+                <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition">
+                    <input type="checkbox" name="motoristas" value="{{ motorista.id }}" class="w-5 h-5 text-blue-600 rounded"
+                        {% if veiculo and motorista in veiculo.motoristas_autorizados.all %}checked{% endif %}>
+                    <div class="ml-3 flex items-center">
+                        {% if motorista.foto_perfil %}
+                            <img src="{{ motorista.foto_perfil.url }}" class="w-8 h-8 rounded-full object-cover mr-2">
+                        {% endif %}
+                        <span class="font-medium text-gray-700">{{ motorista.usuario.first_name }} (CPF: {{ motorista.cpf }})</span>
+                    </div>
+                </label>
+                {% empty %}
+                    <p class="text-sm text-red-500">Nenhum motorista aprovado no sistema ainda.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="flex justify-end pt-4">
+            <a href="{% url 'painel_veiculos' %}" class="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg font-bold mr-4 hover:bg-gray-300">Cancelar</a>
+            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700">Salvar Veículo</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-8">
+        <h1 class="font-display text-3xl font-bold text-gray-900">Usuários Ativos</h1>
+        <a href="{% url 'home' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-bold">Voltar</a>
+    </div>
+
+    <div class="space-y-8">
+        <section class="bg-white p-6 rounded-xl shadow border border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">🚌 Motoristas</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% for mot in motoristas %}
+                    <div class="flex justify-between items-center p-4 border rounded-lg bg-gray-50">
+                        <div class="flex items-center gap-4">
+                            {% if mot.foto_perfil %}<img src="{{ mot.foto_perfil.url }}" class="w-12 h-12 rounded-full object-cover">{% endif %}
+                            <div>
+                                <p class="font-bold text-gray-900">{{ mot.usuario.first_name }} {{ mot.usuario.last_name }}</p>
+                                <p class="text-sm text-gray-500">{{ mot.usuario.email }}</p>
+                            </div>
+                        </div>
+                        <a href="{% url 'deletar_usuario' 'motorista' mot.id %}" class="btn-deletar text-red-600 hover:text-red-800 font-bold">Excluir</a>
+                    </div>
+                {% empty %}
+                    <p class="text-gray-500">Nenhum motorista ativo.</p>
+                {% endfor %}
+            </div>
+        </section>
+
+        </div>
+</div>
+{% endblock %}
