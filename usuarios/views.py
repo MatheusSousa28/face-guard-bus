@@ -224,3 +224,73 @@ def deletar_usuario(request, tipo, obj_id):
 
     messages.error(request, f"Usuário excluído com sucesso.")
     return redirect('painel_usuarios')
+
+@login_required(login_url='login')
+def gerenciar_usuario_instituicao(request, tipo, id=None):
+    if not hasattr(request.user, 'instituicao'):
+        return redirect('home')
+
+    # Seleciona qual modelo vamos alterar/criar
+    if tipo == 'responsavel':
+        ModeloPerfil = Responsavel
+    elif tipo == 'motorista':
+        ModeloPerfil = Motorista
+    else:
+        return redirect('painel_usuarios')
+
+    # Se recebeu um ID, tenta buscar. Se não, é criação (None).
+    perfil = get_object_or_404(ModeloPerfil, id=id) if id else None
+
+    if request.method == 'POST':
+        nome = request.POST.get('first_name')
+        sobrenome = request.POST.get('last_name')
+        email = request.POST.get('email')
+        cpf = request.POST.get('cpf')
+        senha = request.POST.get('senha')
+        foto = request.FILES.get('foto_perfil')
+
+        cpf_limpo = re.sub(r'[^0-9]', '', cpf)
+
+        try:
+            with transaction.atomic():
+                if not perfil: 
+                    if Usuario.objects.filter(email=email).exists() or ModeloPerfil.objects.filter(cpf=cpf_limpo).exists():
+                        messages.error(request, 'Email ou CPF já cadastrados no sistema.')
+                        return redirect(request.path)
+
+                    # Cria o usuário já aprovado
+                    novo_user = Usuario.objects.create_user(
+                        username=email, email=email, password=senha,
+                        first_name=nome, last_name=sobrenome, is_aprovado=True
+                    )
+                    ModeloPerfil.objects.create(usuario=novo_user, cpf=cpf_limpo, foto_perfil=foto)
+                    messages.success(request, f'{tipo.capitalize()} cadastrado com sucesso!')
+
+                else:  # MODO EDIÇÃO
+                    user = perfil.usuario
+                    user.first_name = nome
+                    user.last_name = sobrenome
+                    
+                    # Atualiza o email se for diferente e não estiver em uso
+                    if user.email != email and not Usuario.objects.filter(email=email).exists():
+                        user.email = email
+                        user.username = email
+                    
+                    # Só atualiza a senha se a instituição digitou algo no campo
+                    if senha:
+                        user.set_password(senha)
+                    user.save()
+
+                    perfil.cpf = cpf_limpo
+                    if foto:
+                        perfil.foto_perfil = foto
+                    perfil.save()
+                    messages.success(request, f'{tipo.capitalize()} atualizado com sucesso!')
+
+            return redirect('painel_usuarios')
+        
+        except Exception as e:
+            messages.error(request, f'Erro ao processar: {str(e)}')
+
+    # Renderiza o formulário passando o tipo e o objeto (se existir)
+    return render(request, 'usuarios/form_usuario.html', {'perfil': perfil, 'tipo': tipo})
