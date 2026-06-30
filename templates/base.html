@@ -85,5 +85,38 @@
         </script>
     {% endif %}
 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+        // Esse script procura todos os links que tenham a classe 'btn-deletar'
+        document.addEventListener('DOMContentLoaded', function() {
+            const botoesDeletar = document.querySelectorAll('.btn-deletar');
+            
+            botoesDeletar.forEach(botao => {
+                botao.addEventListener('click', function(e) {
+                    e.preventDefault(); // Impede o clique imediato
+                    const linkDestino = this.getAttribute('href'); // Guarda para onde o botão ia
+                    
+                    // Dispara o Card no meio da tela
+                    Swal.fire({
+                        title: 'Tem certeza?',
+                        text: "Esta ação apagará o registro permanentemente!",
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#d33',
+                        cancelButtonColor: '#9ca3af',
+                        confirmButtonText: 'Sim, excluir!',
+                        cancelButtonText: 'Cancelar'
+                    }).then((result) => {
+                        // Se o usuário clicou no vermelho, o sistema continua a viagem
+                        if (result.isConfirmed) {
+                            window.location.href = linkDestino;
+                        }
+                    });
+                });
+            });
+        });
+    </script>
+
 </body>
 </html>

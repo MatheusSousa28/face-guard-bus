@@ -1,5 +1,5 @@
 from django.db import models
-from usuarios.models import Instituicao, Motorista
+from usuarios.models import Motorista
 from alunos.models import Aluno
 
 class Veiculo(models.Model):

@@ -1,10 +1,11 @@
 import json
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect, render, get_object_or_404
 from django.http import JsonResponse
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
-from .models import Rota, Localizacao
+from .models import Rota, Localizacao, Veiculo
+from usuarios.models import Motorista
 from django.contrib import messages
 from monitoramento.models import Evento 
 import base64
@@ -292,3 +293,57 @@ def api_frota_mapa_unificada(request):
 @login_required(login_url='login')
 def tela_mapa_unificado(request):
     return render(request, 'transporte/mapa_unificado.html')
+
+@login_required(login_url='login')
+def painel_veiculos(request):
+    if not hasattr(request.user, 'instituicao'):
+        return redirect('home')
+    veiculos = Veiculo.objects.all()
+    return render(request, 'transporte/painel_veiculos.html', {'veiculos': veiculos})
+
+@login_required(login_url='login')
+def gerenciar_veiculo(request, id=None):
+    if not hasattr(request.user, 'instituicao'):
+        return redirect('home')
+    
+    veiculo = get_object_or_404(Veiculo, id=id) if id else None
+    motoristas = Motorista.objects.filter(usuario__is_aprovado=True)
+
+    if request.method == 'POST':
+        modelo = request.POST.get('modelo')
+        capacidade = request.POST.get('capacidade')
+        placa = request.POST.get('placa')
+        cor = request.POST.get('cor')
+        foto = request.FILES.get('foto')
+        motoristas_ids = request.POST.getlist('motoristas') # Pega a lista de IDs dos checkboxes
+
+        if not veiculo:
+            veiculo = Veiculo.objects.create(modelo=modelo, capacidade=capacidade, placa=placa, cor=cor)
+            messages.success(request, 'Veículo cadastrado com sucesso!')
+        else:
+            veiculo.modelo = modelo
+            veiculo.capacidade = capacidade
+            veiculo.placa = placa
+            veiculo.cor = cor
+            veiculo.save()
+            messages.success(request, 'Veículo atualizado com sucesso!')
+
+        if foto:
+            veiculo.foto = foto
+            veiculo.save()
+
+        #salva todos os motoristas marcados de uma vez no banco
+        veiculo.motoristas_autorizados.set(motoristas_ids)
+
+        return redirect('painel_veiculos')
+
+    return render(request, 'transporte/form_veiculo.html', {'veiculo': veiculo, 'motoristas': motoristas})
+
+@login_required(login_url='login')
+def deletar_veiculo(request, id):
+    if not hasattr(request.user, 'instituicao'):
+        return redirect('home')
+    veiculo = get_object_or_404(Veiculo, id=id)
+    veiculo.delete()
+    messages.error(request, 'Veículo removido do sistema.')
+    return redirect('painel_veiculos')
