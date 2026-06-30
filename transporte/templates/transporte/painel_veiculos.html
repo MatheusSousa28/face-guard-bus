@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-8">
+        <h1 class="font-display text-3xl font-bold text-gray-900">Frota Escolar</h1>
+        <a href="{% url 'novo_veiculo' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold transition">
+            + Novo Veículo
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {% for veiculo in veiculos %}
+            <div class="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200 flex flex-col">
+                {% if veiculo.foto %}
+                    <img src="{{ veiculo.foto.url }}" class="w-full h-48 object-cover">
+                {% else %}
+                    <div class="w-full h-48 bg-gray-200 flex items-center justify-center text-gray-500">Sem Foto</div>
+                {% endif %}
+                <div class="p-5 flex-1">
+                    <h3 class="font-bold text-xl text-gray-900 mb-1">{{ veiculo.modelo }}</h3>
+                    <p class="text-sm text-gray-600 mb-3">Placa: <span class="font-mono font-bold text-gray-800">{{ veiculo.placa }}</span></p>
+                    <p class="text-sm text-gray-600">Capacidade: {{ veiculo.capacidade }} vagas</p>
+                    <p class="text-sm text-gray-600 mb-4">Motoristas Vinculados: <span class="font-bold text-blue-600">{{ veiculo.motoristas_autorizados.count }}</span></p>
+                </div>
+                <div class="p-4 bg-gray-50 border-t flex gap-2">
+                    <a href="{% url 'editar_veiculo' veiculo.id %}" class="flex-1 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-center py-2 rounded font-bold transition">Editar</a>
+                    <a href="{% url 'deletar_veiculo' veiculo.id %}" class="btn-deletar flex-1 bg-red-600 hover:bg-red-700 text-white text-center py-2 rounded font-bold transition">Excluir</a>
+                </div>
+            </div>
+        {% empty %}
+            <p class="text-gray-500 col-span-3">Nenhum veículo cadastrado na frota.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

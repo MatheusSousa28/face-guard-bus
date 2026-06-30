@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto px-4 py-8">
+<div class="max-w-7xl mx-auto px-4 py-8">
     <div class="bg-white p-8 rounded-lg shadow">
         
         <div class="flex items-center justify-between mb-6">
@@ -10,41 +10,129 @@
 
         <div class="bg-blue-50 border-l-4 border-blue-700 p-4 mb-8 rounded-r-md">
             <h3 class="font-display font-bold text-blue-700 text-lg mb-1">Acesso Administrativo (Instituição)</h3>
-            <p class="text-gray-700">Bem-vindo(a)! Aqui você poderá gerenciar aprovações de pais, visualizar alertas críticos de embarque e administrar a frota de veículos escolares.</p>
+            <p class="text-gray-700">Bem-vindo(a)! Aqui você poderá gerenciar aprovações de pais, frota escolar, usuários ativos e visualizar rotas ao vivo.</p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             
-            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition">
-                <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                    </svg>
+            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition flex flex-col justify-between">
+                <div>
+                    <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 4m0 13V4m0 0L9 7" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">Monitoramento Ao Vivo</h3>
+                    <p class="text-gray-500 text-sm mb-6">Acompanhe a localização exata da frota e status dos alunos a bordo em tempo real.</p>
                 </div>
-                <h3 class="text-lg font-bold text-gray-900 mb-2">Monitoramento da Frota</h3>
-                <p class="text-gray-500 text-sm mb-6">Acompanhe todos os veículos escolares ativos no mapa em tempo real.</p>
-                
                 <a href="{% url 'mapa_unificado' %}" class="inline-flex justify-center w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-200">
-                    Acessar Mapa Ao Vivo
+                    Acessar Mapa
                 </a>
             </div>
 
-            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition">
-                <div class="w-12 h-12 bg-gray-100 text-gray-600 rounded-lg flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
+            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition flex flex-col justify-between">
+                <div>
+                    <div class="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-lg flex items-center justify-center mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">Cadastros Pendentes</h3>
+                    <p class="text-gray-500 text-sm mb-6">Analise e aprove contas recém-criadas de novos pais, alunos e motoristas.</p>
                 </div>
-                <h3 class="text-lg font-bold text-gray-900 mb-2">Gestão de Cadastros</h3>
-                <p class="text-gray-500 text-sm mb-6">Aprove responsáveis, alunos e cadastre novos motoristas no sistema.</p>
-                
-                <a href="{% url 'painel_aprovacoes' %}" class="inline-flex justify-center w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-2.5 px-4 rounded-lg transition duration-200">
-                    Gerenciar Cadastros
+                <a href="{% url 'painel_aprovacoes' %}" class="inline-flex justify-center w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2.5 px-4 rounded-lg transition duration-200">
+                    Analisar Pendências
                 </a>
             </div>
 
+            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition flex flex-col justify-between">
+                <div>
+                    <div class="w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">Frota de Veículos</h3>
+                    <p class="text-gray-500 text-sm mb-6">Cadastre novos ônibus/vans, atualize placas e vincule motoristas aos veículos.</p>
+                </div>
+                <a href="{% url 'painel_veiculos' %}" class="inline-flex justify-center w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-200">
+                    Gerenciar Frota
+                </a>
+            </div>
+
+            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition flex flex-col justify-between">
+                <div>
+                    <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">Usuários Ativos</h3>
+                    <p class="text-gray-500 text-sm mb-6">Visualize e remova contas de alunos e colaboradores que já estão em operação.</p>
+                </div>
+                <a href="{% url 'painel_usuarios' %}" class="inline-flex justify-center w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-200">
+                    Gerenciar Usuários
+                </a>
+            </div>
+        </div>
+
+        <hr class="my-8">
+        
+        <h3 class="text-xl font-bold text-gray-800 mb-4">Ferramentas de Desenvolvedor</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3">
+            
+            <div onclick="abrirModalAdmin()" class="bg-red-50 border border-red-200 rounded-xl shadow-sm p-6 hover:shadow-md hover:bg-red-100 transition cursor-pointer flex flex-col justify-between">
+                <div>
+                    <div class="w-12 h-12 bg-red-200 text-red-700 rounded-lg flex items-center justify-center mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-red-900 mb-2">Painel Django (Admin)</h3>
+                    <p class="text-red-700 text-sm mb-6">Acesso bruto ao banco de dados. Permite apagar registros históricos e alterar o núcleo do sistema.</p>
+                </div>
+                <button class="inline-flex justify-center w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 px-4 rounded-lg transition duration-200">
+                    Acessar Banco de Dados
+                </button>
+            </div>
         </div>
 
     </div>
 </div>
+
+<div id="modalAdmin" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 backdrop-blur-sm transition-opacity">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center transform scale-100 transition-transform">
+        
+        <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-6">
+            <svg class="h-10 w-10 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+        </div>
+        
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">Atenção! Zona de Risco</h2>
+        <p class="text-gray-600 mb-8 leading-relaxed">
+            Você está prestes a entrar no painel raiz do sistema. Ações realizadas no Admin <b>não podem ser desfeitas</b> e podem comprometer o histórico de rotas e biometrias. Deseja mesmo continuar?
+        </p>
+        
+        <div class="flex justify-center gap-4 w-full">
+            <button onclick="fecharModalAdmin()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-bold hover:bg-gray-300 transition">
+                Cancelar
+            </button>
+            <a href="{% url 'admin:index' %}" class="flex-1 bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700 transition block">
+                Sim, Entrar
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+    function abrirModalAdmin() {
+        document.getElementById('modalAdmin').classList.remove('hidden');
+    }
+    
+    function fecharModalAdmin() {
+        document.getElementById('modalAdmin').classList.add('hidden');
+    }
+</script>
 {% endblock %}

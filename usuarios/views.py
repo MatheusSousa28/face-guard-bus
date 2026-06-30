@@ -193,3 +193,34 @@ def reprovar_cadastro(request, tipo, obj_id):
 
     messages.error(request, f"Cadastro rejeitado e removido do sistema.")
     return redirect('painel_aprovacoes')
+
+@login_required(login_url='login')
+def painel_usuarios_ativos(request):
+    if not hasattr(request.user, 'instituicao'):
+        return redirect('home')
+    
+    responsaveis = Responsavel.objects.filter(usuario__is_aprovado=True)
+    motoristas = Motorista.objects.filter(usuario__is_aprovado=True)
+    alunos = Aluno.objects.filter(is_aprovado=True)
+
+    contexto = {
+        'responsaveis': responsaveis,
+        'motoristas': motoristas,
+        'alunos': alunos,
+    }
+    return render(request, 'usuarios/painel_usuarios.html', contexto)
+
+@login_required(login_url='login')
+def deletar_usuario(request, tipo, obj_id):
+    if not hasattr(request.user, 'instituicao'):
+        return redirect('home')
+
+    if tipo == 'responsavel':
+        get_object_or_404(Responsavel, id=obj_id).usuario.delete()
+    elif tipo == 'motorista':
+        get_object_or_404(Motorista, id=obj_id).usuario.delete()
+    elif tipo == 'aluno':
+        get_object_or_404(Aluno, id=obj_id).delete()
+
+    messages.error(request, f"Usuário excluído com sucesso.")
+    return redirect('painel_usuarios')
