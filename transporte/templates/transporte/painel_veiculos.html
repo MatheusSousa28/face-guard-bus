@@ -24,7 +24,9 @@
                 </div>
                 <div class="p-4 bg-gray-50 border-t flex gap-2">
                     <a href="{% url 'editar_veiculo' veiculo.id %}" class="flex-1 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-center py-2 rounded font-bold transition">Editar</a>
-                    <a href="{% url 'deletar_veiculo' veiculo.id %}" class="btn-deletar flex-1 bg-red-600 hover:bg-red-700 text-white text-center py-2 rounded font-bold transition">Excluir</a>
+                    <form method="POST" action="{% url 'deletar_veiculo' veiculo.id %}" class="flex-1" onsubmit="return confirm('Excluir este veículo?')">
+                        {% csrf_token %}<button class="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded font-bold transition">Excluir</button>
+                    </form>
                 </div>
             </div>
         {% empty %}

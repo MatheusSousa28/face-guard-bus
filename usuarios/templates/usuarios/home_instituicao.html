@@ -13,6 +13,68 @@
             <p class="text-gray-700">Bem-vindo(a)! Aqui você poderá gerenciar aprovações de pais, frota escolar, usuários ativos e visualizar rotas ao vivo.</p>
         </div>
 
+        <section class="mb-8">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Resumo do monitoramento</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+                <div class="rounded-xl bg-blue-50 border border-blue-100 p-5">
+                    <p class="text-sm text-blue-700">Rotas em andamento</p>
+                    <p class="text-3xl font-bold text-blue-900">{{ total_rotas_ativas|default:0 }}</p>
+                </div>
+                <div class="rounded-xl bg-green-50 border border-green-100 p-5">
+                    <p class="text-sm text-green-700">Alunos a bordo</p>
+                    <p class="text-3xl font-bold text-green-900">{{ total_alunos_abordo|default:0 }}</p>
+                </div>
+                <div class="rounded-xl bg-amber-50 border border-amber-100 p-5">
+                    <p class="text-sm text-amber-700">Alertas recentes (máx. 5)</p>
+                    <p class="text-3xl font-bold text-amber-900">{{ alertas_recentes|length }}</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div class="bg-white border rounded-xl p-5">
+                    <h4 class="font-bold text-gray-900 mb-3">Rotas ativas e GPS</h4>
+                    <div class="space-y-3">
+                        {% for item in rotas_ativas %}
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b last:border-0 pb-3 last:pb-0">
+                            <div>
+                                <p class="font-semibold">{{ item.rota.veiculo.placa }} · {{ item.rota.veiculo.modelo }}</p>
+                                <p class="text-sm text-gray-600">{{ item.alunos_abordo }} aluno(s) a bordo · motorista: {{ item.rota.motorista.usuario.first_name|default:'Não informado' }}</p>
+                                {% if item.ultima_localizacao %}
+                                    <p class="text-xs text-gray-500">Último GPS: {{ item.ultima_localizacao.timestamp|date:'d/m/Y H:i:s' }}</p>
+                                {% else %}
+                                    <p class="text-xs text-gray-500">Ainda não há coordenadas para esta rota.</p>
+                                {% endif %}
+                            </div>
+                            <div class="flex items-center gap-3">
+                                {% if item.gps_atualizado %}
+                                    <span class="text-xs font-bold text-green-700">GPS atualizado</span>
+                                {% else %}
+                                    <span class="text-xs font-bold text-red-700">GPS sem atualização</span>
+                                {% endif %}
+                                <a href="{% url 'mapa_unificado' %}?rota={{ item.rota.id }}" class="text-sm font-bold text-blue-700 hover:underline">Mapa</a>
+                            </div>
+                        </div>
+                        {% empty %}<p class="text-sm text-gray-500">Nenhuma rota ativa no momento.</p>{% endfor %}
+                    </div>
+                </div>
+
+                <div class="bg-white border rounded-xl p-5">
+                    <h4 class="font-bold text-gray-900 mb-3">Alertas recentes</h4>
+                    <div class="space-y-3">
+                        {% for alerta in alertas_recentes %}
+                        <div class="flex items-center justify-between gap-3 border-b last:border-0 pb-3 last:pb-0">
+                            <div>
+                                <p class="font-semibold text-amber-800">Face desconhecida</p>
+                                <p class="text-xs text-gray-600">{{ alerta.rota.veiculo.placa|default:'Veículo não disponível' }} · {{ alerta.data_hora|date:'d/m/Y H:i:s' }}</p>
+                            </div>
+                            <a href="{% url 'mapa_unificado' %}?rota={{ alerta.rota.id }}" class="text-sm font-bold text-blue-700 hover:underline">Ver rota</a>
+                        </div>
+                        {% empty %}<p class="text-sm text-gray-500">Nenhum alerta registrado.</p>{% endfor %}
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             
             <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition flex flex-col justify-between">

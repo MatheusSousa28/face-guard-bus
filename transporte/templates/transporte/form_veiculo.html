@@ -50,6 +50,22 @@
             </div>
         </div>
 
+        <div class="border-t pt-4 mt-6">
+            <h3 class="font-bold text-lg text-gray-800 mb-1">Alunos autorizados neste veículo</h3>
+            <p class="text-sm text-gray-500 mb-4">Selecione em lote os alunos que podem usar este veículo. Um aluno pode ser associado a vários veículos.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto">
+                {% for aluno in alunos %}
+                <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" name="alunos" value="{{ aluno.id }}" class="w-5 h-5 text-blue-600 rounded"
+                        {% if veiculo and aluno in veiculo.alunos_autorizados.all %}checked{% endif %}>
+                    <span class="ml-3 font-medium text-gray-700">{{ aluno.nome }} — responsável: {{ aluno.responsavel.usuario.first_name }}</span>
+                </label>
+                {% empty %}
+                    <p class="text-sm text-gray-500">Não há alunos aprovados para vincular.</p>
+                {% endfor %}
+            </div>
+        </div>
+
         <div class="flex justify-end pt-4">
             <a href="{% url 'painel_veiculos' %}" class="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg font-bold mr-4 hover:bg-gray-300">Cancelar</a>
             <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700">Salvar Veículo</button>

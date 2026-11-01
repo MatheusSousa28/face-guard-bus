@@ -1,12 +1,37 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import authenticate, login as auth_login
+from django.http import HttpResponseNotAllowed
+from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import Usuario, Responsavel, Motorista
 from django.db import transaction
+from django.utils import timezone
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
+from datetime import timedelta
 import re
 from alunos.models import Aluno
 from transporte.models import Rota
+from monitoramento.models import Evento
+from PIL import Image, UnidentifiedImageError
+
+
+def _senha_valida(senha):
+    return bool(re.match(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$', senha or ''))
+
+
+def _imagem_valida(arquivo, limite_bytes=5 * 1024 * 1024):
+    if not arquivo or arquivo.size > limite_bytes:
+        return False
+    try:
+        arquivo.seek(0)
+        imagem = Image.open(arquivo)
+        imagem.verify()
+        arquivo.seek(0)
+        return imagem.format in {'JPEG', 'PNG', 'WEBP'}
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        arquivo.seek(0)
+        return False
 
 def login_view(request):
     #se o usuário clicou no botão entrar então ele enviou um formulário
@@ -31,13 +56,60 @@ def login_view(request):
     #se a requisição for GET (o usuário apenas digitou o site no navegador), mostra a tela vazia
     return render(request, 'usuarios/login.html')
 
+
+@login_required(login_url='login')
+def logout_view(request):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    auth_logout(request)
+    messages.success(request, 'Sessão encerrada. Você já pode entrar com outro perfil.')
+    return redirect('login')
+
 #o login requiered protege a página, se não estiver logado, vai pro login
 @login_required(login_url='login')
 def painel_home(request):
     usuario = request.user
     
     if hasattr(usuario, 'instituicao') or usuario.is_superuser:
-        return render(request, 'usuarios/home_instituicao.html')
+        rotas_ativas = list(
+            Rota.objects.filter(ativa=True)
+            .select_related('veiculo', 'motorista__usuario')
+            .order_by('-inicio')
+        )
+        eventos_ativos = Evento.objects.filter(
+            rota__in=rotas_ativas, aluno__isnull=False
+        ).select_related('aluno').order_by('data_hora', 'id')
+        estado_alunos = {}
+        for evento in eventos_ativos:
+            estado_alunos[(evento.rota_id, evento.aluno_id)] = evento.tipo
+
+        contexto_rotas = []
+        for rota in rotas_ativas:
+            ultima_localizacao = rota.coordenadas.order_by('-timestamp').first()
+            gps_atualizado = bool(
+                ultima_localizacao and
+                timezone.now() - ultima_localizacao.timestamp <= timedelta(seconds=90)
+            )
+            alunos_abordo = sum(
+                1 for (rota_id, _), tipo in estado_alunos.items()
+                if rota_id == rota.id and tipo == 'embarque'
+            )
+            contexto_rotas.append({
+                'rota': rota,
+                'ultima_localizacao': ultima_localizacao,
+                'gps_atualizado': gps_atualizado,
+                'alunos_abordo': alunos_abordo,
+            })
+
+        alertas_recentes = Evento.objects.filter(tipo='desconhecido').select_related(
+            'rota__veiculo'
+        ).order_by('-data_hora')[:5]
+        return render(request, 'usuarios/home_instituicao.html', {
+            'rotas_ativas': contexto_rotas,
+            'total_rotas_ativas': len(contexto_rotas),
+            'total_alunos_abordo': sum(item['alunos_abordo'] for item in contexto_rotas),
+            'alertas_recentes': alertas_recentes,
+        })
 
     elif hasattr(usuario, 'motorista'):
         motorista = usuario.motorista
@@ -69,10 +141,10 @@ def cadastro_responsavel(request):
     if request.method == 'POST':
         nome = request.POST.get('first_name', '').strip()
         sobrenome = request.POST.get('last_name', '').strip()
-        email = request.POST.get('email', '').strip()
+        email = request.POST.get('email', '').strip().lower()
         cpf = request.POST.get('cpf', '')
-        senha = request.POST.get('senha')
-        confirmar_senha = request.POST.get('confirmar_senha')        
+        senha = request.POST.get('senha', '')
+        confirmar_senha = request.POST.get('confirmar_senha', '')
         foto = request.FILES.get('foto_perfil')
 
 
@@ -88,13 +160,13 @@ def cadastro_responsavel(request):
             messages.error(request, 'As senhas não coincidem.')
             return redirect('cadastro')
 
-        regex_senha = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$'
-        if not re.match(regex_senha, senha):
-            messages.error(request, 'A senha deve ter no mínimo 8 caracteres, contendo maiúsculas, minúsculas, números e pelo menos um símbolo (@$!%*?&).')
+        if not _senha_valida(senha):
+            messages.error(request, 'A senha deve ter no mínimo 8 caracteres, letras maiúsculas e minúsculas, número e símbolo.')
             return redirect('cadastro')
 
-        regex_email = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-        if not re.match(regex_email, email):
+        try:
+            validate_email(email)
+        except ValidationError:
             messages.error(request, 'Digite um formato de e-mail válido.')
             return redirect('cadastro')
 
@@ -111,6 +183,10 @@ def cadastro_responsavel(request):
             
         if Responsavel.objects.filter(cpf=cpf_limpo).exists():
             messages.error(request, 'Este CPF já está cadastrado no sistema.')
+            return redirect('cadastro')
+
+        if not _imagem_valida(foto):
+            messages.error(request, 'Envie uma foto válida em JPEG, PNG ou WebP com até 5 MB.')
             return redirect('cadastro')
 
         try:
@@ -130,9 +206,8 @@ def cadastro_responsavel(request):
             messages.success(request, 'Cadastro realizado com sucesso! Aguarde a aprovação da instituição.')
             return redirect('login')
 
-        except Exception as e:
-            #se der erro em uma das criações, dá rollback
-            messages.error(request, f'Erro interno ao criar cadastro: {str(e)}')
+        except Exception:
+            messages.error(request, 'Não foi possível concluir o cadastro. Verifique os dados enviados e tente novamente.')
             return redirect('cadastro')
 
     return render(request, 'usuarios/cadastro.html')
@@ -157,6 +232,8 @@ def painel_instituicao_aprovacoes(request):
 
 @login_required(login_url='login')
 def aprovar_cadastro(request, tipo, obj_id):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
     if not hasattr(request.user, 'instituicao'):
         return redirect('home')
 
@@ -172,12 +249,16 @@ def aprovar_cadastro(request, tipo, obj_id):
         obj = get_object_or_404(Aluno, id=obj_id)
         obj.is_aprovado = True
         obj.save()
+    else:
+        return redirect('painel_aprovacoes')
 
     messages.success(request, f"Cadastro aprovado com sucesso!")
     return redirect('painel_aprovacoes')
 
 @login_required(login_url='login')
 def reprovar_cadastro(request, tipo, obj_id):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
     if not hasattr(request.user, 'instituicao'):
         return redirect('home')
 
@@ -190,6 +271,8 @@ def reprovar_cadastro(request, tipo, obj_id):
     elif tipo == 'aluno':
         obj = get_object_or_404(Aluno, id=obj_id)
         obj.delete()
+    else:
+        return redirect('painel_aprovacoes')
 
     messages.error(request, f"Cadastro rejeitado e removido do sistema.")
     return redirect('painel_aprovacoes')
@@ -211,7 +294,66 @@ def painel_usuarios_ativos(request):
     return render(request, 'usuarios/painel_usuarios.html', contexto)
 
 @login_required(login_url='login')
+def cadastrar_motorista(request):
+    if not hasattr(request.user, 'instituicao'):
+        messages.error(request, 'Apenas a instituição pode cadastrar motoristas.')
+        return redirect('home')
+
+    if request.method == 'POST':
+        nome = request.POST.get('first_name', '').strip()
+        sobrenome = request.POST.get('last_name', '').strip()
+        email = request.POST.get('email', '').strip().lower()
+        cpf = re.sub(r'\D', '', request.POST.get('cpf', ''))
+        senha = request.POST.get('senha', '')
+        foto = request.FILES.get('foto_perfil')
+
+        erros = []
+        if not nome or len(nome) > 150 or not sobrenome or len(sobrenome) > 150:
+            erros.append('Informe nome e sobrenome (até 150 caracteres cada).')
+        try:
+            validate_email(email)
+        except ValidationError:
+            erros.append('Informe um e-mail válido.')
+        if len(cpf) != 11:
+            erros.append('O CPF deve conter 11 números.')
+        if Usuario.objects.filter(email=email).exists():
+            erros.append('Este e-mail já está cadastrado.')
+        if Motorista.objects.filter(cpf=cpf).exists():
+            erros.append('Este CPF já está cadastrado.')
+        if not _senha_valida(senha):
+            erros.append('A senha deve ter ao menos 8 caracteres, letras maiúsculas e minúsculas, número e símbolo.')
+        if not _imagem_valida(foto):
+            erros.append('Envie uma foto JPEG, PNG ou WebP válida com até 5 MB.')
+
+        if erros:
+            for erro in erros:
+                messages.error(request, erro)
+            return render(request, 'usuarios/cadastrar_motorista.html')
+
+        try:
+            with transaction.atomic():
+                usuario = Usuario.objects.create_user(
+                    username=email,
+                    email=email,
+                    password=senha,
+                    first_name=nome,
+                    last_name=sobrenome,
+                    is_aprovado=True,
+                )
+                Motorista.objects.create(usuario=usuario, cpf=cpf, foto_perfil=foto)
+        except Exception:
+            messages.error(request, 'Não foi possível cadastrar o motorista. Verifique os dados e tente novamente.')
+            return render(request, 'usuarios/cadastrar_motorista.html')
+
+        messages.success(request, 'Motorista cadastrado e aprovado. Agora você pode vinculá-lo a um ou mais veículos.')
+        return redirect('painel_usuarios')
+
+    return render(request, 'usuarios/cadastrar_motorista.html')
+
+@login_required(login_url='login')
 def deletar_usuario(request, tipo, obj_id):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
     if not hasattr(request.user, 'instituicao'):
         return redirect('home')
 

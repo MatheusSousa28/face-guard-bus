@@ -36,7 +36,7 @@ def cadastro_aluno(request):
             if idade < 2 or idade > 30:
                 messages.error(request, "O aluno deve ter no mínimo 2 anos e no máximo 30.")
                 return redirect('cadastro_aluno')
-        except ValueError:
+        except (TypeError, ValueError):
             messages.error(request, "Idade inválida.")
             return redirect('cadastro_aluno')
 
@@ -44,14 +44,21 @@ def cadastro_aluno(request):
             messages.error(request, "A captura da biometria facial é obrigatória.")
             return redirect('cadastro_aluno')
 
+        if len(foto_base64) > 8_000_000:
+            messages.error(request, 'A captura excede o tamanho máximo permitido.')
+            return redirect('cadastro_aluno')
+
         #módulo de intelgiencia artificial e imagem
         try:
             #limpando o Base64 ex: 'data:image/jpeg;base64,/9j/4AAQSk...'
-            formato, imgstr = foto_base64.split(';base64,')
+            formato, imgstr = foto_base64.split(';base64,', 1)
             extensao = formato.split('/')[-1] # Pega o 'jpeg' ou 'png'
+            if extensao not in ('jpeg', 'png'):
+                messages.error(request, 'A captura deve estar em JPEG ou PNG. Tente novamente.')
+                return redirect('cadastro_aluno')
             
             #converte a string de volta para os bytes da imagem
-            image_data = base64.b64decode(imgstr)
+            image_data = base64.b64decode(imgstr, validate=True)
 
             #carrega a imagem na memória para a bib ler
             imagem_memoria = face_recognition.load_image_file(io.BytesIO(image_data))
@@ -90,8 +97,8 @@ def cadastro_aluno(request):
             messages.success(request, "Biometria e Aluno cadastrados com sucesso! Aguarde aprovação.")
             return redirect('home')
 
-        except Exception as e:
-            messages.error(request, f"Erro interno ao processar a biometria: {str(e)}")
+        except Exception:
+            messages.error(request, 'Não foi possível processar a captura facial. Verifique a imagem e tente novamente.')
             return redirect('cadastro_aluno')
 
     return render(request, 'alunos/cadastro_aluno.html')

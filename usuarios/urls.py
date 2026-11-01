@@ -9,5 +9,6 @@ urlpatterns = [
     path('painel/aprovar/<str:tipo>/<int:obj_id>/', views.aprovar_cadastro, name='aprovar_cadastro'),
     path('painel/reprovar/<str:tipo>/<int:obj_id>/', views.reprovar_cadastro, name='reprovar_cadastro'),
     path('painel/usuarios/', views.painel_usuarios_ativos, name='painel_usuarios'),
+    path('painel/motoristas/novo/', views.cadastrar_motorista, name='cadastrar_motorista'),
     path('painel/usuarios/deletar/<str:tipo>/<int:obj_id>/', views.deletar_usuario, name='deletar_usuario'),
 ]

@@ -3,7 +3,10 @@
 <div class="max-w-7xl mx-auto px-4 py-8">
     <div class="flex items-center justify-between mb-8">
         <h1 class="font-display text-3xl font-bold text-gray-900">Usuários Ativos</h1>
-        <a href="{% url 'home' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-bold">Voltar</a>
+        <div class="flex gap-3">
+            <a href="{% url 'cadastrar_motorista' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold">Cadastrar motorista</a>
+            <a href="{% url 'home' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-bold">Voltar</a>
+        </div>
     </div>
 
     <div class="space-y-8">
@@ -19,7 +22,9 @@
                                 <p class="text-sm text-gray-500">{{ mot.usuario.email }}</p>
                             </div>
                         </div>
-                        <a href="{% url 'deletar_usuario' 'motorista' mot.id %}" class="btn-deletar text-red-600 hover:text-red-800 font-bold">Excluir</a>
+                        <form method="POST" action="{% url 'deletar_usuario' 'motorista' mot.id %}" onsubmit="return confirm('Excluir este motorista?')">
+                            {% csrf_token %}<button class="text-red-600 hover:text-red-800 font-bold">Excluir</button>
+                        </form>
                     </div>
                 {% empty %}
                     <p class="text-gray-500">Nenhum motorista ativo.</p>
@@ -27,6 +32,40 @@
             </div>
         </section>
 
-        </div>
+        <section class="bg-white p-6 rounded-xl shadow border border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">👨‍👩‍👧 Responsáveis</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% for resp in responsaveis %}
+                    <div class="flex justify-between items-center p-4 border rounded-lg bg-gray-50">
+                        <div>
+                            <p class="font-bold text-gray-900">{{ resp.usuario.first_name }} {{ resp.usuario.last_name }}</p>
+                            <p class="text-sm text-gray-500">{{ resp.usuario.email }}</p>
+                        </div>
+                        <form method="POST" action="{% url 'deletar_usuario' 'responsavel' resp.id %}" onsubmit="return confirm('Excluir este responsável e o perfil associado?')">
+                            {% csrf_token %}<button class="text-red-600 hover:text-red-800 font-bold">Excluir</button>
+                        </form>
+                    </div>
+                {% empty %}<p class="text-gray-500">Nenhum responsável ativo.</p>{% endfor %}
+            </div>
+        </section>
+
+        <section class="bg-white p-6 rounded-xl shadow border border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">🎓 Alunos</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% for aluno in alunos %}
+                    <div class="flex justify-between items-center p-4 border rounded-lg bg-gray-50">
+                        <div>
+                            <p class="font-bold text-gray-900">{{ aluno.nome }}</p>
+                            <p class="text-sm text-gray-500">Responsável: {{ aluno.responsavel.usuario.first_name }}</p>
+                        </div>
+                        <form method="POST" action="{% url 'deletar_usuario' 'aluno' aluno.id %}" onsubmit="return confirm('Excluir este aluno e seus dados?')">
+                            {% csrf_token %}<button class="text-red-600 hover:text-red-800 font-bold">Excluir</button>
+                        </form>
+                    </div>
+                {% empty %}<p class="text-gray-500">Nenhum aluno ativo.</p>{% endfor %}
+            </div>
+        </section>
+
+    </div>
 </div>
 {% endblock %}

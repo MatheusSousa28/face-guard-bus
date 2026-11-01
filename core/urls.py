@@ -11,6 +11,7 @@ urlpatterns = [
     path('', RedirectView.as_view(pattern_name='home'), name='raiz'),
 
     path('login/', usuarios_views.login_view, name='login'),
+    path('logout/', usuarios_views.logout_view, name='logout'),
     path('home/', usuarios_views.painel_home, name='home'),
     path('cadastro/', usuarios_views.cadastro_responsavel, name='cadastro'),
     

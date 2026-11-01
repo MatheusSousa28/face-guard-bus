@@ -6,145 +6,121 @@
 
 <div class="max-w-7xl mx-auto px-4 py-8">
     <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
-        <div class="p-6 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-            <div>
-                <h2 class="font-display text-2xl font-bold text-gray-800">🚌 Monitoramento em Tempo Real</h2>
-                <p class="text-sm text-gray-500">Localização e status de embarque atualizados ao vivo.</p>
-            </div>
-            <div id="contador-frota" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-md">
-                Aguardando conexão...
-            </div>
+        <div class="p-6 bg-gray-50 border-b border-gray-200">
+            <h2 class="font-display text-2xl font-bold text-gray-800">Histórico de percursos</h2>
+            <p class="text-sm text-gray-500 mt-1">Selecione uma rota para consultar o trajeto e os eventos. Rotas ativas atualizam a posição automaticamente.</p>
+            <label for="seletor-rota" class="block text-sm font-semibold text-gray-700 mt-4 mb-1">Rota</label>
+            <select id="seletor-rota" class="w-full md:max-w-xl border border-gray-300 rounded-lg p-3 bg-white">
+                <option value="">Carregando rotas...</option>
+            </select>
+            <p id="detalhes-rota" class="text-sm text-gray-600 mt-3"></p>
+            <div id="resumo-alunos" class="mt-3 text-sm text-gray-700"></div>
+            {% if user.instituicao or user.is_superuser %}
+            <div id="alertas-rota" class="hidden mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900"></div>
+            {% endif %}
         </div>
-
         <div id="mapa-frota" class="w-full h-[600px] z-10"></div>
+        <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <p><span class="font-bold text-green-700">● Embarque</span> — clique no ponto para ver o aluno e horário.</p>
+            <p><span class="font-bold text-red-700">● Desembarque</span> — clique no ponto para ver o aluno e horário.</p>
+            <p><span class="font-bold text-blue-700">● Parada</span> — parada estimada a partir dos registros GPS (mínimo 2 minutos).</p>
+        </div>
     </div>
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Inicializa o mapa com a permissão do navegador
-        let mapa = null;
-        let marcadores = {}; 
-        let primeiraVez = true;
+document.addEventListener('DOMContentLoaded', () => {
+    const mapa = L.map('mapa-frota').setView([-15.7801, -47.9292], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(mapa);
+    const seletor = document.getElementById('seletor-rota');
+    const detalhes = document.getElementById('detalhes-rota');
+    let camadaRota = L.layerGroup().addTo(mapa);
+    let rotasCarregadas = false;
+    let timerAtualizacao = null;
+    let carregamentoAtual = 0;
+    const escapar = valor => String(valor).replace(/[&<>"']/g, caractere => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[caractere]));
 
-        const iconeOnibus = L.icon({
-            iconUrl: 'https://cdn-icons-png.flaticon.com/512/3448/3448339.png',
-            iconSize: [35, 35],
-            iconAnchor: [17, 17],
-            popupAnchor: [0, -15]
-        });
-
-        // 1. A trava rigorosa de Geolocation antes de iniciar o mapa
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const userLat = position.coords.latitude;
-                    const userLng = position.coords.longitude;
-                    
-                    // Inicia o mapa focado no usuário
-                    mapa = L.map('mapa-frota').setView([userLat, userLng], 14);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa);
-                    
-                    // Só começa a buscar os ônibus DEPOIS que o mapa carregar
-                    setInterval(atualizarFrota, 3000);
-                    atualizarFrota();
-                },
-                (error) => {
-                    alert("A permissão de localização é necessária para exibir o mapa corretamente.");
-                    // Inicia em um local padrão caso o usuário negue
-                    mapa = L.map('mapa-frota').setView([-15.7801, -47.9292], 13);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa);
-                    setInterval(atualizarFrota, 3000);
-                    atualizarFrota();
+    function carregarRota(id = '') {
+        clearInterval(timerAtualizacao);
+        const requisicao = ++carregamentoAtual;
+        const url = new URL('{% url "api_mapa_unificado" %}', window.location.origin);
+        if (id) url.searchParams.set('rota', id);
+        fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(response => {
+                if (!response.ok) throw new Error('Não foi possível carregar as rotas.');
+                return response.json();
+            })
+            .then(dados => {
+                if (requisicao !== carregamentoAtual) return;
+                if (!rotasCarregadas) {
+                    seletor.innerHTML = '';
+                    dados.rotas.forEach(rota => seletor.add(new Option(rota.label, rota.id)));
+                    rotasCarregadas = true;
+                    seletor.addEventListener('change', () => carregarRota(seletor.value));
                 }
-            );
-        }
-
-        // 2. Função que busca os dados unificados no Django
-        function atualizarFrota() {
-            // Se o mapa não ligou ainda, não faz a requisição
-            if (!mapa) return; 
-
-            fetch('/transporte/api/mapa-unificado/')
-                .then(response => response.json())
-                .then(dados => {
-                    const veiculosAtuais = dados.veiculos || [];
-                    
-                    let contador = document.getElementById('contador-frota');
-                    if (veiculosAtuais.length === 0) {
-                        contador.innerText = `Nenhum veículo em rota`;
-                        contador.className = "bg-gray-500 text-white px-4 py-2 rounded-lg font-bold shadow-md";
-                    } else {
-                        contador.innerText = `${veiculosAtuais.length} Veículo(s) no Mapa`;
-                        contador.className = "bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-md animate-pulse";
-                    }
-
-                    veiculosAtuais.forEach(v => {
-                        const pos = [v.latitude, v.longitude];
-                        
-                        // Monta o Pop-up com Fotos e Histórico dinâmico
-                        let conteudoPopup = `
-                            <div style="min-width: 220px; font-family: sans-serif;">
-                                <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                                    ${v.motorista_foto ? `<img src="${v.motorista_foto}" style="width:40px; height:40px; border-radius:50%; margin-right:10px; object-fit:cover;">` : ''}
-                                    <div>
-                                        <strong style="font-size: 14px;">Motorista: ${v.motorista}</strong><br>
-                                        <span style="font-size: 11px; color: gray;">${v.modelo} (${v.placa})</span>
-                                    </div>
-                                </div>
-                                
-                                <hr style="margin: 5px 0;">
-                                <strong style="font-size: 13px; color: #16a34a;">✅ Alunos a Bordo:</strong>
-                                <ul style="list-style: none; padding: 0; margin: 5px 0; max-height: 100px; overflow-y: auto;">
-                                    ${v.alunos_abordo.length > 0 ? 
-                                        v.alunos_abordo.map(a => `
-                                        <li style="display: flex; align-items: center; margin-bottom: 4px; font-size: 12px;">
-                                            ${a.foto ? `<img src="${a.foto}" style="width:24px; height:24px; border-radius:50%; margin-right:8px; object-fit:cover;">` : ''}
-                                            ${a.nome} às ${a.hora}
-                                        </li>`).join('') 
-                                        : '<li style="font-size: 12px; color: gray;">Nenhum aluno a bordo.</li>'
-                                    }
-                                </ul>
-
-                                <hr style="margin: 5px 0;">
-                                <strong style="font-size: 13px; color: #4b5563;">📜 Histórico da Rota:</strong>
-                                <ul style="list-style: none; padding: 0; margin: 5px 0; max-height: 100px; overflow-y: auto;">
-                                    ${v.historico.length > 0 ? 
-                                        v.historico.map(h => `
-                                        <li style="font-size: 11px; color: #6b7280; border-left: 2px solid ${h.tipo === 'Embarcou' ? '#16a34a' : '#dc2626'}; padding-left: 5px; margin-bottom: 3px;">
-                                            <b>${h.tipo}</b>: ${h.nome} (${h.hora})
-                                        </li>`).join('')
-                                        : '<li style="font-size: 12px; color: gray;">Nenhum evento.</li>'
-                                    }
-                                </ul>
-                                <div style="font-size: 10px; color: #9ca3af; text-align: right; margin-top: 8px;">Atualizado às ${v.atualizado_em}</div>
-                            </div>`;
-
-                        if (marcadores[v.veiculo_id]) {
-                            marcadores[v.veiculo_id].setLatLng(pos);
-                            marcadores[v.veiculo_id].getPopup().setContent(conteudoPopup);
-                        } else {
-                            marcadores[v.veiculo_id] = L.marker(pos, {icon: iconeOnibus})
-                                .addTo(mapa)
-                                .bindPopup(conteudoPopup);
-                        }
-                        
-                        if (primeiraVez && veiculosAtuais.length > 0) {
-                            mapa.setView(pos, 15);
-                            primeiraVez = false;
-                        }
-                    });
-
-                    // Remove veículos que não estão mais na rota (ou que o pai não tem mais acesso)
-                    const idsServidor = veiculosAtuais.map(v => v.veiculo_id);
-                    Object.keys(marcadores).forEach(id => {
-                        if (!idsServidor.includes(parseInt(id))) {
-                            mapa.removeLayer(marcadores[id]);
-                            delete marcadores[id];
-                        }
-                    });
+                camadaRota.clearLayers();
+                if (!dados.rota) {
+                    clearInterval(timerAtualizacao);
+                    seletor.innerHTML = '<option>Nenhuma rota com histórico disponível</option>';
+                    detalhes.textContent = '';
+                    return;
+                }
+                seletor.value = dados.rota.id;
+                detalhes.textContent = `Veículo: ${dados.rota.veiculo} · Motorista: ${dados.rota.motorista}`;
+                const resumoAlunos = document.getElementById('resumo-alunos');
+                const nomesAlunos = dados.alunos_abordo.map(aluno => escapar(aluno.nome));
+                resumoAlunos.innerHTML = `<strong>Alunos a bordo ${dados.rota.ativa ? 'agora' : 'ao final da rota'}:</strong> ${nomesAlunos.length ? nomesAlunos.join(', ') : 'nenhum'}`;
+                const coordenadas = dados.trajeto.map(p => [p.latitude, p.longitude]);
+                if (coordenadas.length) {
+                    const linha = L.polyline(coordenadas, {color: '#2563eb', weight: 5, opacity: 0.8}).addTo(camadaRota);
+                    mapa.fitBounds(linha.getBounds(), {padding: [30, 30]});
+                }
+                if (dados.posicao_atual) {
+                    const posicao = dados.posicao_atual;
+                    L.circleMarker([posicao.latitude, posicao.longitude], {
+                        radius: 11, color: '#1e3a8a', fillColor: '#3b82f6', fillOpacity: 1,
+                    }).bindPopup(`<strong>Veículo em rota</strong><br>Atualizado às ${escapar(posicao.atualizado_em)}`)
+                      .addTo(camadaRota);
+                    mapa.panTo([posicao.latitude, posicao.longitude]);
+                }
+                dados.eventos.forEach(evento => {
+                    if (evento.latitude === null || evento.longitude === null) return;
+                    const embarque = evento.tipo === 'Embarque';
+                    L.circleMarker([evento.latitude, evento.longitude], {
+                        radius: 9, color: embarque ? '#15803d' : '#b91c1c',
+                        fillColor: embarque ? '#22c55e' : '#ef4444', fillOpacity: 0.9
+                      }).bindPopup(`<strong>${escapar(evento.tipo)}</strong><br>${escapar(evento.aluno)}<br>${escapar(evento.hora)}`)
+                      .addTo(camadaRota);
                 });
-        }
-    });
+                const painelAlertas = document.getElementById('alertas-rota');
+                if (painelAlertas) {
+                    painelAlertas.classList.toggle('hidden', !dados.alertas.length);
+                    painelAlertas.innerHTML = dados.alertas.length
+                        ? `<strong>Alertas de face desconhecida</strong><ul class="mt-2 list-disc pl-5">${dados.alertas.map(a => `<li>Captura às ${a.hora}</li>`).join('')}</ul>`
+                        : '';
+                    dados.alertas.forEach(alerta => {
+                        if (alerta.latitude === null || alerta.longitude === null) return;
+                        L.marker([alerta.latitude, alerta.longitude]).bindPopup(`<strong>Face desconhecida</strong><br>Alerta às ${alerta.hora}`).addTo(camadaRota);
+                    });
+                }
+                dados.paradas.forEach(parada => {
+                    L.circleMarker([parada.latitude, parada.longitude], {
+                        radius: 8, color: '#1d4ed8', fillColor: '#60a5fa', fillOpacity: 0.9
+                    }).bindPopup(`<strong>Parada estimada</strong><br>${parada.inicio}–${parada.fim}<br>Duração aproximada: ${parada.duracao_minutos} min`)
+                      .addTo(camadaRota);
+                });
+                clearInterval(timerAtualizacao);
+                if (dados.rota.ativa) {
+                    timerAtualizacao = setInterval(() => carregarRota(String(dados.rota.id)), 10000);
+                }
+            })
+            .catch(error => { detalhes.textContent = error.message; });
+    }
+    carregarRota(new URLSearchParams(window.location.search).get('rota') || '');
+});
 </script>
 {% endblock %}
