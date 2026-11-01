@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">Cadastrar motorista</h1>
+        <p class="text-sm text-gray-600 mt-1">A conta será aprovada pela instituição e poderá ser vinculada a vários veículos.</p>
+    </div>
+    <form method="POST" enctype="multipart/form-data" class="space-y-5">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label for="first_name" class="block text-sm font-semibold mb-1">Nome</label>
+                <input id="first_name" name="first_name" required maxlength="150" class="w-full border rounded-lg p-3">
+            </div>
+            <div>
+                <label for="last_name" class="block text-sm font-semibold mb-1">Sobrenome</label>
+                <input id="last_name" name="last_name" required maxlength="150" class="w-full border rounded-lg p-3">
+            </div>
+        </div>
+        <div>
+            <label for="cpf" class="block text-sm font-semibold mb-1">CPF</label>
+            <input id="cpf" name="cpf" inputmode="numeric" required maxlength="14" placeholder="000.000.000-00" class="w-full border rounded-lg p-3">
+        </div>
+        <div>
+            <label for="email" class="block text-sm font-semibold mb-1">E-mail de acesso</label>
+            <input id="email" name="email" type="email" required autocomplete="email" class="w-full border rounded-lg p-3">
+        </div>
+        <div>
+            <label for="senha" class="block text-sm font-semibold mb-1">Senha inicial</label>
+            <input id="senha" name="senha" type="password" required minlength="8" autocomplete="new-password" class="w-full border rounded-lg p-3">
+            <p class="text-xs text-gray-500 mt-1">Mínimo de 8 caracteres, com maiúsculas, minúsculas, número e símbolo.</p>
+        </div>
+        <div>
+            <label for="foto_perfil" class="block text-sm font-semibold mb-1">Foto de perfil</label>
+            <input id="foto_perfil" name="foto_perfil" type="file" accept="image/jpeg,image/png,image/webp" required class="w-full border rounded-lg p-3">
+        </div>
+        <div class="flex justify-end gap-3 pt-2">
+            <a href="{% url 'painel_usuarios' %}" class="bg-gray-200 hover:bg-gray-300 px-5 py-3 rounded-lg font-bold">Cancelar</a>
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-bold">Criar motorista</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

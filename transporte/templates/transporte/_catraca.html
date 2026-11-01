@@ -1,0 +1,90 @@
+<section class="bg-gray-900 rounded-2xl p-4 sm:p-8 flex flex-col items-center gap-5 text-white">
+    <p id="painel-status" role="status" aria-live="polite" class="bg-black/80 px-5 py-3 rounded-full border border-gray-600 text-center font-bold">
+        Câmera desligada. Ative-a para registrar um evento demonstrativo.
+    </p>
+    <div class="relative w-full max-w-3xl aspect-video rounded-xl overflow-hidden border-4 border-gray-700 bg-black">
+        <video id="webcam" autoplay playsinline class="w-full h-full object-cover transform -scale-x-100"></video>
+        <div class="absolute top-0 left-0 w-full h-1 bg-green-500 opacity-50 animate-pulse"></div>
+    </div>
+    <canvas id="canvas-oculto" class="hidden"></canvas>
+    <form class="hidden" aria-hidden="true">{% csrf_token %}</form>
+    <div class="flex flex-col sm:flex-row gap-3">
+        <button id="btn-camera" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold">
+            Ativar câmera
+        </button>
+        <button id="btn-analisar" type="button" disabled class="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-bold">
+            Capturar embarque/desembarque
+        </button>
+    </div>
+    <p class="text-gray-300 text-xs text-center">A captura só é enviada ao pressionar o botão. Para a demonstração, embarque e desembarque são alternados a cada leitura reconhecida.</p>
+</section>
+
+<script>
+(() => {
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas-oculto');
+    const status = document.getElementById('painel-status');
+    const buttonCamera = document.getElementById('btn-camera');
+    const buttonCapture = document.getElementById('btn-analisar');
+    let stream = null;
+    let processing = false;
+
+    buttonCamera.addEventListener('click', async () => {
+        if (!navigator.mediaDevices?.getUserMedia) {
+            status.textContent = 'Este navegador não disponibiliza acesso à câmera.';
+            return;
+        }
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({video: true});
+            video.srcObject = stream;
+            buttonCapture.disabled = false;
+            buttonCamera.textContent = 'Câmera ativada';
+            buttonCamera.disabled = true;
+            status.textContent = 'Câmera pronta. Posicione o rosto e capture o evento.';
+        } catch (error) {
+            status.textContent = 'Não foi possível acessar a câmera. Verifique a permissão do navegador.';
+        }
+    });
+
+    buttonCapture.addEventListener('click', async () => {
+        if (processing || !video.videoWidth) return;
+        processing = true;
+        buttonCapture.disabled = true;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        try {
+            const response = await fetch('{% url "api_reconhecimento" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({imagem: canvas.toDataURL('image/jpeg', 0.8)}),
+            });
+            const result = await response.json();
+            if (!response.ok || result.status === 'erro') {
+                status.textContent = result.mensagem || 'Não foi possível registrar o evento.';
+            } else if (result.status === 'sucesso') {
+                status.textContent = `${result.tipo}: ${result.aluno} — registrado.`;
+            } else if (result.status === 'desconhecido') {
+                status.textContent = 'Face não reconhecida. O alerta demonstrativo foi registrado para a instituição.';
+            } else if (result.status === 'carencia') {
+                status.textContent = `${result.aluno}: aguarde alguns segundos antes de capturar novamente.`;
+            } else if (result.status === 'nenhum_rosto') {
+                status.textContent = 'Nenhum rosto detectado. Ajuste a posição e tente novamente.';
+            }
+        } catch (error) {
+            status.textContent = 'Falha de comunicação com o sistema.';
+        } finally {
+            processing = false;
+            buttonCapture.disabled = false;
+        }
+    });
+
+    window.addEventListener('pagehide', () => {
+        if (stream) stream.getTracks().forEach(track => track.stop());
+    });
+})();
+</script>

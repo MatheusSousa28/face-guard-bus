@@ -1,106 +1,128 @@
 import json
 from django.shortcuts import redirect, render, get_object_or_404
-from django.http import JsonResponse
+from django.http import HttpResponseNotAllowed, JsonResponse
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.csrf import csrf_exempt
 from .models import Rota, Localizacao, Veiculo
 from usuarios.models import Motorista
+from alunos.models import Aluno
 from django.contrib import messages
+from django.db import transaction
 from monitoramento.models import Evento 
 import base64
+import binascii
+import math
 import numpy as np
 from django.core.files.base import ContentFile
 import face_recognition
-from datetime import timedelta
+from math import radians, sin, cos, sqrt, atan2
+from PIL import Image, UnidentifiedImageError
 
 @login_required(login_url='login')
 def iniciar_rota(request):
-    if request.method == 'POST':
-        motorista_logado = request.user.motorista
-        veiculo_id = request.POST.get('veiculo_id')
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    if not hasattr(request.user, 'motorista') or not request.user.is_aprovado:
+        messages.error(request, 'Apenas motoristas aprovados podem iniciar rotas.')
+        return redirect('home')
 
-        if not veiculo_id:
-            messages.error(request, "Por favor, selecione um veículo para iniciar a rota.")
-            return redirect('home')
+    veiculo_id = request.POST.get('veiculo_id')
+    if not veiculo_id:
+        messages.error(request, 'Por favor, selecione um veículo para iniciar a rota.')
+        return redirect('home')
 
-        #busca o veículo específico que o motorista escolheu, 
-        # mas garante que faz parte da lista de autorizados dele.
-        veiculo = motorista_logado.veiculos.filter(id=veiculo_id).first()
+    try:
+        with transaction.atomic():
+            motorista = Motorista.objects.select_for_update().get(pk=request.user.motorista.pk)
+            # O bloqueio evita duas solicitações simultâneas iniciando o mesmo veículo.
+            veiculo = motorista.veiculos.select_for_update().filter(pk=veiculo_id).first()
+            if not veiculo:
+                messages.error(request, 'Veículo inválido ou não autorizado para o seu perfil.')
+                return redirect('home')
 
-        if not veiculo:
-            messages.error(request, "Veículo inválido ou não autorizado para o seu perfil.")
-            return redirect('home')
+            if Rota.objects.filter(motorista=motorista, ativa=True).exists():
+                messages.warning(request, 'Você já possui uma rota em andamento.')
+                return redirect('home')
+            if Rota.objects.filter(veiculo=veiculo, ativa=True).exists():
+                messages.error(request, 'Este veículo já possui uma rota em andamento.')
+                return redirect('home')
 
-        # Verifica se já não existe uma rota ativa
-        rota_ativa = Rota.objects.filter(motorista=motorista_logado, ativa=True).first()
-        
-        if not rota_ativa:
-            # Cria a nova Rota com o veículo selecionado!
-            rota_ativa = Rota.objects.create(
+            Rota.objects.create(
                 veiculo=veiculo,
-                motorista=motorista_logado,
+                motorista=motorista,
                 inicio=timezone.now(),
-                ativa=True
+                ativa=True,
             )
-            messages.success(request, f"Rota iniciada com sucesso no veículo {veiculo.placa}!")
-        else:
-            messages.warning(request, "Você já possui uma rota em andamento.")
-        
+    except Motorista.DoesNotExist:
+        messages.error(request, 'Perfil de motorista não encontrado.')
+        return redirect('home')
+
+    messages.success(request, f'Rota iniciada com sucesso no veículo {veiculo.placa}!')
     return redirect('home')
 
 @login_required(login_url='login')
 def finalizar_rota(request):
-    if request.method == 'POST':
-        motorista_logado = request.user.motorista
-        #busca a rota que está marcada como ativa
-        rota_ativa = Rota.objects.filter(motorista=motorista_logado, ativa=True).first()
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    if not hasattr(request.user, 'motorista') or not request.user.is_aprovado:
+        messages.error(request, 'Apenas motoristas aprovados podem finalizar rotas.')
+        return redirect('home')
 
-        alunos_embarcados = Evento.objects.filter(rota=rota_ativa, tipo='embarque').count()
-        alunos_desembarcados = Evento.objects.filter(rota=rota_ativa, tipo='desembarque').count()
-
-        if alunos_embarcados > alunos_desembarcados:
-            messages.error(request, "Atenção! Ainda existem alunos dentro do veículo.")
-            return redirect('home')
-        
+    with transaction.atomic():
+        rota_ativa = Rota.objects.select_for_update().filter(
+            motorista=request.user.motorista, ativa=True
+        ).first()
         if rota_ativa:
+            eventos = Evento.objects.filter(
+                rota=rota_ativa, aluno__isnull=False
+            ).order_by('data_hora', 'id').values_list('aluno_id', 'tipo')
+            status_alunos = {}
+            for aluno_id, tipo in eventos:
+                status_alunos[aluno_id] = tipo
+            alunos_abordo = [aluno_id for aluno_id, tipo in status_alunos.items() if tipo == 'embarque']
+            if alunos_abordo:
+                messages.error(request, f'Atenção! Ainda há {len(alunos_abordo)} aluno(s) dentro do veículo.')
+                return redirect('home')
+
             rota_ativa.ativa = False
             rota_ativa.fim = timezone.now()
-            rota_ativa.save()
-            messages.success(request, "Rota finalizada com sucesso. Bom descanso!")
+            rota_ativa.save(update_fields=['ativa', 'fim'])
+            messages.success(request, 'Rota finalizada com sucesso. Bom descanso!')
         else:
-            messages.error(request, "Não foi encontrada nenhuma rota ativa para encerrar.")
-            
+            messages.error(request, 'Não foi encontrada nenhuma rota ativa para encerrar.')
+
     return redirect('home')
 
-@csrf_exempt #desativando a proteção de formulário para facilitar a API via JS
+@login_required(login_url='login')
 def receber_localizacao(request):
-    #api que recebe a loclização do celular
-    if request.method == 'POST':
-        try:
-            #lendo o JSON que o JS do celular enviou
-            dados = json.loads(request.body)
-            lat = dados.get('latitude')
-            lng = dados.get('longitude')
-            
-            #identifica o motorista logado e pega a rota ativa dele
-            if request.user.is_authenticated and hasattr(request.user, 'motorista'):
-                rota_ativa = Rota.objects.filter(motorista=request.user.motorista, ativa=True).first()
-                
-                if rota_ativa:
-                    # Salva o ponto do GPS no banco de dados!
-                    Localizacao.objects.create(
-                        rota=rota_ativa,
-                        latitude=lat,
-                        longitude=lng
-                    )
-                    return JsonResponse({'status': 'sucesso'})
-            
+    if request.method != 'POST':
+        return JsonResponse({'status': 'erro', 'mensagem': 'Método não permitido.'}, status=405)
+    if not hasattr(request.user, 'motorista') or not request.user.is_aprovado:
+        return JsonResponse({'status': 'erro', 'mensagem': 'Apenas motoristas aprovados podem enviar GPS.'}, status=403)
+    if request.content_type != 'application/json':
+        return JsonResponse({'status': 'erro', 'mensagem': 'Envie as coordenadas em JSON.'}, status=415)
+
+    try:
+        dados = json.loads(request.body)
+        lat = float(dados.get('latitude'))
+        lng = float(dados.get('longitude'))
+    except (json.JSONDecodeError, UnicodeDecodeError, TypeError, ValueError, AttributeError):
+        return JsonResponse({'status': 'erro', 'mensagem': 'Coordenadas inválidas.'}, status=400)
+
+    if not (math.isfinite(lat) and math.isfinite(lng) and -90 <= lat <= 90 and -180 <= lng <= 180):
+        return JsonResponse({'status': 'erro', 'mensagem': 'Coordenadas fora do intervalo válido.'}, status=400)
+
+    with transaction.atomic():
+        rota_ativa = Rota.objects.select_for_update().filter(
+            motorista=request.user.motorista, ativa=True,
+        ).first()
+        if not rota_ativa:
             return JsonResponse({'status': 'erro', 'mensagem': 'Nenhuma rota ativa encontrada.'}, status=400)
-        except Exception as e:
-            return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
-            
-    return JsonResponse({'status': 'metodo_invalido'}, status=405)
+        localizacao = Localizacao.objects.create(rota=rota_ativa, latitude=lat, longitude=lng)
+    return JsonResponse({
+        'status': 'sucesso',
+        'atualizado_em': timezone.localtime(localizacao.timestamp).strftime('%H:%M:%S'),
+    })
 
 @login_required(login_url='login')
 def monitoramento_instituicao(request):
@@ -112,106 +134,107 @@ def monitoramento_instituicao(request):
     return render(request, 'transporte/monitoramento_geral.html', {'rotas': rotas_ativas})
 
 #api que detecta a face do aluno no embarque/desembarque
-@csrf_exempt
+@login_required(login_url='login')
 def api_reconhecimento(request):
-    if request.method == 'POST':
+    if request.method != 'POST':
+        return JsonResponse({'status': 'erro', 'mensagem': 'Método não permitido.'}, status=405)
+    if not hasattr(request.user, 'motorista') or not request.user.is_aprovado:
+        return JsonResponse({'status': 'erro', 'mensagem': 'Apenas motoristas aprovados podem operar a câmera.'}, status=403)
+    if request.content_type != 'application/json':
+        return JsonResponse({'status': 'erro', 'mensagem': 'Envie a captura em JSON.'}, status=415)
+
+    try:
+        data = json.loads(request.body)
+        img_base64 = data.get('imagem')
+    except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+        return JsonResponse({'status': 'erro', 'mensagem': 'Requisição inválida.'}, status=400)
+    if not img_base64 or not isinstance(img_base64, str) or ';base64,' not in img_base64:
+        return JsonResponse({'status': 'erro', 'mensagem': 'Imagem inválida.'}, status=400)
+    if len(img_base64) > 8_000_000:
+        return JsonResponse({'status': 'erro', 'mensagem': 'A captura excede o tamanho permitido.'}, status=413)
+
+    rota_ativa = Rota.objects.filter(motorista=request.user.motorista, ativa=True).select_related('veiculo').first()
+    if not rota_ativa:
+        return JsonResponse({'status': 'erro', 'mensagem': 'Nenhuma rota ativa.'}, status=400)
+
+    formato, imgstr = img_base64.split(';base64,', 1)
+    extensao = formato.removeprefix('data:image/')
+    if extensao not in ('jpeg', 'png'):
+        return JsonResponse({'status': 'erro', 'mensagem': 'Formato de imagem não permitido.'}, status=400)
+    try:
+        bytes_imagem = base64.b64decode(imgstr, validate=True)
+        if len(bytes_imagem) > 6 * 1024 * 1024:
+            return JsonResponse({'status': 'erro', 'mensagem': 'A captura excede o tamanho permitido.'}, status=413)
+        arquivo_imagem = ContentFile(bytes_imagem, name=f'captura.{extensao}')
+        imagem_carregada = face_recognition.load_image_file(arquivo_imagem)
+        encodings_capturados = face_recognition.face_encodings(imagem_carregada)
+    except (binascii.Error, ValueError, OSError):
+        return JsonResponse({'status': 'erro', 'mensagem': 'A captura não é uma imagem válida.'}, status=400)
+
+    if not encodings_capturados:
+        return JsonResponse({'status': 'nenhum_rosto'})
+    if len(encodings_capturados) > 1:
+        return JsonResponse({
+            'status': 'multiplos_rostos',
+            'mensagem': 'A captura deve conter apenas um rosto.',
+        }, status=400)
+
+    encoding_atual = encodings_capturados[0]
+    alunos_autorizados = rota_ativa.veiculo.alunos_autorizados.filter(is_aprovado=True)
+    aluno_reconhecido = None
+    for aluno in alunos_autorizados:
+        if not aluno.dados_faciais:
+            continue
         try:
-            data = json.loads(request.body)
-            img_base64 = data.get('imagem')
-            
-            #Recupera a rota ativa do motorista logado
-            rota_ativa = Rota.objects.filter(motorista__usuario=request.user, ativa=True).first()
-            if not rota_ativa:
-                return JsonResponse({'status': 'erro', 'mensagem': 'Nenhuma rota ativa.'}, status=400)
+            dados_brutos = json.loads(aluno.dados_faciais) if isinstance(aluno.dados_faciais, str) else aluno.dados_faciais
+            conhecido_encoding = np.asarray(dados_brutos, dtype=float)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if conhecido_encoding.shape != (128,):
+            continue
+        if face_recognition.compare_faces([conhecido_encoding], encoding_atual, tolerance=0.5)[0]:
+            aluno_reconhecido = aluno
+            break
 
-            #Decodifica a imagem recebida da catraca
-            format, imgstr = img_base64.split(';base64,')
-            ext = format.split('/')[-1]
-            arquivo_imagem = ContentFile(base64.b64decode(imgstr), name=f"temp_captura.{ext}")
+    # Serializa eventos concorrentes para não registrar dois embarques no mesmo instante.
+    with transaction.atomic():
+        rota_ativa = Rota.objects.select_for_update().filter(
+            pk=rota_ativa.pk, motorista=request.user.motorista, ativa=True,
+        ).select_related('veiculo').first()
+        if not rota_ativa:
+            return JsonResponse({'status': 'erro', 'mensagem': 'A rota foi encerrada durante a captura.'}, status=409)
 
-            #Carrega a imagem e extrai a biometria (encoding)
-            imagem_carregada = face_recognition.load_image_file(arquivo_imagem)
-            encodings_capturados = face_recognition.face_encodings(imagem_carregada)
-
-            if not encodings_capturados:
-                return JsonResponse({'status': 'nenhum_rosto'})
-
-            encoding_atual = encodings_capturados[0]
-
-            #Busca apenas alunos autorizados para este veículo para otimizar
-            alunos_autorizados = rota_ativa.veiculo.alunos_autorizados.all()
-            
+        if aluno_reconhecido and not rota_ativa.veiculo.alunos_autorizados.filter(
+            pk=aluno_reconhecido.pk, is_aprovado=True,
+        ).exists():
             aluno_reconhecido = None
-            for aluno in alunos_autorizados:
-                
-                dados_brutos = aluno.dados_faciais
-                
-                #Se o banco devolveu um texto, converte de volta para lista
-                if isinstance(dados_brutos, str):
-                    dados_brutos = json.loads(dados_brutos)
-                
-                #Transforma em array NumPy garantindo que são números decimais
-                conhecido_encoding = np.array(dados_brutos, dtype=float)
-                
-                #Compara as faces
-                match = face_recognition.compare_faces([conhecido_encoding], encoding_atual, tolerance=0.5)
-                
-                if match[0]:
-                    aluno_reconhecido = aluno
-                    break
 
-            if aluno_reconhecido:
-                if aluno_reconhecido:
-                # Busca o último evento deste aluno nesta rota específica
-                    ultimo_evento = Evento.objects.filter(
-                        rota=rota_ativa, 
-                        aluno=aluno_reconhecido
-                    ).order_by('-data_hora').first()
+        if not aluno_reconhecido:
+            Evento.objects.create(rota=rota_ativa, tipo='desconhecido', autorizado=False)
+            return JsonResponse({'status': 'desconhecido'})
 
-                    #se o mesmo aluno registrou um evento muito recentemente, o sistema bloqueia a ação
-                    if ultimo_evento:
-                        tempo_passado = timezone.now() - ultimo_evento.data_hora
-                        # Define a carência em segundos (Ex: 60 segundos para a demonstração)
-                        # No mundo real, você colocaria algo como 300 (5 minutos)
-                        if tempo_passado.total_seconds() < 60:
-                            return JsonResponse({
-                                'status': 'carencia',
-                                'aluno': aluno_reconhecido.nome
-                            })
+        ultimo_evento = Evento.objects.filter(
+            rota=rota_ativa, aluno=aluno_reconhecido,
+        ).order_by('-data_hora', '-id').first()
+        if ultimo_evento and (timezone.now() - ultimo_evento.data_hora).total_seconds() < 10:
+            return JsonResponse({
+                'status': 'carencia', 'aluno': aluno_reconhecido.nome,
+                'mensagem': 'Aguarde alguns segundos antes de registrar outro evento.',
+            })
 
-                    if not ultimo_evento or ultimo_evento.tipo == 'desembarque':
-                        tipo_evento = 'embarque'
-                    else:
-                        tipo_evento = 'desembarque'
-
-                    # Cria o registro do evento
-                    Evento.objects.create(
-                        rota=rota_ativa,
-                        aluno=aluno_reconhecido,
-                        tipo=tipo_evento,
-                        foto_capturada=arquivo_imagem,
-                        autorizado=True
-                    )
-            else:
-                # Caso a face não seja de um aluno autorizado ou seja desconhecida
-                Evento.objects.create(
-                    rota=rota_ativa,
-                    tipo='desconhecido',
-                    foto_capturada=arquivo_imagem,
-                    autorizado=False
-                )
-                return JsonResponse({'status': 'desconhecido'})
-
-        except Exception as e:
-            return JsonResponse({'status': 'erro', 'mensagem': str(e)}, status=500)
-
-    return JsonResponse({'status': 'metodo_invalido'}, status=405)
+        tipo_evento = 'embarque' if not ultimo_evento or ultimo_evento.tipo == 'desembarque' else 'desembarque'
+        Evento.objects.create(
+            rota=rota_ativa, aluno=aluno_reconhecido, tipo=tipo_evento, autorizado=True,
+        )
+        return JsonResponse({'status': 'sucesso', 'tipo': tipo_evento, 'aluno': aluno_reconhecido.nome})
 
 @login_required(login_url='login')
 def simulador_catraca(request):
-    #view apenas para renderizar a tela preta com a webcam
-    if not hasattr(request.user, 'motorista'):
-        messages.error(request, "Acesso Negado: Apenas motoristas logados podem operar a catraca do veículo.")
+    if not hasattr(request.user, 'motorista') or not request.user.is_aprovado:
+        messages.error(request, 'Apenas motoristas aprovados podem operar a câmera.')
+        return redirect('home')
+    if not Rota.objects.filter(motorista=request.user.motorista, ativa=True).exists():
+        messages.error(request, 'Inicie uma rota antes de ativar a câmera.')
         return redirect('home')
     return render(request, 'transporte/catraca.html')
 
@@ -225,73 +248,103 @@ def api_frota_mapa_unificada(request):
     if not (is_admin or is_responsavel):
         return JsonResponse({'error': 'Acesso negado'}, status=403)
 
-    rotas_ativas = Rota.objects.filter(ativa=True).select_related('veiculo', 'motorista', 'motorista__usuario')
-    lista_veiculos = []
+    rotas = Rota.objects.select_related('veiculo', 'motorista', 'motorista__usuario').exclude(veiculo__isnull=True)
+    if is_responsavel and not is_admin:
+        rotas = rotas.filter(eventos__aluno__responsavel=usuario.responsavel).distinct()
+    rotas = list(rotas.order_by('-ativa', '-inicio'))
+    route_id = request.GET.get('rota')
+    rota = next((item for item in rotas if str(item.id) == str(route_id)), None) if route_id else (rotas[0] if rotas else None)
+    if rota is None:
+        return JsonResponse({'rotas': [], 'rota': None})
 
-    for rota in rotas_ativas:
-        ultima_pos = Localizacao.objects.filter(rota=rota).order_by('-timestamp').first()
-        if not ultima_pos:
-            continue
+    pontos = list(Localizacao.objects.filter(rota=rota).order_by('timestamp'))
+    eventos_qs = Evento.objects.filter(rota=rota).select_related('aluno').exclude(tipo='desconhecido')
+    if is_responsavel and not is_admin:
+        eventos_qs = eventos_qs.filter(aluno__responsavel=usuario.responsavel)
+    eventos = list(eventos_qs.order_by('data_hora'))
 
-        # Busca todos os eventos dessa rota
-        eventos_rota = Evento.objects.filter(rota=rota).select_related('aluno').order_by('data_hora')
-        
-        # Filtro Rigoroso: Se for Pai, corta os eventos para sobrar APENAS os dos filhos dele
-        if is_responsavel and not is_admin:
-            eventos_rota = eventos_rota.filter(aluno__responsavel=usuario.responsavel)
+    def ponto_proximo_do_evento(evento):
+        if not pontos:
+            return None
+        ponto = min(pontos, key=lambda item: abs((item.timestamp - evento.data_hora).total_seconds()))
+        # Não atribui ao evento uma posição antiga se o GPS estava sem sinal.
+        if abs((ponto.timestamp - evento.data_hora).total_seconds()) > 180:
+            return None
+        return ponto
 
-        # Descobre o status atual de cada aluno a bordo (varrendo do mais antigo pro mais novo)
-        status_atual_alunos = {}
-        for ev in eventos_rota:
-            if ev.aluno:
-                status_atual_alunos[ev.aluno] = ev
+    alertas_json = []
+    if is_admin:
+        desconhecidos = Evento.objects.filter(rota=rota, tipo='desconhecido').order_by('data_hora')
+        for evento in desconhecidos:
+            ponto = ponto_proximo_do_evento(evento)
+            alertas_json.append({
+                'hora': timezone.localtime(evento.data_hora).strftime('%H:%M:%S'),
+                'latitude': float(ponto.latitude) if ponto else None,
+                'longitude': float(ponto.longitude) if ponto else None,
+            })
 
-        # Separa apenas quem está a bordo AGORA
-        alunos_abordo = []
-        for aluno, ev in status_atual_alunos.items():
-            if ev.tipo == 'embarque':
-                alunos_abordo.append({
-                    'nome': aluno.nome,
-                    'foto': aluno.foto_perfil.url if aluno.foto_perfil else '',
-                    'hora': ev.data_hora.strftime('%H:%M:%S')
-                })
+    def distancia_metros(a, b):
+        raio = 6371000
+        lat1, lat2 = radians(float(a.latitude)), radians(float(b.latitude))
+        dlat = lat2 - lat1
+        dlon = radians(float(b.longitude) - float(a.longitude))
+        valor = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+        return 2 * raio * atan2(sqrt(valor), sqrt(1 - valor))
 
-        #o pai NÃO VÊ o ônibus no mapa se o filho dele não estiver a bordo
-        if is_responsavel and not is_admin and not alunos_abordo:
-            continue
+    paradas = []
+    grupo = []
+    for ponto in pontos:
+        if grupo and distancia_metros(grupo[-1], ponto) > 40:
+            if len(grupo) > 1 and (grupo[-1].timestamp - grupo[0].timestamp).total_seconds() >= 120:
+                paradas.append({'latitude': float(grupo[0].latitude), 'longitude': float(grupo[0].longitude),
+                                'inicio': timezone.localtime(grupo[0].timestamp).strftime('%H:%M'),
+                                'fim': timezone.localtime(grupo[-1].timestamp).strftime('%H:%M'),
+                                'duracao_minutos': round((grupo[-1].timestamp - grupo[0].timestamp).total_seconds() / 60)})
+            grupo = []
+        grupo.append(ponto)
+    if len(grupo) > 1 and (grupo[-1].timestamp - grupo[0].timestamp).total_seconds() >= 120:
+        paradas.append({'latitude': float(grupo[0].latitude), 'longitude': float(grupo[0].longitude),
+                        'inicio': timezone.localtime(grupo[0].timestamp).strftime('%H:%M'),
+                        'fim': timezone.localtime(grupo[-1].timestamp).strftime('%H:%M'),
+                        'duracao_minutos': round((grupo[-1].timestamp - grupo[0].timestamp).total_seconds() / 60)})
 
-        # Monta o histórico completo de entrada/saída (Pais veem só dos filhos, Instituição vê de todos)
-        historico = []
-        for ev in eventos_rota.order_by('-data_hora'):
-            if ev.aluno:
-                historico.append({
-                    'nome': ev.aluno.nome,
-                    'tipo': 'Embarcou' if ev.tipo == 'embarque' else 'Desembarcou',
-                    'hora': ev.data_hora.strftime('%H:%M:%S')
-                })
-
-        # Prepara a foto do motorista
-        motorista_foto = ''
-        if rota.motorista and rota.motorista.foto_perfil:
-            motorista_foto = rota.motorista.foto_perfil.url
-
-        lista_veiculos.append({
-            'veiculo_id': rota.veiculo.id,
-            'placa': rota.veiculo.placa,
-            'modelo': rota.veiculo.modelo,
-            'motorista': rota.motorista.usuario.first_name if rota.motorista else 'Desconhecido',
-            'motorista_foto': motorista_foto,
-            'latitude': float(ultima_pos.latitude),
-            'longitude': float(ultima_pos.longitude),
-            'atualizado_em': ultima_pos.timestamp.strftime('%H:%M:%S'),
-            'alunos_abordo': alunos_abordo,
-            'historico': historico,
+    eventos_json = []
+    status_por_aluno = {}
+    for evento in eventos:
+        ponto = ponto_proximo_do_evento(evento)
+        eventos_json.append({
+            'aluno': evento.aluno.nome, 'tipo': evento.get_tipo_display(),
+            'hora': timezone.localtime(evento.data_hora).strftime('%H:%M:%S'),
+            'latitude': float(ponto.latitude) if ponto else None,
+            'longitude': float(ponto.longitude) if ponto else None,
         })
+        status_por_aluno[evento.aluno_id] = {
+            'nome': evento.aluno.nome,
+            'foto': evento.aluno.foto_perfil.url if evento.aluno.foto_perfil else '',
+            'a_bordo': evento.tipo == 'embarque',
+            'hora': timezone.localtime(evento.data_hora).strftime('%H:%M:%S'),
+        }
+    alunos_abordo = [aluno for aluno in status_por_aluno.values() if aluno['a_bordo']]
 
-    return JsonResponse({'veiculos': lista_veiculos})
+    return JsonResponse({
+        'rotas': [{'id': item.id, 'label': f"{item.veiculo.placa} · {timezone.localtime(item.inicio).strftime('%d/%m/%Y %H:%M') if item.inicio else 'Data não informada'} · {'Em andamento' if item.ativa else 'Concluída'}"} for item in rotas],
+        'rota': {'id': rota.id, 'ativa': rota.ativa, 'veiculo': str(rota.veiculo),
+                 'motorista': rota.motorista.usuario.first_name if rota.motorista else 'Não informado'},
+        'trajeto': [{'latitude': float(p.latitude), 'longitude': float(p.longitude)} for p in pontos],
+        'eventos': eventos_json, 'paradas': paradas, 'alertas': alertas_json,
+        'alunos_abordo': alunos_abordo,
+        'posicao_atual': ({
+            'latitude': float(pontos[-1].latitude),
+            'longitude': float(pontos[-1].longitude),
+            'atualizado_em': timezone.localtime(pontos[-1].timestamp).strftime('%H:%M:%S'),
+        } if pontos and rota.ativa else None),
+    })
 
 @login_required(login_url='login')
 def tela_mapa_unificado(request):
+    if not (hasattr(request.user, 'instituicao') or hasattr(request.user, 'responsavel') or request.user.is_superuser):
+        messages.error(request, 'Acesso permitido apenas à instituição e aos responsáveis.')
+        return redirect('home')
     return render(request, 'transporte/mapa_unificado.html')
 
 @login_required(login_url='login')
@@ -308,42 +361,107 @@ def gerenciar_veiculo(request, id=None):
     
     veiculo = get_object_or_404(Veiculo, id=id) if id else None
     motoristas = Motorista.objects.filter(usuario__is_aprovado=True)
+    alunos = Aluno.objects.filter(is_aprovado=True).select_related('responsavel__usuario')
 
     if request.method == 'POST':
-        modelo = request.POST.get('modelo')
+        modelo = request.POST.get('modelo', '').strip()
         capacidade = request.POST.get('capacidade')
-        placa = request.POST.get('placa')
-        cor = request.POST.get('cor')
+        placa = request.POST.get('placa', '').strip().upper()
+        cor = request.POST.get('cor', '').strip()
         foto = request.FILES.get('foto')
         motoristas_ids = request.POST.getlist('motoristas') # Pega a lista de IDs dos checkboxes
+        alunos_ids = request.POST.getlist('alunos')
 
-        if not veiculo:
-            veiculo = Veiculo.objects.create(modelo=modelo, capacidade=capacidade, placa=placa, cor=cor)
-            messages.success(request, 'Veículo cadastrado com sucesso!')
-        else:
-            veiculo.modelo = modelo
-            veiculo.capacidade = capacidade
-            veiculo.placa = placa
-            veiculo.cor = cor
-            veiculo.save()
-            messages.success(request, 'Veículo atualizado com sucesso!')
+        if not all((modelo, capacidade, placa, cor)):
+            messages.error(request, 'Preencha todos os campos obrigatórios do veículo.')
+            return render(request, 'transporte/form_veiculo.html', {
+                'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+            })
+        if len(modelo) > 100 or len(cor) > 30 or len(placa) > 10:
+            messages.error(request, 'Modelo, cor ou placa excede o limite de caracteres permitido.')
+            return render(request, 'transporte/form_veiculo.html', {
+                'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+            })
+        try:
+            capacidade = int(capacidade)
+            if capacidade < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            messages.error(request, 'A capacidade deve ser um número maior que zero.')
+            return render(request, 'transporte/form_veiculo.html', {
+                'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+            })
+
+        placa_em_uso = Veiculo.objects.filter(placa=placa)
+        if veiculo:
+            placa_em_uso = placa_em_uso.exclude(pk=veiculo.pk)
+        if placa_em_uso.exists():
+            messages.error(request, 'Já existe um veículo cadastrado com esta placa.')
+            return render(request, 'transporte/form_veiculo.html', {
+                'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+            })
 
         if foto:
-            veiculo.foto = foto
-            veiculo.save()
+            if foto.size > 5 * 1024 * 1024:
+                messages.error(request, 'A foto deve ter até 5 MB.')
+                return render(request, 'transporte/form_veiculo.html', {
+                    'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+                })
+            imagem_valida = True
+            try:
+                foto.seek(0)
+                imagem = Image.open(foto)
+                imagem.verify()
+                imagem_valida = imagem_valida and imagem.format in {'JPEG', 'PNG', 'WEBP'}
+                foto.seek(0)
+            except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+                imagem_valida = False
+                foto.seek(0)
+            if not imagem_valida:
+                messages.error(request, 'A foto deve ser JPEG, PNG ou WebP válida e ter até 5 MB.')
+                return render(request, 'transporte/form_veiculo.html', {
+                    'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+                })
 
-        #salva todos os motoristas marcados de uma vez no banco
-        veiculo.motoristas_autorizados.set(motoristas_ids)
+        try:
+            with transaction.atomic():
+                if not veiculo:
+                    veiculo = Veiculo.objects.create(modelo=modelo, capacidade=capacidade, placa=placa, cor=cor)
+                else:
+                    veiculo.modelo = modelo
+                    veiculo.capacidade = capacidade
+                    veiculo.placa = placa
+                    veiculo.cor = cor
+                    veiculo.save()
+
+                if foto:
+                    veiculo.foto = foto
+                    veiculo.save(update_fields=['foto'])
+
+                veiculo.motoristas_autorizados.set(motoristas.filter(id__in=motoristas_ids))
+                veiculo.alunos_autorizados.set(alunos.filter(id__in=alunos_ids))
+        except Exception:
+            messages.error(request, 'Não foi possível salvar o veículo. Verifique os dados e tente novamente.')
+            return render(request, 'transporte/form_veiculo.html', {
+                'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+            })
+
+        messages.success(request, 'Veículo e vínculos salvos com sucesso.')
 
         return redirect('painel_veiculos')
 
-    return render(request, 'transporte/form_veiculo.html', {'veiculo': veiculo, 'motoristas': motoristas})
+    return render(request, 'transporte/form_veiculo.html', {'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos})
 
 @login_required(login_url='login')
 def deletar_veiculo(request, id):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
     if not hasattr(request.user, 'instituicao'):
         return redirect('home')
     veiculo = get_object_or_404(Veiculo, id=id)
+    if Rota.objects.filter(veiculo=veiculo).exists():
+        messages.error(request, 'Não é possível excluir um veículo associado ao histórico de rotas.')
+        return redirect('painel_veiculos')
     veiculo.delete()
     messages.error(request, 'Veículo removido do sistema.')
     return redirect('painel_veiculos')

@@ -24,8 +24,8 @@
                     </div>
                 </div>
                 <div class="flex flex-col gap-2 ml-4">
-                    <a href="{% url 'aprovar_cadastro' 'aluno' aluno.id %}" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm text-center transition">Aprovar</a>
-                    <a href="{% url 'reprovar_cadastro' 'aluno' aluno.id %}" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-bold text-sm text-center transition">Reprovar</a>
+                    <form method="POST" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}">{% csrf_token %}<button class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm">Aprovar</button></form>
+                    <form method="POST" action="{% url 'reprovar_cadastro' 'aluno' aluno.id %}" onsubmit="return confirm('Reprovar e remover este aluno?')">{% csrf_token %}<button class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-bold text-sm">Reprovar</button></form>
                 </div>
             </div>
         {% empty %}
@@ -47,8 +47,8 @@
                     </div>
                 </div>
                 <div class="flex flex-col gap-2 ml-4">
-                    <a href="{% url 'aprovar_cadastro' 'responsavel' resp.id %}" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm text-center transition">Aprovar</a>
-                    <a href="{% url 'reprovar_cadastro' 'responsavel' resp.id %}" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-bold text-sm text-center transition">Reprovar</a>
+                    <form method="POST" action="{% url 'aprovar_cadastro' 'responsavel' resp.id %}">{% csrf_token %}<button class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm">Aprovar</button></form>
+                    <form method="POST" action="{% url 'reprovar_cadastro' 'responsavel' resp.id %}" onsubmit="return confirm('Reprovar e remover este responsável?')">{% csrf_token %}<button class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-bold text-sm">Reprovar</button></form>
                 </div>
             </div>
         {% empty %}
@@ -70,8 +70,8 @@
                     </div>
                 </div>
                 <div class="flex flex-col gap-2 ml-4">
-                    <a href="{% url 'aprovar_cadastro' 'motorista' mot.id %}" class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm text-center transition">Aprovar</a>
-                    <a href="{% url 'reprovar_cadastro' 'motorista' mot.id %}" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-bold text-sm text-center transition">Reprovar</a>
+                    <form method="POST" action="{% url 'aprovar_cadastro' 'motorista' mot.id %}">{% csrf_token %}<button class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm">Aprovar</button></form>
+                    <form method="POST" action="{% url 'reprovar_cadastro' 'motorista' mot.id %}" onsubmit="return confirm('Reprovar e remover este motorista?')">{% csrf_token %}<button class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-bold text-sm">Reprovar</button></form>
                 </div>
             </div>
         {% empty %}

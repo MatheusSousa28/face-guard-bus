@@ -3,86 +3,66 @@
 <div class="max-w-7xl mx-auto px-4 py-8">
     <div class="flex items-center justify-between mb-8">
         <h1 class="font-display text-3xl font-bold text-gray-900">Usuários Ativos</h1>
-        <a href="{% url 'home' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-bold transition">Voltar</a>
+        <div class="flex gap-3">
+            <a href="{% url 'cadastrar_motorista' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold">Cadastrar motorista</a>
+            <a href="{% url 'home' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-bold">Voltar</a>
+        </div>
     </div>
 
-    <div class="space-y-10">
-        
+    <div class="space-y-8">
         <section class="bg-white p-6 rounded-xl shadow border border-gray-200">
-            <div class="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 class="text-xl font-bold text-gray-800">🚌 Motoristas</h2>
-                <a href="{% url 'gerenciar_usuario' 'motorista' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-bold text-sm transition">+ Novo Motorista</a>
-            </div>
+            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">🚌 Motoristas</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {% for mot in motoristas %}
-                    <div class="flex justify-between items-center p-4 border rounded-lg bg-gray-50 hover:bg-white transition">
+                    <div class="flex justify-between items-center p-4 border rounded-lg bg-gray-50">
                         <div class="flex items-center gap-4">
                             {% if mot.foto_perfil %}<img src="{{ mot.foto_perfil.url }}" class="w-12 h-12 rounded-full object-cover">{% endif %}
                             <div>
                                 <p class="font-bold text-gray-900">{{ mot.usuario.first_name }} {{ mot.usuario.last_name }}</p>
-                                <p class="text-sm text-gray-500">{{ mot.usuario.email }} | CPF: {{ mot.cpf }}</p>
+                                <p class="text-sm text-gray-500">{{ mot.usuario.email }}</p>
                             </div>
                         </div>
-                        <div class="flex gap-3">
-                            <a href="{% url 'gerenciar_usuario' 'motorista' mot.id %}" class="text-yellow-600 hover:text-yellow-800 font-bold text-sm">Editar</a>
-                            <a href="{% url 'deletar_usuario' 'motorista' mot.id %}" class="btn-deletar text-red-600 hover:text-red-800 font-bold text-sm">Excluir</a>
-                        </div>
+                        <form method="POST" action="{% url 'deletar_usuario' 'motorista' mot.id %}" onsubmit="return confirm('Excluir este motorista?')">
+                            {% csrf_token %}<button class="text-red-600 hover:text-red-800 font-bold">Excluir</button>
+                        </form>
                     </div>
                 {% empty %}
-                    <p class="text-gray-500 italic">Nenhum motorista ativo no sistema.</p>
+                    <p class="text-gray-500">Nenhum motorista ativo.</p>
                 {% endfor %}
             </div>
         </section>
 
         <section class="bg-white p-6 rounded-xl shadow border border-gray-200">
-            <div class="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 class="text-xl font-bold text-gray-800">👨‍👩‍👧 Responsáveis (Pais)</h2>
-                <a href="{% url 'gerenciar_usuario' 'responsavel' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-bold text-sm transition">+ Novo Responsável</a>
-            </div>
+            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">👨‍👩‍👧 Responsáveis</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {% for resp in responsaveis %}
-                    <div class="flex justify-between items-center p-4 border rounded-lg bg-gray-50 hover:bg-white transition">
-                        <div class="flex items-center gap-4">
-                            {% if resp.foto_perfil %}<img src="{{ resp.foto_perfil.url }}" class="w-12 h-12 rounded-full object-cover">{% endif %}
-                            <div>
-                                <p class="font-bold text-gray-900">{{ resp.usuario.first_name }} {{ resp.usuario.last_name }}</p>
-                                <p class="text-sm text-gray-500">{{ resp.usuario.email }} | CPF: {{ resp.cpf }}</p>
-                            </div>
+                    <div class="flex justify-between items-center p-4 border rounded-lg bg-gray-50">
+                        <div>
+                            <p class="font-bold text-gray-900">{{ resp.usuario.first_name }} {{ resp.usuario.last_name }}</p>
+                            <p class="text-sm text-gray-500">{{ resp.usuario.email }}</p>
                         </div>
-                        <div class="flex gap-3">
-                            <a href="{% url 'gerenciar_usuario' 'responsavel' resp.id %}" class="text-yellow-600 hover:text-yellow-800 font-bold text-sm">Editar</a>
-                            <a href="{% url 'deletar_usuario' 'responsavel' resp.id %}" class="btn-deletar text-red-600 hover:text-red-800 font-bold text-sm">Excluir</a>
-                        </div>
+                        <form method="POST" action="{% url 'deletar_usuario' 'responsavel' resp.id %}" onsubmit="return confirm('Excluir este responsável e o perfil associado?')">
+                            {% csrf_token %}<button class="text-red-600 hover:text-red-800 font-bold">Excluir</button>
+                        </form>
                     </div>
-                {% empty %}
-                    <p class="text-gray-500 italic">Nenhum responsável ativo no sistema.</p>
-                {% endfor %}
+                {% empty %}<p class="text-gray-500">Nenhum responsável ativo.</p>{% endfor %}
             </div>
         </section>
 
         <section class="bg-white p-6 rounded-xl shadow border border-gray-200">
-            <div class="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 class="text-xl font-bold text-gray-800">🎓 Alunos</h2>
-                <button onclick="alert('A criação e edição de alunos será liberada na próxima etapa devido à biometria facial.')" class="bg-gray-400 text-white px-4 py-2 rounded font-bold text-sm cursor-not-allowed">+ Novo Aluno</button>
-            </div>
+            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">🎓 Alunos</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {% for aluno in alunos %}
-                    <div class="flex justify-between items-center p-4 border rounded-lg bg-gray-50 hover:bg-white transition">
-                        <div class="flex items-center gap-4">
-                            {% if aluno.foto_perfil %}<img src="{{ aluno.foto_perfil.url }}" class="w-12 h-12 rounded-full object-cover">{% endif %}
-                            <div>
-                                <p class="font-bold text-gray-900">{{ aluno.nome }}</p>
-                                <p class="text-sm text-gray-500">Resp: {{ aluno.responsavel.usuario.first_name }}</p>
-                            </div>
+                    <div class="flex justify-between items-center p-4 border rounded-lg bg-gray-50">
+                        <div>
+                            <p class="font-bold text-gray-900">{{ aluno.nome }}</p>
+                            <p class="text-sm text-gray-500">Responsável: {{ aluno.responsavel.usuario.first_name }}</p>
                         </div>
-                        <div class="flex gap-3">
-                            <button onclick="alert('Em breve!')" class="text-gray-400 font-bold text-sm">Editar</button>
-                            <a href="{% url 'deletar_usuario' 'aluno' aluno.id %}" class="btn-deletar text-red-600 hover:text-red-800 font-bold text-sm">Excluir</a>
-                        </div>
+                        <form method="POST" action="{% url 'deletar_usuario' 'aluno' aluno.id %}" onsubmit="return confirm('Excluir este aluno e seus dados?')">
+                            {% csrf_token %}<button class="text-red-600 hover:text-red-800 font-bold">Excluir</button>
+                        </form>
                     </div>
-                {% empty %}
-                    <p class="text-gray-500 italic">Nenhum aluno ativo no sistema.</p>
-                {% endfor %}
+                {% empty %}<p class="text-gray-500">Nenhum aluno ativo.</p>{% endfor %}
             </div>
         </section>
 
