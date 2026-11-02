@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 py-8">
-    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div class="flex items-start gap-3">
-            {% include '_botao_voltar.html' with voltar_url='home' %}
-            <h1 class="font-display text-3xl font-bold text-gray-900">Frota Escolar</h1>
-        </div>
-        <a href="{% url 'novo_veiculo' %}" class="self-end rounded-lg bg-blue-600 px-6 py-2 font-bold text-white transition hover:bg-blue-700 sm:ml-auto sm:self-start">
+    <div class="mb-4">
+        {% include '_botao_voltar.html' with voltar_url='home' %}
+    </div>
+    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 class="font-display text-3xl font-bold text-gray-900">Frota Escolar</h1>
+        <a href="{% url 'novo_veiculo' %}" class="self-end rounded-lg bg-blue-600 px-6 py-2 font-bold text-white transition hover:bg-blue-700 sm:ml-auto sm:self-auto">
             + Novo Veículo
         </a>
     </div>

@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="max-w-5xl mx-auto px-4 py-6">
-    <div class="mb-4 flex items-start gap-3">
+    <div class="mb-4">
         {% include '_botao_voltar.html' with voltar_url='home' %}
-        <h1 class="text-2xl font-bold text-gray-900">Câmera da rota</h1>
     </div>
+    <h1 class="mb-4 text-2xl font-bold text-gray-900">Câmera da rota</h1>
     {% include 'transporte/_catraca.html' %}
 </div>
 {% endblock %}
