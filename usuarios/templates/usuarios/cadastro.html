@@ -26,10 +26,11 @@
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center font-sans py-10">
 
-    <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-lg">
-        <div class="mb-4">
+    <div class="w-full max-w-lg px-4">
+        <div class="mb-3">
             {% include '_botao_voltar.html' with voltar_url='login' %}
         </div>
+        <div class="bg-white p-8 rounded-lg shadow-md">
         <h2 class="font-display text-3xl font-bold text-blue-600 mb-2 text-center text-blue-800">Criar Conta</h2>
         <p class="text-center text-gray-500 mb-6 text-sm">Acesso exclusivo para Pais e Responsáveis</p>
         
@@ -140,6 +141,7 @@
 
         <div class="mt-6 text-center">
             <p class="text-sm text-gray-600">Já tem uma conta? <a href="{% url 'login' %}" class="text-blue-600 hover:underline font-medium">Faça Login</a></p>
+        </div>
         </div>
     </div>
 
