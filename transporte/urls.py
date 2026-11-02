@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     path('iniciar-rota/', views.iniciar_rota, name='iniciar_rota'),
     path('finalizar_rota/', views.finalizar_rota, name='finalizar_rota'),
+    path('rotas/<int:rota_id>/resolver-interrupcao/', views.resolver_rota_interrompida, name='resolver_rota_interrompida'),
     path('api/gps/', views.receber_localizacao, name='api_gps'),
     
     path('mapa-unificado/', views.tela_mapa_unificado, name='mapa_unificado'),

@@ -8,10 +8,10 @@ from django.db import transaction
 from django.utils import timezone
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
-from datetime import timedelta
 import re
 from alunos.models import Aluno
 from transporte.models import Rota
+from transporte.services import contar_alunos_a_bordo, obter_estado_gps, processar_rotas_sem_gps
 from monitoramento.models import Evento
 from PIL import Image, UnidentifiedImageError
 
@@ -71,57 +71,89 @@ def painel_home(request):
     usuario = request.user
     
     if hasattr(usuario, 'instituicao') or usuario.is_superuser:
+        processar_rotas_sem_gps()
         rotas_ativas = list(
-            Rota.objects.filter(ativa=True)
+            Rota.objects.filter(ativa=True, interrompida=False)
             .select_related('veiculo', 'motorista__usuario')
             .order_by('-inicio')
         )
+        rotas_interrompidas_pendentes = list(
+            Rota.objects.filter(interrompida=True, ativa=True)
+            .select_related('veiculo', 'motorista__usuario', 'resolvida_por')
+            .order_by('-interrompida_em')
+        )
+        rotas_interrompidas_encerradas = list(
+            Rota.objects.filter(interrompida=True, ativa=False)
+            .select_related('veiculo', 'motorista__usuario', 'resolvida_por')
+            .order_by('-interrompida_em')[:10]
+        )
+        rotas_interrompidas = rotas_interrompidas_pendentes + rotas_interrompidas_encerradas
+        rotas_operacionais = rotas_ativas + [rota for rota in rotas_interrompidas if rota.ativa]
         eventos_ativos = Evento.objects.filter(
-            rota__in=rotas_ativas, aluno__isnull=False
+            rota__in=rotas_operacionais, aluno__isnull=False
         ).select_related('aluno').order_by('data_hora', 'id')
         estado_alunos = {}
         for evento in eventos_ativos:
             estado_alunos[(evento.rota_id, evento.aluno_id)] = evento.tipo
 
-        contexto_rotas = []
-        for rota in rotas_ativas:
+        agora = timezone.now()
+
+        def montar_resumo_rota(rota):
             ultima_localizacao = rota.coordenadas.order_by('-timestamp').first()
-            gps_atualizado = bool(
-                ultima_localizacao and
-                timezone.now() - ultima_localizacao.timestamp <= timedelta(seconds=90)
-            )
             alunos_abordo = sum(
                 1 for (rota_id, _), tipo in estado_alunos.items()
                 if rota_id == rota.id and tipo == 'embarque'
             )
-            contexto_rotas.append({
+            estado_gps = obter_estado_gps(rota, ultima_localizacao, agora)
+            return {
                 'rota': rota,
                 'ultima_localizacao': ultima_localizacao,
-                'gps_atualizado': gps_atualizado,
+                'estado_gps': estado_gps,
+                'gps_atualizado': estado_gps == 'atualizado',
                 'alunos_abordo': alunos_abordo,
-            })
+            }
+
+        contexto_rotas = [montar_resumo_rota(rota) for rota in rotas_ativas]
+        contexto_interrompidas = [montar_resumo_rota(rota) for rota in rotas_interrompidas]
+        rotas_com_gps = sum(item['estado_gps'] == 'atualizado' for item in contexto_rotas)
+        rotas_sem_sinal = sum(item['estado_gps'] == 'sem_sinal' for item in contexto_rotas)
+        interrupcoes_pendentes = sum(item['rota'].ativa for item in contexto_interrompidas)
 
         alertas_recentes = Evento.objects.filter(tipo='desconhecido').select_related(
             'rota__veiculo'
         ).order_by('-data_hora')[:5]
         return render(request, 'usuarios/home_instituicao.html', {
             'rotas_ativas': contexto_rotas,
-            'total_rotas_ativas': len(contexto_rotas),
-            'total_alunos_abordo': sum(item['alunos_abordo'] for item in contexto_rotas),
+            'rotas_interrompidas': contexto_interrompidas,
+            'total_rotas_ativas': rotas_com_gps,
+            'total_rotas_sem_sinal': rotas_sem_sinal,
+            'total_interrupcoes_pendentes': interrupcoes_pendentes,
+            'total_alunos_abordo': sum(
+                item['alunos_abordo'] for item in contexto_rotas + contexto_interrompidas
+                if item['rota'].ativa
+            ),
             'alertas_recentes': alertas_recentes,
         })
 
     elif hasattr(usuario, 'motorista'):
         motorista = usuario.motorista
+        processar_rotas_sem_gps(motorista_id=motorista.pk)
         
         #busca a rota ativa (se existir)
-        rota_ativa = Rota.objects.filter(motorista=motorista, ativa=True).first()
+        rota_ativa = Rota.objects.filter(
+            motorista=motorista, ativa=True,
+        ).select_related('veiculo').first()
+        ultima_localizacao = (
+            rota_ativa.coordenadas.order_by('-timestamp').first()
+            if rota_ativa else None
+        )
         
         #busca veículos autorizados para o motorista
         veiculos = motorista.veiculos.all()
         
         contexto = {
             'rota_ativa': rota_ativa,
+            'ultima_localizacao': ultima_localizacao,
             'veiculos': veiculos
         }
         return render(request, 'usuarios/home_motorista.html', contexto)

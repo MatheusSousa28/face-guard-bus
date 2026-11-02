@@ -60,11 +60,12 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(dados => {
                 if (requisicao !== carregamentoAtual) return;
                 if (!rotasCarregadas) {
-                    seletor.innerHTML = '';
-                    dados.rotas.forEach(rota => seletor.add(new Option(rota.label, rota.id)));
                     rotasCarregadas = true;
                     seletor.addEventListener('change', () => carregarRota(seletor.value));
                 }
+                const rotaSelecionada = id || seletor.value;
+                seletor.innerHTML = '';
+                dados.rotas.forEach(rota => seletor.add(new Option(rota.label, rota.id)));
                 camadaRota.clearLayers();
                 if (!dados.rota) {
                     clearInterval(timerAtualizacao);
@@ -72,11 +73,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     detalhes.textContent = '';
                     return;
                 }
-                seletor.value = dados.rota.id;
-                detalhes.textContent = `Veículo: ${dados.rota.veiculo} · Motorista: ${dados.rota.motorista}`;
+                seletor.value = dados.rotas.some(rota => String(rota.id) === String(rotaSelecionada))
+                    ? rotaSelecionada
+                    : dados.rota.id;
+                const statusGps = {
+                    atualizado: 'GPS atualizado',
+                    sem_sinal: 'GPS sem sinal',
+                    interrompida: dados.rota.ativa ? 'interrompida — revisão necessária' : 'rota interrompida',
+                }[dados.rota.gps_status];
+                const ultimaAtualizacao = dados.rota.ultima_atualizacao
+                    ? ` · Último GPS: ${dados.rota.ultima_atualizacao}`
+                    : ' · Sem coordenadas GPS';
+                detalhes.textContent = `Veículo: ${dados.rota.veiculo} · Motorista: ${dados.rota.motorista} · ${statusGps}${ultimaAtualizacao}`;
                 const resumoAlunos = document.getElementById('resumo-alunos');
                 const nomesAlunos = dados.alunos_abordo.map(aluno => escapar(aluno.nome));
-                resumoAlunos.innerHTML = `<strong>Alunos a bordo ${dados.rota.ativa ? 'agora' : 'ao final da rota'}:</strong> ${nomesAlunos.length ? nomesAlunos.join(', ') : 'nenhum'}`;
+                const rotaEmAndamento = dados.rota.ativa && !dados.rota.interrompida;
+                resumoAlunos.innerHTML = `<strong>Alunos a bordo ${rotaEmAndamento ? 'agora' : 'ao final da rota'}:</strong> ${nomesAlunos.length ? nomesAlunos.join(', ') : 'nenhum'}`;
                 const coordenadas = dados.trajeto.map(p => [p.latitude, p.longitude]);
                 if (coordenadas.length) {
                     const linha = L.polyline(coordenadas, {color: '#2563eb', weight: 5, opacity: 0.8}).addTo(camadaRota);
@@ -117,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       .addTo(camadaRota);
                 });
                 clearInterval(timerAtualizacao);
-                if (dados.rota.ativa) {
+                if (rotaEmAndamento) {
                     timerAtualizacao = setInterval(() => carregarRota(String(dados.rota.id)), 10000);
                 }
             })

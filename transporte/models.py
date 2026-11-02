@@ -22,6 +22,14 @@ class Rota(models.Model):
     inicio = models.DateTimeField(null=True, blank=True)
     fim = models.DateTimeField(null=True, blank=True)
     ativa = models.BooleanField(default=False)
+    interrompida = models.BooleanField(default=False)
+    interrompida_em = models.DateTimeField(null=True, blank=True)
+    resolvida_por = models.ForeignKey(
+        'usuarios.Usuario', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='interrupcoes_de_rotas_resolvidas',
+    )
+    resolvida_em = models.DateTimeField(null=True, blank=True)
+    observacao_resolucao = models.TextField(blank=True)
 
     def __str__(self):
         return f"Rota {self.id} - {self.veiculo.placa}"

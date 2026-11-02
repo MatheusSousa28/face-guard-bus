@@ -139,6 +139,8 @@ class TransporteFluxosTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Ativar câmera')
         self.assertContains(response, 'Capturar embarque/desembarque')
+        self.assertContains(response, 'setInterval(enviarLocalizacao, 3000)')
+        self.assertContains(response, 'maximumAge: 0')
 
     def test_painel_da_instituicao_resume_gps_e_alunos_a_bordo(self):
         rota = self.criar_rota()
@@ -152,6 +154,99 @@ class TransporteFluxosTests(TestCase):
         self.assertContains(response, 'Alunos a bordo')
         self.assertContains(response, 'GPS atualizado')
         self.assertEqual(response.context['total_alunos_abordo'], 1)
+
+    def test_rota_sem_gps_por_mais_de_15_minutos_e_encerrada_sem_alunos_a_bordo(self):
+        rota = self.criar_rota()
+        Rota.objects.filter(pk=rota.pk).update(inicio=timezone.now() - timedelta(minutes=16))
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.get(reverse('home'))
+
+        rota.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(rota.ativa)
+        self.assertTrue(rota.interrompida)
+        self.assertIsNotNone(rota.fim)
+        self.assertContains(response, 'Encerrada automaticamente por falta de GPS')
+
+    def test_rota_sem_gps_com_aluno_a_bordo_fica_pendente_e_reserva_recursos(self):
+        rota = self.criar_rota()
+        Rota.objects.filter(pk=rota.pk).update(inicio=timezone.now() - timedelta(minutes=16))
+        Evento.objects.create(rota=rota, aluno=self.aluno, tipo='embarque', autorizado=True)
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.get(reverse('home'))
+
+        rota.refresh_from_db()
+        self.assertTrue(rota.ativa)
+        self.assertTrue(rota.interrompida)
+        self.assertContains(response, 'Revisão necessária')
+        self.assertContains(response, 'permanecem reservados')
+
+    def test_rota_com_gps_sem_sinal_por_mais_de_90_segundos_ainda_pode_retornar(self):
+        rota = self.criar_rota()
+        ponto = Localizacao.objects.create(rota=rota, latitude=-15.78, longitude=-47.92)
+        Localizacao.objects.filter(pk=ponto.pk).update(timestamp=timezone.now() - timedelta(minutes=2))
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.get(reverse('home'))
+
+        rota.refresh_from_db()
+        self.assertTrue(rota.ativa)
+        self.assertFalse(rota.interrompida)
+        self.assertContains(response, 'Sem sinal')
+        self.assertEqual(response.context['total_rotas_sem_sinal'], 1)
+
+    def test_iniciar_rota_libera_rota_fantasma_sem_alunos_a_bordo(self):
+        rota_antiga = self.criar_rota()
+        Rota.objects.filter(pk=rota_antiga.pk).update(inicio=timezone.now() - timedelta(minutes=16))
+        self.client.force_login(self.motorista_usuario)
+
+        response = self.client.post(reverse('iniciar_rota'), {'veiculo_id': self.veiculo.id})
+
+        rota_antiga.refresh_from_db()
+        self.assertRedirects(response, reverse('home'))
+        self.assertFalse(rota_antiga.ativa)
+        self.assertTrue(rota_antiga.interrompida)
+        self.assertEqual(Rota.objects.filter(motorista=self.motorista, ativa=True).count(), 1)
+
+    def test_instituicao_pode_resolver_interrupcao_com_registro_de_revisao(self):
+        rota = self.criar_rota()
+        Rota.objects.filter(pk=rota.pk).update(inicio=timezone.now() - timedelta(minutes=16))
+        Evento.objects.create(rota=rota, aluno=self.aluno, tipo='embarque', autorizado=True)
+        self.client.force_login(self.instituicao_usuario)
+        self.client.get(reverse('home'))
+
+        response = self.client.post(reverse('resolver_rota_interrompida', args=(rota.pk,)), {
+            'observacao': 'Aluno localizado e situação confirmada pela instituição.',
+            'confirmacao_seguranca': 'on',
+        })
+
+        rota.refresh_from_db()
+        self.assertRedirects(response, reverse('home'))
+        self.assertFalse(rota.ativa)
+        self.assertEqual(rota.resolvida_por, self.instituicao_usuario)
+        self.assertIsNotNone(rota.resolvida_em)
+        self.assertEqual(rota.observacao_resolucao, 'Aluno localizado e situação confirmada pela instituição.')
+
+    def test_gps_nao_reativa_rota_interrompida_aguardando_revisao(self):
+        rota = self.criar_rota()
+        Rota.objects.filter(pk=rota.pk).update(inicio=timezone.now() - timedelta(minutes=16))
+        Evento.objects.create(rota=rota, aluno=self.aluno, tipo='embarque', autorizado=True)
+        self.client.force_login(self.motorista_usuario)
+
+        response = self.client.post(
+            reverse('api_gps'),
+            data=json.dumps({'latitude': -15.78, 'longitude': -47.92}),
+            content_type='application/json',
+        )
+
+        rota.refresh_from_db()
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['status'], 'interrompida')
+        self.assertTrue(rota.ativa)
+        self.assertTrue(rota.interrompida)
+        self.assertFalse(Localizacao.objects.filter(rota=rota).exists())
 
     def test_instituicao_pode_acessar_cadastro_de_motorista(self):
         self.client.force_login(self.instituicao_usuario)

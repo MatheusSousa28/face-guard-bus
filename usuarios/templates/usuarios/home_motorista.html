@@ -9,6 +9,18 @@
         </div>
 
         {% if rota_ativa %}
+            {% if rota_ativa.interrompida %}
+            <div class="mb-6 rounded-r-md border-l-4 border-red-600 bg-red-50 p-6">
+                <h3 class="mb-1 text-xl font-bold text-red-800">Rota interrompida — revisão necessária</h3>
+                <p class="font-medium text-red-700">Veículo: {{ rota_ativa.veiculo.modelo }} ({{ rota_ativa.veiculo.placa }})</p>
+                {% if ultima_localizacao %}
+                    <p class="mt-2 text-sm text-gray-700">Último GPS recebido: {{ ultima_localizacao.timestamp|date:'d/m/Y H:i:s' }}</p>
+                {% else %}
+                    <p class="mt-2 text-sm text-gray-700">Nenhuma coordenada GPS foi recebida nesta rota.</p>
+                {% endif %}
+                <p class="mt-2 text-sm text-red-800">A instituição precisa revisar a situação dos alunos antes de liberar uma nova rota. O envio de GPS e a câmera foram pausados.</p>
+            </div>
+            {% else %}
             <div class="bg-green-50 border-l-4 border-green-600 p-6 mb-6 rounded-r-md flex justify-between items-center">
                 <div>
                     <h3 class="font-display font-bold text-green-800 text-xl mb-1">Rota em Andamento</h3>
@@ -66,7 +78,7 @@
                                     statusGps.className = 'text-sm text-red-700 mt-2';
                                     enviando = false;
                                 },
-                                { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+                                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                             );
                         } else {
                             statusGps.textContent = 'Este navegador não oferece geolocalização.';
@@ -75,10 +87,11 @@
                     }
 
                     enviarLocalizacao();
-                    intervaloGps = setInterval(enviarLocalizacao, 10000);
+                    intervaloGps = setInterval(enviarLocalizacao, 3000);
                     window.addEventListener('pagehide', () => clearInterval(intervaloGps), {once: true});
                 });
             </script>
+            {% endif %}
 
         {% else %}
             <div class="bg-blue-50 border-l-4 border-blue-700 p-4 mb-8 rounded-r-md">

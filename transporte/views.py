@@ -4,6 +4,11 @@ from django.http import HttpResponseNotAllowed, JsonResponse
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
 from .models import Rota, Localizacao, Veiculo
+from .services import (
+    contar_alunos_a_bordo,
+    obter_estado_gps,
+    processar_rotas_sem_gps,
+)
 from usuarios.models import Motorista
 from alunos.models import Aluno
 from django.contrib import messages
@@ -40,11 +45,26 @@ def iniciar_rota(request):
                 messages.error(request, 'Veículo inválido ou não autorizado para o seu perfil.')
                 return redirect('home')
 
+            processar_rotas_sem_gps(motorista_id=motorista.pk)
+            processar_rotas_sem_gps(veiculo_id=veiculo.pk)
+
             if Rota.objects.filter(motorista=motorista, ativa=True).exists():
-                messages.warning(request, 'Você já possui uma rota em andamento.')
+                pendente = Rota.objects.filter(
+                    motorista=motorista, ativa=True, interrompida=True,
+                ).exists()
+                if pendente:
+                    messages.warning(request, 'Sua rota foi interrompida e aguarda revisão da instituição.')
+                else:
+                    messages.warning(request, 'Você já possui uma rota em andamento.')
                 return redirect('home')
             if Rota.objects.filter(veiculo=veiculo, ativa=True).exists():
-                messages.error(request, 'Este veículo já possui uma rota em andamento.')
+                pendente = Rota.objects.filter(
+                    veiculo=veiculo, ativa=True, interrompida=True,
+                ).exists()
+                if pendente:
+                    messages.error(request, 'Este veículo está reservado por uma rota interrompida que aguarda revisão.')
+                else:
+                    messages.error(request, 'Este veículo já possui uma rota em andamento.')
                 return redirect('home')
 
             Rota.objects.create(
@@ -69,19 +89,17 @@ def finalizar_rota(request):
         return redirect('home')
 
     with transaction.atomic():
+        processar_rotas_sem_gps(motorista_id=request.user.motorista.pk)
         rota_ativa = Rota.objects.select_for_update().filter(
             motorista=request.user.motorista, ativa=True
         ).first()
         if rota_ativa:
-            eventos = Evento.objects.filter(
-                rota=rota_ativa, aluno__isnull=False
-            ).order_by('data_hora', 'id').values_list('aluno_id', 'tipo')
-            status_alunos = {}
-            for aluno_id, tipo in eventos:
-                status_alunos[aluno_id] = tipo
-            alunos_abordo = [aluno_id for aluno_id, tipo in status_alunos.items() if tipo == 'embarque']
+            if rota_ativa.interrompida:
+                messages.error(request, 'Esta rota foi interrompida e precisa ser revisada pela instituição.')
+                return redirect('home')
+            alunos_abordo = contar_alunos_a_bordo(rota_ativa)
             if alunos_abordo:
-                messages.error(request, f'Atenção! Ainda há {len(alunos_abordo)} aluno(s) dentro do veículo.')
+                messages.error(request, f'Atenção! Ainda há {alunos_abordo} aluno(s) dentro do veículo.')
                 return redirect('home')
 
             rota_ativa.ativa = False
@@ -91,6 +109,43 @@ def finalizar_rota(request):
         else:
             messages.error(request, 'Não foi encontrada nenhuma rota ativa para encerrar.')
 
+    return redirect('home')
+
+
+@login_required(login_url='login')
+def resolver_rota_interrompida(request, rota_id):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    if not (hasattr(request.user, 'instituicao') or request.user.is_superuser):
+        messages.error(request, 'Apenas a instituição pode revisar uma rota interrompida.')
+        return redirect('home')
+
+    observacao = request.POST.get('observacao', '').strip()
+    if not observacao or len(observacao) > 1000:
+        messages.error(request, 'Informe uma observação válida para registrar a revisão da rota.')
+        return redirect('home')
+    if request.POST.get('confirmacao_seguranca') != 'on':
+        messages.error(request, 'Confirme que a situação dos alunos foi verificada antes de encerrar a rota.')
+        return redirect('home')
+
+    with transaction.atomic():
+        rota = Rota.objects.select_for_update().filter(
+            pk=rota_id, ativa=True, interrompida=True,
+        ).first()
+        if not rota:
+            messages.error(request, 'Esta rota não está mais aguardando revisão.')
+            return redirect('home')
+        agora = timezone.now()
+        rota.ativa = False
+        rota.fim = agora
+        rota.resolvida_por = request.user
+        rota.resolvida_em = agora
+        rota.observacao_resolucao = observacao
+        rota.save(update_fields=[
+            'ativa', 'fim', 'resolvida_por', 'resolvida_em', 'observacao_resolucao',
+        ])
+
+    messages.success(request, 'A rota interrompida foi encerrada após revisão.')
     return redirect('home')
 
 @login_required(login_url='login')
@@ -113,10 +168,19 @@ def receber_localizacao(request):
         return JsonResponse({'status': 'erro', 'mensagem': 'Coordenadas fora do intervalo válido.'}, status=400)
 
     with transaction.atomic():
+        processar_rotas_sem_gps(motorista_id=request.user.motorista.pk)
         rota_ativa = Rota.objects.select_for_update().filter(
-            motorista=request.user.motorista, ativa=True,
+            motorista=request.user.motorista, ativa=True, interrompida=False,
         ).first()
         if not rota_ativa:
+            rota_interrompida = Rota.objects.filter(
+                motorista=request.user.motorista, ativa=True, interrompida=True,
+            ).exists()
+            if rota_interrompida:
+                return JsonResponse({
+                    'status': 'interrompida',
+                    'mensagem': 'A rota foi interrompida e aguarda revisão da instituição.',
+                }, status=409)
             return JsonResponse({'status': 'erro', 'mensagem': 'Nenhuma rota ativa encontrada.'}, status=400)
         localizacao = Localizacao.objects.create(rota=rota_ativa, latitude=lat, longitude=lng)
     return JsonResponse({
@@ -130,7 +194,10 @@ def monitoramento_instituicao(request):
     if not (hasattr(request.user, 'instituicao') or request.user.is_superuser):
         return redirect('home')
         
-    rotas_ativas = Rota.objects.filter(ativa=True).select_related('veiculo', 'motorista')
+    processar_rotas_sem_gps()
+    rotas_ativas = Rota.objects.filter(
+        ativa=True, interrompida=False,
+    ).select_related('veiculo', 'motorista')
     return render(request, 'transporte/monitoramento_geral.html', {'rotas': rotas_ativas})
 
 #api que detecta a face do aluno no embarque/desembarque
@@ -153,8 +220,18 @@ def api_reconhecimento(request):
     if len(img_base64) > 8_000_000:
         return JsonResponse({'status': 'erro', 'mensagem': 'A captura excede o tamanho permitido.'}, status=413)
 
-    rota_ativa = Rota.objects.filter(motorista=request.user.motorista, ativa=True).select_related('veiculo').first()
+    processar_rotas_sem_gps(motorista_id=request.user.motorista.pk)
+    rota_ativa = Rota.objects.filter(
+        motorista=request.user.motorista, ativa=True, interrompida=False,
+    ).select_related('veiculo').first()
     if not rota_ativa:
+        if Rota.objects.filter(
+            motorista=request.user.motorista, ativa=True, interrompida=True,
+        ).exists():
+            return JsonResponse({
+                'status': 'interrompida',
+                'mensagem': 'A rota foi interrompida e aguarda revisão da instituição.',
+            }, status=409)
         return JsonResponse({'status': 'erro', 'mensagem': 'Nenhuma rota ativa.'}, status=400)
 
     formato, imgstr = img_base64.split(';base64,', 1)
@@ -198,8 +275,10 @@ def api_reconhecimento(request):
 
     # Serializa eventos concorrentes para não registrar dois embarques no mesmo instante.
     with transaction.atomic():
+        processar_rotas_sem_gps(motorista_id=request.user.motorista.pk)
         rota_ativa = Rota.objects.select_for_update().filter(
-            pk=rota_ativa.pk, motorista=request.user.motorista, ativa=True,
+            pk=rota_ativa.pk, motorista=request.user.motorista,
+            ativa=True, interrompida=False,
         ).select_related('veiculo').first()
         if not rota_ativa:
             return JsonResponse({'status': 'erro', 'mensagem': 'A rota foi encerrada durante a captura.'}, status=409)
@@ -233,7 +312,10 @@ def simulador_catraca(request):
     if not hasattr(request.user, 'motorista') or not request.user.is_aprovado:
         messages.error(request, 'Apenas motoristas aprovados podem operar a câmera.')
         return redirect('home')
-    if not Rota.objects.filter(motorista=request.user.motorista, ativa=True).exists():
+    processar_rotas_sem_gps(motorista_id=request.user.motorista.pk)
+    if not Rota.objects.filter(
+        motorista=request.user.motorista, ativa=True, interrompida=False,
+    ).exists():
         messages.error(request, 'Inicie uma rota antes de ativar a câmera.')
         return redirect('home')
     return render(request, 'transporte/catraca.html')
@@ -247,6 +329,8 @@ def api_frota_mapa_unificada(request):
     # Proteção de acesso
     if not (is_admin or is_responsavel):
         return JsonResponse({'error': 'Acesso negado'}, status=403)
+
+    processar_rotas_sem_gps()
 
     rotas = Rota.objects.select_related('veiculo', 'motorista', 'motorista__usuario').exclude(veiculo__isnull=True)
     if is_responsavel and not is_admin:
@@ -326,10 +410,35 @@ def api_frota_mapa_unificada(request):
         }
     alunos_abordo = [aluno for aluno in status_por_aluno.values() if aluno['a_bordo']]
 
+    agora = timezone.now()
+    estado_gps = obter_estado_gps(rota, pontos[-1] if pontos else None, agora)
+
+    def rotulo_rota(item):
+        if item.interrompida:
+            if item.ativa:
+                estado = 'Interrompida · revisão pendente'
+            elif item.resolvida_por_id:
+                estado = 'Interrompida · revisão concluída'
+            else:
+                estado = 'Interrompida · encerrada automaticamente'
+        elif item.ativa:
+            estado = 'Em andamento' if obter_estado_gps(item, agora=agora) == 'atualizado' else 'Sem sinal'
+        else:
+            estado = 'Concluída'
+        inicio = timezone.localtime(item.inicio).strftime('%d/%m/%Y %H:%M') if item.inicio else 'Data não informada'
+        return {'id': item.id, 'label': f'{item.veiculo.placa} · {inicio} · {estado}'}
+
     return JsonResponse({
-        'rotas': [{'id': item.id, 'label': f"{item.veiculo.placa} · {timezone.localtime(item.inicio).strftime('%d/%m/%Y %H:%M') if item.inicio else 'Data não informada'} · {'Em andamento' if item.ativa else 'Concluída'}"} for item in rotas],
-        'rota': {'id': rota.id, 'ativa': rota.ativa, 'veiculo': str(rota.veiculo),
-                 'motorista': rota.motorista.usuario.first_name if rota.motorista else 'Não informado'},
+        'rotas': [rotulo_rota(item) for item in rotas],
+        'rota': {
+            'id': rota.id,
+            'ativa': rota.ativa,
+            'interrompida': rota.interrompida,
+            'gps_status': estado_gps,
+            'ultima_atualizacao': timezone.localtime(pontos[-1].timestamp).strftime('%d/%m/%Y %H:%M:%S') if pontos else None,
+            'veiculo': str(rota.veiculo),
+            'motorista': rota.motorista.usuario.first_name if rota.motorista else 'Não informado',
+        },
         'trajeto': [{'latitude': float(p.latitude), 'longitude': float(p.longitude)} for p in pontos],
         'eventos': eventos_json, 'paradas': paradas, 'alertas': alertas_json,
         'alunos_abordo': alunos_abordo,
@@ -337,7 +446,7 @@ def api_frota_mapa_unificada(request):
             'latitude': float(pontos[-1].latitude),
             'longitude': float(pontos[-1].longitude),
             'atualizado_em': timezone.localtime(pontos[-1].timestamp).strftime('%H:%M:%S'),
-        } if pontos and rota.ativa else None),
+        } if pontos and rota.ativa and not rota.interrompida and estado_gps == 'atualizado' else None),
     })
 
 @login_required(login_url='login')
