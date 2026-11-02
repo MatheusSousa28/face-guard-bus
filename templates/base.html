@@ -5,8 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FaceGuard Bus</title>
-    <link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
-    <link rel="alternate icon" type="image/png" href="{% static 'img/logo_branco.png' %}">
+    <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,7 +31,7 @@
     <nav class="bg-blue-800 p-4 shadow-2xl">
         <div class="container mx-auto flex justify-between items-center text-white">
             <a href="{% url 'home' %}" aria-label="FaceGuard Bus - início" class="inline-flex items-center">
-                <img src="{% static 'img/logo_branco.png' %}" alt="FaceGuard Bus" class="h-12 w-auto max-w-[140px] object-contain">
+                <img src="{% static 'img/logo_branco.png' %}" alt="FaceGuard Bus" class="h-14 w-auto max-w-[160px] object-contain">
             </a>
             <div class="space-x-4">
                 {% if user.is_authenticated %}
