@@ -1,8 +1,12 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
-    <h2 class="font-display text-2xl font-bold text-blue-600 mb-6 text-center">Cadastrar Aluno e Biometria</h2>
+<div class="max-w-2xl mx-auto px-4 py-8">
+    <div class="mb-4">
+        {% include '_botao_voltar.html' with voltar_url='home' %}
+    </div>
+    <div class="bg-white p-8 rounded-lg shadow-md">
+        <h2 class="font-display text-2xl font-bold text-blue-600 mb-6 text-center">Cadastrar Aluno e Biometria</h2>
 
     <form method="POST" id="form-aluno" class="space-y-6">
         {% csrf_token %}
@@ -65,6 +69,7 @@
             Salvar Aluno
         </button>
     </form>
+    </div>
 </div>
 
 <script>

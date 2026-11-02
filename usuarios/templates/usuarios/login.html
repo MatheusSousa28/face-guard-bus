@@ -1,8 +1,11 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <title>FaceGuard Bus - Login</title>
+    <link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
+    <link rel="alternate icon" type="image/png" href="{% static 'img/logo_branco.png' %}">
     
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -25,9 +28,10 @@
         }
     </script>
 </head>
-<body class="bg-gray-100 h-screen flex items-center justify-center font-sans">
+<body class="bg-gray-100 min-h-screen flex items-center justify-center font-sans py-8">
 
     <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+        <img src="{% static 'img/logo_azul.png' %}" alt="FaceGuard Bus" class="mx-auto mb-4 h-auto w-40 sm:w-44 object-contain">
         <h2 class="font-display text-4xl font-bold text-blue-800 mb-6 text-center">Bem vindo!</h2>
         <h2 class= "text-sm font-semibold mt-8 text-center pb-10">Preencha os campos para entrar na sua conta</h2>
         

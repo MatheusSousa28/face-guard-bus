@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 py-8">
-    <div class="flex items-center justify-between mb-8">
-        <h1 class="font-display text-3xl font-bold text-gray-900">Usuários Ativos</h1>
-        <div class="flex gap-3">
-            <a href="{% url 'cadastrar_motorista' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold">Cadastrar motorista</a>
-            <a href="{% url 'home' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-bold">Voltar</a>
+    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div class="flex items-start gap-3">
+            {% include '_botao_voltar.html' with voltar_url='home' %}
+            <h1 class="font-display text-3xl font-bold text-gray-900">Usuários Ativos</h1>
         </div>
+        <a href="{% url 'cadastrar_motorista' %}" class="self-end rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700 sm:ml-auto sm:self-start">Cadastrar motorista</a>
     </div>
 
     <div class="space-y-8">
