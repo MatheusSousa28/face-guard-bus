@@ -10,6 +10,7 @@ from .services import (
     processar_rotas_sem_gps,
 )
 from usuarios.models import Motorista
+from usuarios.monitoramento import obter_contexto_monitoramento
 from alunos.models import Aluno
 from django.contrib import messages
 from django.db import transaction
@@ -332,14 +333,68 @@ def api_frota_mapa_unificada(request):
 
     processar_rotas_sem_gps()
 
-    rotas = Rota.objects.select_related('veiculo', 'motorista', 'motorista__usuario').exclude(veiculo__isnull=True)
+    rotas = Rota.objects.select_related(
+        'veiculo', 'motorista', 'motorista__usuario',
+    ).exclude(veiculo__isnull=True)
     if is_responsavel and not is_admin:
-        rotas = rotas.filter(eventos__aluno__responsavel=usuario.responsavel).distinct()
+        rotas = rotas.filter(
+            veiculo__alunos_autorizados__responsavel=usuario.responsavel,
+        ).distinct()
     rotas = list(rotas.order_by('-ativa', '-inicio'))
     route_id = request.GET.get('rota')
-    rota = next((item for item in rotas if str(item.id) == str(route_id)), None) if route_id else (rotas[0] if rotas else None)
+    rota = next((item for item in rotas if str(item.id) == str(route_id)), None) if route_id else None
+    if route_id and rota is None:
+        return JsonResponse({'error': 'Rota não encontrada.'}, status=404)
+
+    agora = timezone.now()
+
+    def rotulo_rota(item):
+        if item.interrompida:
+            if item.ativa:
+                estado = 'Interrompida · revisão pendente'
+            elif item.resolvida_por_id:
+                estado = 'Interrompida · revisão concluída'
+            else:
+                estado = 'Interrompida · encerrada automaticamente'
+        elif item.ativa:
+            ultima = item.coordenadas.order_by('-timestamp').first()
+            estado = 'Em andamento' if obter_estado_gps(item, ultima, agora) == 'atualizado' else 'Sem sinal'
+        else:
+            estado = 'Concluída'
+        inicio = timezone.localtime(item.inicio).strftime('%d/%m/%Y %H:%M') if item.inicio else 'Data não informada'
+        return {'id': item.id, 'label': f'{item.veiculo.placa} · {inicio} · {estado}'}
+
+    rotas_json = [rotulo_rota(item) for item in rotas]
+    posicoes_ativas = []
+    for item in rotas:
+        if not item.ativa or item.interrompida:
+            continue
+        ultima = item.coordenadas.order_by('-timestamp').first()
+        if not ultima:
+            continue
+        posicoes_ativas.append({
+            'rota_id': item.id,
+            'latitude': float(ultima.latitude),
+            'longitude': float(ultima.longitude),
+            'veiculo': str(item.veiculo),
+            'placa': item.veiculo.placa,
+            'motorista': item.motorista.usuario.first_name if item.motorista else 'Não informado',
+            'gps_status': obter_estado_gps(item, ultima, agora),
+            'atualizado_em': timezone.localtime(ultima.timestamp).strftime('%H:%M:%S'),
+        })
+
     if rota is None:
-        return JsonResponse({'rotas': [], 'rota': None})
+        return JsonResponse({
+            'rotas': rotas_json,
+            'posicoes_ativas': posicoes_ativas,
+            'rota': None,
+            'trajeto': [],
+            'eventos': [],
+            'paradas': [],
+            'alertas': [],
+            'alunos_abordo': [],
+            'posicao_atual': None,
+        })
 
     pontos = list(Localizacao.objects.filter(rota=rota).order_by('timestamp'))
     eventos_qs = Evento.objects.filter(rota=rota).select_related('aluno').exclude(tipo='desconhecido')
@@ -410,26 +465,11 @@ def api_frota_mapa_unificada(request):
         }
     alunos_abordo = [aluno for aluno in status_por_aluno.values() if aluno['a_bordo']]
 
-    agora = timezone.now()
     estado_gps = obter_estado_gps(rota, pontos[-1] if pontos else None, agora)
 
-    def rotulo_rota(item):
-        if item.interrompida:
-            if item.ativa:
-                estado = 'Interrompida · revisão pendente'
-            elif item.resolvida_por_id:
-                estado = 'Interrompida · revisão concluída'
-            else:
-                estado = 'Interrompida · encerrada automaticamente'
-        elif item.ativa:
-            estado = 'Em andamento' if obter_estado_gps(item, agora=agora) == 'atualizado' else 'Sem sinal'
-        else:
-            estado = 'Concluída'
-        inicio = timezone.localtime(item.inicio).strftime('%d/%m/%Y %H:%M') if item.inicio else 'Data não informada'
-        return {'id': item.id, 'label': f'{item.veiculo.placa} · {inicio} · {estado}'}
-
     return JsonResponse({
-        'rotas': [rotulo_rota(item) for item in rotas],
+        'rotas': rotas_json,
+        'posicoes_ativas': posicoes_ativas,
         'rota': {
             'id': rota.id,
             'ativa': rota.ativa,
@@ -454,7 +494,10 @@ def tela_mapa_unificado(request):
     if not (hasattr(request.user, 'instituicao') or hasattr(request.user, 'responsavel') or request.user.is_superuser):
         messages.error(request, 'Acesso permitido apenas à instituição e aos responsáveis.')
         return redirect('home')
-    return render(request, 'transporte/mapa_unificado.html')
+    contexto = {}
+    if hasattr(request.user, 'instituicao') or request.user.is_superuser:
+        contexto = obter_contexto_monitoramento()
+    return render(request, 'transporte/mapa_unificado.html', contexto)
 
 @login_required(login_url='login')
 def painel_veiculos(request):

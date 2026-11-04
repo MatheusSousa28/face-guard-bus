@@ -26,7 +26,11 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         let mapa = L.map('mapa-frota').setView([-15.7801, -47.9292], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 20,
+        }).addTo(mapa);
 
         let marcadores = {}; // Objeto para controlar os marcadores por ID de veículo
         let primeiraVez = true;

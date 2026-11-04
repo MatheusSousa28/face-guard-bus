@@ -1,10 +1,13 @@
 import json
 import base64
 from datetime import timedelta
+from io import StringIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command, CommandError
 from django.test import TestCase
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -154,6 +157,82 @@ class TransporteFluxosTests(TestCase):
         self.assertContains(response, 'Alunos a bordo')
         self.assertContains(response, 'GPS atualizado')
         self.assertEqual(response.context['total_alunos_abordo'], 1)
+
+    def test_cards_de_acao_da_instituicao_aparecem_antes_do_resumo(self):
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.get(reverse('home'))
+        html = response.content.decode()
+
+        self.assertLess(html.index('Acesso Administrativo (Instituição)'), html.index('Monitoramento Ao Vivo'))
+        self.assertLess(html.index('Monitoramento Ao Vivo'), html.index('Resumo do monitoramento'))
+
+    def test_tela_de_mapa_mostra_resumo_institucional_abaixo_do_mapa(self):
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.get(reverse('mapa_unificado'))
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertLess(html.index('id="mapa-frota"'), html.index('Resumo do monitoramento'))
+        self.assertContains(response, 'Acompanhamento da frota')
+        self.assertContains(response, 'basemaps.cartocdn.com')
+        self.assertNotContains(response, 'tile.openstreetmap.org')
+
+    def test_mapa_sem_rota_selecionada_mostra_todos_os_onibus_ativos(self):
+        rota_1 = self.criar_rota()
+        Localizacao.objects.create(rota=rota_1, latitude=-15.78, longitude=-47.92)
+        veiculo_2 = Veiculo.objects.create(
+            modelo='Micro-ônibus teste', capacidade=20, placa='XYZ9876', cor='Azul',
+        )
+        rota_2 = Rota.objects.create(
+            veiculo=veiculo_2, motorista=self.motorista, inicio=timezone.now(), ativa=True,
+        )
+        Localizacao.objects.create(rota=rota_2, latitude=-15.77, longitude=-47.91)
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.get(reverse('api_mapa_unificado'))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIsNone(payload['rota'])
+        self.assertEqual(payload['trajeto'], [])
+        self.assertEqual({p['rota_id'] for p in payload['posicoes_ativas']}, {rota_1.id, rota_2.id})
+        self.assertEqual(len(payload['rotas']), 2)
+
+    def test_mapa_pode_selecionar_rota_historica_e_exibir_seu_trajeto(self):
+        rota = self.criar_rota()
+        rota.ativa = False
+        rota.fim = timezone.now()
+        rota.save(update_fields=['ativa', 'fim'])
+        Localizacao.objects.create(rota=rota, latitude=-15.78, longitude=-47.92)
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.get(reverse('api_mapa_unificado'), {'rota': rota.id})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['rota']['id'], rota.id)
+        self.assertEqual(len(payload['trajeto']), 1)
+
+    def test_comando_de_dados_demo_cria_fluxo_completo_e_e_idempotente(self):
+        with override_settings(SUPABASE_URL=''):
+            call_command('popular_dados_demo', stdout=StringIO())
+            call_command('popular_dados_demo', stdout=StringIO())
+
+        self.assertTrue(Instituicao.objects.filter(usuario__email='demo.escola@example.test').exists())
+        self.assertEqual(Veiculo.objects.filter(placa__startswith='DEMO').count(), 2)
+        self.assertEqual(Rota.objects.filter(veiculo__placa__startswith='DEMO', ativa=True).count(), 2)
+        self.assertEqual(Rota.objects.filter(veiculo__placa__startswith='DEMO', ativa=False).count(), 1)
+        self.assertTrue(Evento.objects.filter(rota__veiculo__placa__startswith='DEMO', tipo='embarque').exists())
+        self.assertTrue(Evento.objects.filter(rota__veiculo__placa__startswith='DEMO', tipo='desembarque').exists())
+
+    @override_settings(SUPABASE_URL='postgresql://demo.invalid/example')
+    def test_comando_de_dados_demo_bloqueia_banco_supabase_sem_confirmacao(self):
+        with self.assertRaises(CommandError):
+            call_command('popular_dados_demo', stdout=StringIO())
+
+        self.assertFalse(Usuario.objects.filter(email='demo.escola@example.test').exists())
 
     def test_rota_sem_gps_por_mais_de_15_minutos_e_encerrada_sem_alunos_a_bordo(self):
         rota = self.criar_rota()
@@ -422,7 +501,7 @@ class TransporteFluxosTests(TestCase):
         Evento.objects.create(rota=rota, aluno=self.aluno, tipo='embarque', autorizado=True)
         self.client.force_login(self.responsavel_usuario)
 
-        response = self.client.get(reverse('api_mapa_unificado'))
+        response = self.client.get(reverse('api_mapa_unificado'), {'rota': rota.id})
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -444,7 +523,7 @@ class TransporteFluxosTests(TestCase):
         Evento.objects.create(rota=rota, tipo='desconhecido', autorizado=False)
         self.client.force_login(self.instituicao_usuario)
 
-        response = self.client.get(reverse('api_mapa_unificado'))
+        response = self.client.get(reverse('api_mapa_unificado'), {'rota': rota.id})
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()

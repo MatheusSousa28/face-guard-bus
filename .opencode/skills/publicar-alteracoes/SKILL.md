@@ -17,7 +17,7 @@ O processo cria um commit local e publica esse commit no GitHub e no Space. Esta
 - Não faça commit nem publicação ao configurar, explicar ou testar a skill. Só execute esses passos quando o usuário invocar o fluxo e aprovar naquela execução.
 - Nunca solicite, mostre, registre em arquivo, passe como argumento de comando, ou inclua em URL o token do Hugging Face. Use credenciais já armazenadas pelo `hf auth login`/credential helper. Não coloque tokens no `.env` do projeto.
 - Nunca inclua `.env`, credenciais, bancos locais, chaves, caches, arquivos de ambiente virtual ou outros artefatos privados. Se houver dúvida sobre um arquivo, pare e pergunte; não o descarte nem altere.
-- Não use `git add -A`, `git add .`, `git commit -am`, `git reset`, `git checkout`, `git clean`, `--force` ou comandos que sobrescrevam histórico/alterações existentes.
+- Não use `git add -A`, `git add .`, `git commit -am`, `git reset`, `git checkout`, `git clean`, `--force` ou comandos que sobrescrevam histórico/alterações existentes sem deixar explícita a situação para o usuário e pedir sua autorização.
 - Não remova nem desfaça mudanças staged ou unstaged do usuário. Se o index contiver alterações fora da seleção aprovada, pare e pergunte como proceder; nunca limpe o index automaticamente.
 - Não diga que uma publicação teve sucesso sem confirmar o resultado do push para cada destino.
 
@@ -74,7 +74,7 @@ Depois de obter arquivos e mensagem, apresente um resumo final de confirmação 
 ### 5. Publicar nos dois destinos
 
 - Fazer push do mesmo commit para o remoto GitHub e o remoto Hugging Face, para as branches aprovadas. O push ao Hugging Face usa a autenticação local do token; nunca revelar o token.
-- Não usar force push. Se houver rejeição por histórico divergente, conflito, falha de autenticação ou branch incorreta, parar; não rebasear, mesclar, sobrescrever ou mudar branch sem consentimento.
+- Não usar force push sem a permissão do usuário. Se houver rejeição por histórico divergente, conflito, falha de autenticação ou branch incorreta, parar; não rebasear, mesclar, sobrescrever ou mudar branch sem consentimento. Se o usuário permiir, faça o force, desde que você deixe explicito o motivo.
 - Se um destino aceitar e o outro falhar, informar claramente o estado parcial e o hash do commit. Não afirmar sucesso total; não apagar/reverter o destino já atualizado. Perguntar antes de qualquer tentativa que altere o estado.
 - Após cada push, verificar saída/status e, se disponível sem credenciais, confirmar referência/commit remoto. Relatar cada destino separadamente.
 

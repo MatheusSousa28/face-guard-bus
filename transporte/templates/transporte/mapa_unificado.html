@@ -10,11 +10,11 @@
     </div>
     <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
         <div class="p-6 bg-gray-50 border-b border-gray-200">
-            <h2 class="font-display text-2xl font-bold text-gray-800">Histórico de percursos</h2>
-            <p class="text-sm text-gray-500 mt-1">Selecione uma rota para consultar o trajeto e os eventos. Rotas ativas atualizam a posição automaticamente.</p>
+            <h2 class="font-display text-2xl font-bold text-gray-800">Acompanhamento da frota</h2>
+            <p class="text-sm text-gray-500 mt-1">Veja os ônibus ativos no mapa ao vivo ou selecione uma rota para consultar seu trajeto e eventos, inclusive os históricos.</p>
             <label for="seletor-rota" class="block text-sm font-semibold text-gray-700 mt-4 mb-1">Rota</label>
             <select id="seletor-rota" class="w-full md:max-w-xl border border-gray-300 rounded-lg p-3 bg-white">
-                <option value="">Carregando rotas...</option>
+                <option value="">Acompanhamento ao vivo — selecione uma rota para ver o trajeto</option>
             </select>
             <p id="detalhes-rota" class="text-sm text-gray-600 mt-3"></p>
             <div id="resumo-alunos" class="mt-3 text-sm text-gray-700"></div>
@@ -29,25 +29,32 @@
             <p><span class="font-bold text-blue-700">● Parada</span> — parada estimada a partir dos registros GPS (mínimo 2 minutos).</p>
         </div>
     </div>
+    {% if user.instituicao or user.is_superuser %}
+        {% include 'usuarios/_resumo_monitoramento.html' %}
+    {% endif %}
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const mapa = L.map('mapa-frota').setView([-15.7801, -47.9292], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 20,
     }).addTo(mapa);
     const seletor = document.getElementById('seletor-rota');
     const detalhes = document.getElementById('detalhes-rota');
-    let camadaRota = L.layerGroup().addTo(mapa);
-    let rotasCarregadas = false;
+    const resumoAlunos = document.getElementById('resumo-alunos');
+    const camadaRota = L.layerGroup().addTo(mapa);
+    const camadaVeiculos = L.layerGroup().addTo(mapa);
+    let seletorConfigurado = false;
     let timerAtualizacao = null;
     let carregamentoAtual = 0;
     const escapar = valor => String(valor).replace(/[&<>"']/g, caractere => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[caractere]));
 
-    function carregarRota(id = '') {
+    function carregarRota(id = seletor.value) {
         clearInterval(timerAtualizacao);
         const requisicao = ++carregamentoAtual;
         const url = new URL('{% url "api_mapa_unificado" %}', window.location.origin);
@@ -59,23 +66,42 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .then(dados => {
                 if (requisicao !== carregamentoAtual) return;
-                if (!rotasCarregadas) {
-                    rotasCarregadas = true;
+                if (!seletorConfigurado) {
+                    seletorConfigurado = true;
                     seletor.addEventListener('change', () => carregarRota(seletor.value));
                 }
-                const rotaSelecionada = id || seletor.value;
                 seletor.innerHTML = '';
+                seletor.add(new Option('Acompanhamento ao vivo — selecione uma rota para ver o trajeto', ''));
                 dados.rotas.forEach(rota => seletor.add(new Option(rota.label, rota.id)));
                 camadaRota.clearLayers();
+                camadaVeiculos.clearLayers();
+                dados.posicoes_ativas.forEach(posicao => {
+                    const semSinal = posicao.gps_status !== 'atualizado';
+                    L.circleMarker([posicao.latitude, posicao.longitude], {
+                        radius: 10,
+                        color: semSinal ? '#b45309' : '#1e3a8a',
+                        fillColor: semSinal ? '#f59e0b' : '#3b82f6',
+                        fillOpacity: 0.95,
+                    }).bindPopup(
+                        `<strong>${escapar(posicao.placa)} · ${escapar(posicao.veiculo)}</strong><br>` +
+                        `Motorista: ${escapar(posicao.motorista)}<br>` +
+                        `${semSinal ? 'Sem sinal — ' : 'GPS atualizado às '}${escapar(posicao.atualizado_em)}<br>` +
+                        '<span>Selecione o marcador para abrir o trajeto</span>'
+                    ).on('click', () => carregarRota(String(posicao.rota_id)))
+                      .addTo(camadaVeiculos);
+                });
+
                 if (!dados.rota) {
-                    clearInterval(timerAtualizacao);
-                    seletor.innerHTML = '<option>Nenhuma rota com histórico disponível</option>';
-                    detalhes.textContent = '';
+                    seletor.value = '';
+                    resumoAlunos.textContent = '';
+                    detalhes.textContent = dados.posicoes_ativas.length
+                        ? `${dados.posicoes_ativas.length} ônibus em rota. Selecione um marcador ou uma rota para ver o trajeto.`
+                        : 'Nenhum ônibus em rota no momento. Selecione uma rota abaixo para consultar o histórico.';
+                    timerAtualizacao = setInterval(() => carregarRota(seletor.value), 5000);
                     return;
                 }
-                seletor.value = dados.rotas.some(rota => String(rota.id) === String(rotaSelecionada))
-                    ? rotaSelecionada
-                    : dados.rota.id;
+
+                seletor.value = String(dados.rota.id);
                 const statusGps = {
                     atualizado: 'GPS atualizado',
                     sem_sinal: 'GPS sem sinal',
@@ -85,7 +111,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     ? ` · Último GPS: ${dados.rota.ultima_atualizacao}`
                     : ' · Sem coordenadas GPS';
                 detalhes.textContent = `Veículo: ${dados.rota.veiculo} · Motorista: ${dados.rota.motorista} · ${statusGps}${ultimaAtualizacao}`;
-                const resumoAlunos = document.getElementById('resumo-alunos');
                 const nomesAlunos = dados.alunos_abordo.map(aluno => escapar(aluno.nome));
                 const rotaEmAndamento = dados.rota.ativa && !dados.rota.interrompida;
                 resumoAlunos.innerHTML = `<strong>Alunos a bordo ${rotaEmAndamento ? 'agora' : 'ao final da rota'}:</strong> ${nomesAlunos.length ? nomesAlunos.join(', ') : 'nenhum'}`;
@@ -93,14 +118,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (coordenadas.length) {
                     const linha = L.polyline(coordenadas, {color: '#2563eb', weight: 5, opacity: 0.8}).addTo(camadaRota);
                     mapa.fitBounds(linha.getBounds(), {padding: [30, 30]});
-                }
-                if (dados.posicao_atual) {
-                    const posicao = dados.posicao_atual;
-                    L.circleMarker([posicao.latitude, posicao.longitude], {
-                        radius: 11, color: '#1e3a8a', fillColor: '#3b82f6', fillOpacity: 1,
-                    }).bindPopup(`<strong>Veículo em rota</strong><br>Atualizado às ${escapar(posicao.atualizado_em)}`)
-                      .addTo(camadaRota);
-                    mapa.panTo([posicao.latitude, posicao.longitude]);
                 }
                 dados.eventos.forEach(evento => {
                     if (evento.latitude === null || evento.longitude === null) return;
@@ -129,9 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       .addTo(camadaRota);
                 });
                 clearInterval(timerAtualizacao);
-                if (rotaEmAndamento) {
-                    timerAtualizacao = setInterval(() => carregarRota(String(dados.rota.id)), 10000);
-                }
+                timerAtualizacao = setInterval(() => carregarRota(seletor.value), 5000);
             })
             .catch(error => { detalhes.textContent = error.message; });
     }

@@ -1,0 +1,104 @@
+        <section class="mb-8">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Resumo do monitoramento</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-5">
+                <div class="rounded-xl bg-blue-50 border border-blue-100 p-5">
+                    <p class="text-sm text-blue-700">Rotas com GPS atualizado</p>
+                    <p class="text-3xl font-bold text-blue-900">{{ total_rotas_ativas|default:0 }}</p>
+                </div>
+                <div class="rounded-xl bg-amber-50 border border-amber-100 p-5">
+                    <p class="text-sm text-amber-700">Rotas sem sinal</p>
+                    <p class="text-3xl font-bold text-amber-900">{{ total_rotas_sem_sinal|default:0 }}</p>
+                </div>
+                <div class="rounded-xl bg-red-50 border border-red-100 p-5">
+                    <p class="text-sm text-red-700">Interrupções para revisão</p>
+                    <p class="text-3xl font-bold text-red-900">{{ total_interrupcoes_pendentes|default:0 }}</p>
+                </div>
+                <div class="rounded-xl bg-green-50 border border-green-100 p-5">
+                    <p class="text-sm text-green-700">Alunos a bordo</p>
+                    <p class="text-3xl font-bold text-green-900">{{ total_alunos_abordo|default:0 }}</p>
+                </div>
+                <div class="rounded-xl bg-amber-50 border border-amber-100 p-5">
+                    <p class="text-sm text-amber-700">Alertas recentes (máx. 5)</p>
+                    <p class="text-3xl font-bold text-amber-900">{{ alertas_recentes|length }}</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div class="bg-white border rounded-xl p-5">
+                    <h4 class="font-bold text-gray-900 mb-3">Rotas ativas e GPS</h4>
+                    <div class="space-y-3">
+                        {% for item in rotas_ativas %}
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b last:border-0 pb-3 last:pb-0">
+                            <div>
+                                <p class="font-semibold">{{ item.rota.veiculo.placa }} · {{ item.rota.veiculo.modelo }}</p>
+                                <p class="text-sm text-gray-600">{{ item.alunos_abordo }} aluno(s) a bordo · motorista: {{ item.rota.motorista.usuario.first_name|default:'Não informado' }}</p>
+                                {% if item.ultima_localizacao %}
+                                    <p class="text-xs text-gray-500">Último GPS: {{ item.ultima_localizacao.timestamp|date:'d/m/Y H:i:s' }}</p>
+                                {% else %}
+                                    <p class="text-xs text-gray-500">Ainda não há coordenadas para esta rota.</p>
+                                {% endif %}
+                            </div>
+                            <div class="flex items-center gap-3">
+                                {% if item.estado_gps == 'atualizado' %}
+                                    <span class="text-xs font-bold text-green-700">GPS atualizado</span>
+                                {% else %}
+                                    <span class="text-xs font-bold text-amber-700">Sem sinal</span>
+                                {% endif %}
+                                <a href="{% url 'mapa_unificado' %}?rota={{ item.rota.id }}" class="text-sm font-bold text-blue-700 hover:underline">Mapa</a>
+                            </div>
+                        </div>
+                        {% empty %}<p class="text-sm text-gray-500">Nenhuma rota ativa no momento.</p>{% endfor %}
+                    </div>
+                </div>
+
+                <div class="bg-white border rounded-xl p-5">
+                    <h4 class="font-bold text-gray-900 mb-3">Alertas recentes</h4>
+                    <div class="space-y-3">
+                        {% for alerta in alertas_recentes %}
+                        <div class="flex items-center justify-between gap-3 border-b last:border-0 pb-3 last:pb-0">
+                            <div>
+                                <p class="font-semibold text-amber-800">Face desconhecida</p>
+                                <p class="text-xs text-gray-600">{{ alerta.rota.veiculo.placa|default:'Veículo não disponível' }} · {{ alerta.data_hora|date:'d/m/Y H:i:s' }}</p>
+                            </div>
+                            <a href="{% url 'mapa_unificado' %}?rota={{ alerta.rota.id }}" class="text-sm font-bold text-blue-700 hover:underline">Ver rota</a>
+                        </div>
+                        {% empty %}<p class="text-sm text-gray-500">Nenhum alerta registrado.</p>{% endfor %}
+                    </div>
+                </div>
+
+                <div class="bg-white border rounded-xl p-5">
+                    <h4 class="font-bold text-gray-900 mb-3">Interrupções recentes e revisão</h4>
+                    <div class="space-y-4">
+                        {% for item in rotas_interrompidas %}
+                        <div class="border-b last:border-0 pb-4 last:pb-0">
+                            <p class="font-semibold">{{ item.rota.veiculo.placa|default:'Veículo não informado' }} · {{ item.rota.veiculo.modelo|default:'Veículo indisponível' }}</p>
+                            <p class="text-sm text-gray-600">Motorista: {{ item.rota.motorista.usuario.first_name|default:'Não informado' }} · {{ item.alunos_abordo }} aluno(s) registrado(s) a bordo</p>
+                            {% if item.ultima_localizacao %}
+                                <p class="text-xs text-gray-500">Último GPS: {{ item.ultima_localizacao.timestamp|date:'d/m/Y H:i:s' }}</p>
+                            {% else %}
+                                <p class="text-xs text-gray-500">A rota não recebeu coordenadas GPS.</p>
+                            {% endif %}
+                            {% if item.rota.ativa %}
+                                <p class="my-2 text-sm font-bold text-red-700">Revisão necessária — motorista e veículo permanecem reservados.</p>
+                                <form method="post" action="{% url 'resolver_rota_interrompida' item.rota.id %}" class="space-y-2">
+                                    {% csrf_token %}
+                                    <label for="observacao-rota-{{ item.rota.id }}" class="block text-sm font-medium text-gray-700">Registro da verificação</label>
+                                    <textarea id="observacao-rota-{{ item.rota.id }}" name="observacao" required maxlength="1000" rows="2" class="w-full rounded border border-gray-300 p-2 text-sm" placeholder="Descreva como a situação dos alunos foi verificada"></textarea>
+                                    <label class="flex items-start gap-2 text-xs text-gray-700">
+                                        <input type="checkbox" name="confirmacao_seguranca" required class="mt-0.5">
+                                        Confirmo que a situação dos alunos foi verificada presencialmente.
+                                    </label>
+                                    <button type="submit" class="rounded bg-red-700 px-3 py-2 text-sm font-bold text-white hover:bg-red-800">Confirmar revisão e encerrar</button>
+                                </form>
+                            {% elif item.rota.resolvida_por %}
+                                <p class="mt-2 text-sm font-semibold text-gray-600">Encerrada após revisão por {{ item.rota.resolvida_por.first_name|default:item.rota.resolvida_por.email }}.</p>
+                                {% if item.rota.observacao_resolucao %}<p class="text-xs text-gray-500">{{ item.rota.observacao_resolucao }}</p>{% endif %}
+                            {% else %}
+                                <p class="mt-2 text-sm font-semibold text-gray-600">Encerrada automaticamente por falta de GPS, sem alunos registrados a bordo.</p>
+                            {% endif %}
+                        </div>
+                        {% empty %}<p class="text-sm text-gray-500">Nenhuma interrupção registrada.</p>{% endfor %}
+                    </div>
+                </div>
+            </div>
+        </section>
