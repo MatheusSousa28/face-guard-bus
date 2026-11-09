@@ -6,6 +6,7 @@ from django.contrib import messages
 from .models import Usuario, Responsavel, Motorista
 from .monitoramento import obter_contexto_monitoramento
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
@@ -296,6 +297,12 @@ def api_usuarios(request, tipo, obj_id=None):
         qs = qs.filter(usuario__is_aprovado=True).select_related('usuario').order_by('usuario__first_name', 'usuario__last_name')
 
     if request.method == 'GET' and obj_id is None:
+        termo = request.GET.get('q', '').strip()
+        if termo:
+            condicao = Q(nome__icontains=termo) | Q(responsavel__usuario__first_name__icontains=termo) | Q(responsavel__usuario__last_name__icontains=termo) | Q(responsavel__usuario__email__icontains=termo) if tipo == 'aluno' else Q(usuario__first_name__icontains=termo) | Q(usuario__last_name__icontains=termo) | Q(usuario__email__icontains=termo) | Q(cpf__icontains=termo)
+            if termo.isdigit():
+                condicao |= Q(pk=int(termo))
+            qs = qs.filter(condicao)
         paginator = Paginator(qs, 8)
         try:
             page = paginator.page(request.GET.get('page', 1))

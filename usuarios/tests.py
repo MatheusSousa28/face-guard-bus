@@ -229,6 +229,26 @@ class GerenciamentoUsuariosTests(TestCase):
         self.assertEqual(response.json()['results'][0]['nome'], aluno.nome)
         self.assertEqual(self.client.get(self.api('motorista')).json()['total'], 0)
 
+    def test_api_pesquisa_respeita_categoria_e_dados_do_tipo(self):
+        aluno = Aluno.objects.create(nome='Lia da Silva', idade=8, responsavel=self.responsavel,
+                                     foto_perfil='alunos/lia.jpg', is_aprovado=True)
+        motorista_usuario = Usuario.objects.create_user(
+            username='marcos.motorista@test.local', email='marcos.motorista@test.local',
+            password='SenhaForte123!', first_name='Marcos', last_name='Lima', is_aprovado=True,
+        )
+        Motorista.objects.create(usuario=motorista_usuario, cpf='11122233344', foto_perfil='fotos/marcos.jpg')
+
+        resultado_aluno = self.client.get(self.api('aluno'), {'q': 'lia'})
+        resultado_responsavel = self.client.get(self.api('responsavel'), {'q': 'lia'})
+        resultado_motorista = self.client.get(self.api('motorista'), {'q': 'marcos'})
+
+        self.assertEqual([item['id'] for item in resultado_aluno.json()['results']], [aluno.pk])
+        self.assertEqual(resultado_responsavel.json()['total'], 0)
+        self.assertEqual(resultado_motorista.json()['results'][0]['nome'], 'Marcos Lima')
+
+        busca_id = self.client.get(self.api('aluno'), {'q': str(aluno.pk)})
+        self.assertEqual(busca_id.json()['total'], 1)
+
     def test_api_cria_edita_e_exclui_motorista(self):
         payload = {'first_name': 'João', 'last_name': 'Condutor', 'email': 'joao.api@example.test',
                    'cpf': '12345678909', 'senha': 'SenhaForte123!',
