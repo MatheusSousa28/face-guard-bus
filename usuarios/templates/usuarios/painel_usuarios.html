@@ -1,71 +1,199 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 py-8">
-    <div class="mb-4">
-        {% include '_botao_voltar.html' with voltar_url='home' %}
+    <div class="mb-4">{% include '_botao_voltar.html' with voltar_url='home' %}</div>
+    <h1 class="font-display text-3xl font-bold text-gray-900 text-center mb-6">Usuários Ativos</h1>
+
+    <div class="flex flex-wrap justify-center gap-2 mb-6" role="tablist" aria-label="Categorias de usuários">
+        <button type="button" data-category="aluno" role="tab" aria-selected="true" class="category-tab rounded-lg px-5 py-2 font-semibold bg-blue-700 text-white">Alunos</button>
+        <button type="button" data-category="motorista" role="tab" aria-selected="false" class="category-tab rounded-lg px-5 py-2 font-semibold bg-white text-gray-700 border border-gray-300">Motoristas</button>
+        <button type="button" data-category="responsavel" role="tab" aria-selected="false" class="category-tab rounded-lg px-5 py-2 font-semibold bg-white text-gray-700 border border-gray-300">Responsáveis</button>
     </div>
-    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 class="font-display text-3xl font-bold text-gray-900">Usuários Ativos</h1>
-        <a href="{% url 'cadastrar_motorista' %}" class="self-end rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700 sm:ml-auto sm:self-auto">Cadastrar motorista</a>
+
+    <div class="flex justify-end mb-4">
+        <button id="create-user" type="button" class="rounded-lg bg-blue-600 px-5 py-2.5 font-bold text-white hover:bg-blue-700">Cadastrar Aluno</button>
     </div>
+    <section class="bg-white rounded-xl shadow border border-gray-200 overflow-hidden" aria-live="polite">
+        <div class="border-b px-5 py-4 flex justify-between items-center">
+            <h2 id="list-title" class="text-xl font-bold text-gray-800">Alunos</h2>
+            <span id="total-count" class="text-sm text-gray-500"></span>
+        </div>
+        <div id="list-status" class="hidden p-8 text-center text-gray-600"></div>
+        <div id="user-list" class="divide-y divide-gray-100"></div>
+        <div class="px-5 py-4 bg-gray-50 border-t flex items-center justify-between gap-3">
+            <button id="previous-page" type="button" class="rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-40">← Anterior</button>
+            <span id="page-label" class="text-sm text-gray-600"></span>
+            <button id="next-page" type="button" class="rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-40">Próxima →</button>
+        </div>
+    </section>
+</div>
 
-    <div class="space-y-8">
-        <section class="bg-white p-6 rounded-xl shadow border border-gray-200">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">🚌 Motoristas</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {% for mot in motoristas %}
-                    <div class="flex justify-between items-center p-4 border rounded-lg bg-gray-50">
-                        <div class="flex items-center gap-4">
-                            {% if mot.foto_perfil %}<img src="{{ mot.foto_perfil.url }}" class="w-12 h-12 rounded-full object-cover">{% endif %}
-                            <div>
-                                <p class="font-bold text-gray-900">{{ mot.usuario.first_name }} {{ mot.usuario.last_name }}</p>
-                                <p class="text-sm text-gray-500">{{ mot.usuario.email }}</p>
-                            </div>
-                        </div>
-                        <form method="POST" action="{% url 'deletar_usuario' 'motorista' mot.id %}" onsubmit="return confirm('Excluir este motorista?')">
-                            {% csrf_token %}<button class="text-red-600 hover:text-red-800 font-bold">Excluir</button>
-                        </form>
-                    </div>
-                {% empty %}
-                    <p class="text-gray-500">Nenhum motorista ativo.</p>
-                {% endfor %}
-            </div>
-        </section>
-
-        <section class="bg-white p-6 rounded-xl shadow border border-gray-200">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">👨‍👩‍👧 Responsáveis</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {% for resp in responsaveis %}
-                    <div class="flex justify-between items-center p-4 border rounded-lg bg-gray-50">
-                        <div>
-                            <p class="font-bold text-gray-900">{{ resp.usuario.first_name }} {{ resp.usuario.last_name }}</p>
-                            <p class="text-sm text-gray-500">{{ resp.usuario.email }}</p>
-                        </div>
-                        <form method="POST" action="{% url 'deletar_usuario' 'responsavel' resp.id %}" onsubmit="return confirm('Excluir este responsável e o perfil associado?')">
-                            {% csrf_token %}<button class="text-red-600 hover:text-red-800 font-bold">Excluir</button>
-                        </form>
-                    </div>
-                {% empty %}<p class="text-gray-500">Nenhum responsável ativo.</p>{% endfor %}
-            </div>
-        </section>
-
-        <section class="bg-white p-6 rounded-xl shadow border border-gray-200">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">🎓 Alunos</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {% for aluno in alunos %}
-                    <div class="flex justify-between items-center p-4 border rounded-lg bg-gray-50">
-                        <div>
-                            <p class="font-bold text-gray-900">{{ aluno.nome }}</p>
-                            <p class="text-sm text-gray-500">Responsável: {{ aluno.responsavel.usuario.first_name }}</p>
-                        </div>
-                        <form method="POST" action="{% url 'deletar_usuario' 'aluno' aluno.id %}" onsubmit="return confirm('Excluir este aluno e seus dados?')">
-                            {% csrf_token %}<button class="text-red-600 hover:text-red-800 font-bold">Excluir</button>
-                        </form>
-                    </div>
-                {% empty %}<p class="text-gray-500">Nenhum aluno ativo.</p>{% endfor %}
-            </div>
-        </section>
-
+<div id="user-modal" class="hidden fixed inset-0 z-50 bg-gray-900/60 p-3 sm:p-6 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full mx-auto my-4 overflow-hidden">
+        <div class="flex justify-between items-center px-6 py-4 border-b">
+            <div><h2 id="modal-title" class="text-xl font-bold text-gray-900"></h2><p id="modal-subtitle" class="text-sm text-gray-500"></p></div>
+            <button type="button" data-close-user-modal aria-label="Fechar" class="text-3xl leading-none text-gray-500 hover:text-gray-900">&times;</button>
+        </div>
+        <div id="user-modal-content" class="p-6"></div>
     </div>
 </div>
+
+<div id="delete-modal" class="hidden fixed inset-0 z-[60] bg-gray-900/60 p-4 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+        <h2 id="delete-title" class="text-xl font-bold text-gray-900 mb-2">Confirmar exclusão</h2>
+        <p class="text-gray-700">Tem certeza de que deseja excluir este usuário?</p>
+        <p id="delete-user-name" class="font-semibold text-gray-900 mt-2"></p>
+        <p class="mt-4 text-sm text-gray-600">Digite exatamente este número para confirmar: <strong id="delete-code" class="text-lg text-red-700"></strong></p>
+        <input id="delete-input" type="text" inputmode="numeric" autocomplete="off" class="mt-2 w-full border rounded-lg px-3 py-2" aria-label="Número de confirmação">
+        <p id="delete-error" class="hidden text-sm text-red-600 mt-2"></p>
+        <div class="flex justify-end gap-3 mt-6">
+            <button id="cancel-delete" type="button" class="rounded-lg bg-gray-200 px-4 py-2 font-semibold">Cancelar</button>
+            <button id="confirm-delete" type="button" disabled class="rounded-lg bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-40">Excluir usuário</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const labels = {aluno: 'Alunos', motorista: 'Motoristas', responsavel: 'Responsáveis'};
+    const singular = {aluno: 'Aluno', motorista: 'Motorista', responsavel: 'Responsável'};
+    const pages = {aluno: 1, motorista: 1, responsavel: 1};
+    let category = 'aluno', currentUser = null, editing = false, deleteTarget = null, deleteCode = '';
+    const list = document.getElementById('user-list');
+    const status = document.getElementById('list-status');
+    const modal = document.getElementById('user-modal');
+    const modalContent = document.getElementById('user-modal-content');
+    const csrf = '{{ csrf_token }}';
+    const api = (type, id) => `/usuarios/painel/usuarios/api/${type}/${id ? `${id}/` : ''}`;
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+
+    async function request(url, options={}) {
+        const response = await fetch(url, {...options, headers: {'X-CSRFToken': csrf, ...(options.headers || {})}});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.erro || 'Não foi possível concluir a operação.');
+        return data;
+    }
+    function setStatus(message, isError=false) {
+        status.textContent = message;
+        status.className = `p-8 text-center ${isError ? 'text-red-700' : 'text-gray-600'}`;
+    }
+    async function loadList() {
+        list.innerHTML = '';
+        status.classList.remove('hidden'); setStatus('Carregando usuários…');
+        document.getElementById('list-title').textContent = labels[category];
+        try {
+            const data = await request(`${api(category)}?page=${pages[category]}`);
+            pages[category] = data.page;
+            status.classList.add('hidden');
+            document.getElementById('total-count').textContent = `${data.total} usuário${data.total === 1 ? '' : 's'}`;
+            document.getElementById('page-label').textContent = `Página ${data.page} de ${data.pages}`;
+            document.getElementById('previous-page').disabled = data.page <= 1;
+            document.getElementById('next-page').disabled = data.page >= data.pages;
+            if (!data.results.length) { status.classList.remove('hidden'); setStatus(`Nenhum(a) ${singular[category].toLowerCase()} cadastrado(a).`); return; }
+            list.innerHTML = data.results.map(user => {
+                const detail = category === 'aluno' ? `${user.idade} anos · Responsável: ${escapeHtml(user.responsavel)}` : `${escapeHtml(user.email)} · CPF: ${escapeHtml(user.cpf)}`;
+                const fallback = `<div class="w-14 h-14 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">${escapeHtml((user.nome || '?').slice(0,1).toUpperCase())}</div>`;
+                return `<article class="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                    <div class="flex items-center gap-4 min-w-0">${user.foto ? `<img src="${escapeHtml(user.foto)}" alt="Foto de ${escapeHtml(user.nome)}" class="w-14 h-14 rounded-full object-cover">` : fallback}
+                        <div class="min-w-0"><p class="font-bold text-gray-900 truncate">${escapeHtml(user.nome)}</p><p class="text-sm text-gray-500 truncate">${detail}</p></div></div>
+                    <div class="flex gap-2 self-end sm:self-auto">
+                        <button data-action="view" data-id="${user.id}" aria-label="Visualizar ${escapeHtml(user.nome)}" title="Visualizar" class="rounded-lg border p-2 text-blue-700 hover:bg-blue-50"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                        <button data-action="edit" data-id="${user.id}" aria-label="Editar ${escapeHtml(user.nome)}" title="Editar" class="rounded-lg border p-2 text-amber-700 hover:bg-amber-50"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m16 4 4 4M4 20l4-.8L19 8a2.8 2.8 0 0 0-4-4L4 15z"/><path d="M13 6 18 11"/></svg></button>
+                        <button data-action="delete" data-id="${user.id}" data-name="${escapeHtml(user.nome)}" aria-label="Excluir ${escapeHtml(user.nome)}" title="Excluir" class="rounded-lg border p-2 text-red-700 hover:bg-red-50"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg></button>
+                    </div></article>`;
+            }).join('');
+        } catch (error) { status.classList.remove('hidden'); setStatus(error.message, true); }
+    }
+    function openModal(title, subtitle='') {
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-subtitle').textContent = subtitle;
+        modal.classList.remove('hidden'); document.body.classList.add('overflow-hidden');
+    }
+    function closeModal() { modal.classList.add('hidden'); document.body.classList.remove('overflow-hidden'); }
+    function formMarkup(user={}, isNew=false) {
+        const readOnly = !editing && !isNew ? 'readonly' : '';
+        const field = (label, name, value, type='text', required=true) => `<label class="block text-sm font-semibold text-gray-700">${label}<input name="${name}" type="${type}" value="${escapeHtml(value)}" ${required ? 'required' : ''} ${readOnly} class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 ${readOnly ? 'bg-gray-50' : 'focus:ring-2 focus:ring-blue-500'}"></label>`;
+        let fields;
+        if (category === 'aluno') {
+            fields = `<div class="grid sm:grid-cols-2 gap-4">${field('Nome do aluno','nome',user.nome)}${field('Idade','idade',user.idade,'number')}</div>
+                ${isNew ? `<label class="block text-sm font-semibold text-gray-700">Responsável<select name="responsavel_id" required class="mt-1 w-full rounded-lg border px-3 py-2"><option value="">Carregando responsáveis…</option></select></label>
+                <label class="block text-sm font-semibold text-gray-700">Foto facial (JPEG/PNG/WebP, até 5 MB)<input name="foto_perfil" type="file" accept="image/jpeg,image/png,image/webp" required class="mt-1 w-full rounded-lg border p-2"></label>
+                <label class="flex gap-2 text-sm text-gray-700"><input type="checkbox" name="termo_consentimento" required> Confirmo que há consentimento para coleta e armazenamento dos dados faciais para segurança escolar.</label>` : `<p class="text-sm text-gray-600">Responsável: ${escapeHtml(user.responsavel)} · ${escapeHtml(user.email)}</p><label class="block text-sm font-semibold text-gray-700">Substituir foto facial (opcional)<input name="foto_perfil" type="file" accept="image/jpeg,image/png,image/webp" class="mt-1 w-full rounded-lg border p-2"></label>`}`;
+        } else {
+            fields = `<div class="grid sm:grid-cols-2 gap-4">${field('Nome','first_name',user.first_name)}${field('Sobrenome','last_name',user.last_name)}</div>${field('E-mail','email',user.email,'email')}${field('CPF','cpf',user.cpf)}
+                ${isNew ? `${field('Senha inicial','senha','','password')}<p class="text-xs text-gray-500">Mínimo de 8 caracteres, com maiúscula, minúscula, número e símbolo.</p>` : ''}
+                <label class="block text-sm font-semibold text-gray-700">${isNew ? 'Foto de perfil' : 'Alterar foto (opcional)'}<input name="foto_perfil" type="file" accept="image/jpeg,image/png,image/webp" ${isNew ? 'required' : ''} ${!editing && !isNew ? 'disabled' : ''} class="mt-1 w-full rounded-lg border p-2"></label>`;
+        }
+        return `<form id="user-form" class="space-y-4" enctype="multipart/form-data">${user.foto ? `<button type="button" id="expand-photo" class="block mb-4"><img src="${escapeHtml(user.foto)}" alt="Ampliar foto" class="w-24 h-24 rounded-full object-cover"></button>` : ''}${fields}
+            <p id="form-error" class="hidden text-sm text-red-700" role="alert"></p>
+            <div class="flex justify-end gap-3 pt-3"><button type="button" data-close-user-modal class="rounded-lg bg-gray-200 px-4 py-2 font-semibold">${editing || isNew ? 'Cancelar' : 'Fechar'}</button>${editing || isNew ? `<button type="submit" class="rounded-lg bg-blue-600 px-5 py-2 font-bold text-white hover:bg-blue-700">${isNew ? 'Cadastrar' : 'Salvar'}</button>` : ''}</div></form>`;
+    }
+    async function startForm(user={}, isNew=false, forceEditing=false) {
+        editing = isNew || forceEditing; currentUser = user;
+        openModal(isNew ? `Cadastrar ${singular[category]}` : editing ? `Editar ${singular[category]}` : `Visualizar ${singular[category]}`);
+        modalContent.innerHTML = formMarkup(user, isNew);
+        if (category === 'aluno' && isNew) {
+            try {
+                let guardians = await request(`${api('responsavel')}?page=1`);
+                let responsaveis = [...guardians.results];
+                for (let page = 2; page <= guardians.pages; page++) {
+                    const next = await request(`${api('responsavel')}?page=${page}`);
+                    responsaveis.push(...next.results);
+                }
+                const select = modalContent.querySelector('[name="responsavel_id"]');
+                select.innerHTML = '<option value="">Selecione</option>' + responsaveis.map(resp => `<option value="${resp.id}">${escapeHtml(resp.nome)} — ${escapeHtml(resp.email)}</option>`).join('');
+                if (!guardians.total) select.innerHTML = '<option value="">Cadastre um responsável primeiro</option>';
+            } catch (error) { modalContent.querySelector('[name="responsavel_id"]').innerHTML = '<option value="">Falha ao carregar</option>'; }
+        }
+    }
+    document.querySelectorAll('.category-tab').forEach(button => button.addEventListener('click', () => {
+        category = button.dataset.category; pages[category] = 1;
+        document.querySelectorAll('.category-tab').forEach(tab => { const selected = tab === button; tab.setAttribute('aria-selected', selected); tab.className = `category-tab rounded-lg px-5 py-2 font-semibold ${selected ? 'bg-blue-700 text-white' : 'bg-white text-gray-700 border border-gray-300'}`; });
+        document.getElementById('create-user').textContent = `Cadastrar ${singular[category]}`; loadList();
+    }));
+    document.getElementById('create-user').addEventListener('click', () => startForm({}, true));
+    document.getElementById('previous-page').addEventListener('click', () => { if (pages[category] > 1) { pages[category]--; loadList(); } });
+    document.getElementById('next-page').addEventListener('click', () => { pages[category]++; loadList(); });
+    list.addEventListener('click', async event => {
+        const button = event.target.closest('[data-action]'); if (!button) return;
+        const id = button.dataset.id;
+        if (button.dataset.action === 'delete') { showDelete(id, button.dataset.name); return; }
+        try { const user = await request(api(category, id)); await startForm(user, false, button.dataset.action === 'edit'); }
+        catch (error) { status.classList.remove('hidden'); setStatus(error.message, true); }
+    });
+    modal.addEventListener('click', event => {
+        if (event.target === modal || event.target.closest('[data-close-user-modal]')) { closeModal(); return; }
+        if (event.target.closest('#expand-photo') && currentUser?.foto) window.open(currentUser.foto, '_blank', 'noopener');
+        if (!editing && event.target.matches('input[readonly]')) { editing = true; modalContent.innerHTML = formMarkup(currentUser); }
+    });
+    modalContent.addEventListener('submit', async event => {
+        if (event.target.id !== 'user-form') return;
+        event.preventDefault();
+        const submit = event.target.querySelector('[type="submit"]'); submit.disabled = true;
+        const errorBox = event.target.querySelector('#form-error');
+        try {
+            const result = await request(api(category, currentUser?.id), {method: 'POST', body: new FormData(event.target)});
+            closeModal(); pages[category] = result.item ? 1 : pages[category]; await loadList();
+            if (window.Swal) Swal.fire({toast:true,position:'bottom-end',icon:'success',title:result.mensagem,showConfirmButton:false,timer:2500});
+        } catch (error) { errorBox.textContent = error.message; errorBox.classList.remove('hidden'); submit.disabled = false; }
+    });
+    function showDelete(id, name) {
+        deleteTarget = id; deleteCode = String(Math.floor(1000 + Math.random() * 9000));
+        document.getElementById('delete-user-name').textContent = name;
+        document.getElementById('delete-code').textContent = deleteCode;
+        document.getElementById('delete-input').value = '';
+        document.getElementById('confirm-delete').disabled = true;
+        document.getElementById('delete-error').classList.add('hidden');
+        document.getElementById('delete-modal').classList.remove('hidden');
+    }
+    document.getElementById('delete-input').addEventListener('input', event => { document.getElementById('confirm-delete').disabled = event.target.value !== deleteCode; });
+    document.getElementById('cancel-delete').addEventListener('click', () => document.getElementById('delete-modal').classList.add('hidden'));
+    document.getElementById('confirm-delete').addEventListener('click', async event => {
+        event.currentTarget.disabled = true;
+        try { const result = await request(api(category, deleteTarget), {method:'DELETE'}); document.getElementById('delete-modal').classList.add('hidden'); await loadList(); if (window.Swal) Swal.fire({toast:true,position:'bottom-end',icon:'success',title:result.mensagem,showConfirmButton:false,timer:2500}); }
+        catch (error) { const box = document.getElementById('delete-error'); box.textContent = error.message; box.classList.remove('hidden'); event.currentTarget.disabled = document.getElementById('delete-input').value !== deleteCode; }
+    });
+    loadList();
+})();
+</script>
 {% endblock %}

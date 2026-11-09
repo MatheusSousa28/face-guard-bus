@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import HttpResponseNotAllowed
+from django.http import HttpResponseNotAllowed, JsonResponse
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -10,6 +10,12 @@ from django.utils import timezone
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 import re
+import base64
+import json
+import io
+import secrets
+from django.core.paginator import Paginator, EmptyPage
+from django.core.files.base import ContentFile
 from alunos.models import Aluno
 from transporte.models import Rota
 from transporte.services import processar_rotas_sem_gps
@@ -253,16 +259,147 @@ def painel_usuarios_ativos(request):
     if not hasattr(request.user, 'instituicao'):
         return redirect('home')
     
-    responsaveis = Responsavel.objects.filter(usuario__is_aprovado=True)
-    motoristas = Motorista.objects.filter(usuario__is_aprovado=True)
-    alunos = Aluno.objects.filter(is_aprovado=True)
+    return render(request, 'usuarios/painel_usuarios.html')
 
-    contexto = {
-        'responsaveis': responsaveis,
-        'motoristas': motoristas,
-        'alunos': alunos,
-    }
-    return render(request, 'usuarios/painel_usuarios.html', contexto)
+
+def _usuario_json(tipo, obj):
+    if tipo == 'aluno':
+        foto = obj.foto_perfil
+        dados = {'id': obj.pk, 'nome': obj.nome, 'idade': obj.idade,
+                 'responsavel': str(obj.responsavel.usuario.get_full_name()),
+                 'responsavel_id': obj.responsavel_id,
+                 'email': obj.responsavel.usuario.email,
+                 'foto': foto.url if foto else '', 'aprovado': obj.is_aprovado,
+                 'termo_consentimento': obj.termo_consentimento}
+    else:
+        usuario = obj.usuario
+        foto = obj.foto_perfil
+        dados = {'id': obj.pk, 'first_name': usuario.first_name,
+                 'last_name': usuario.last_name, 'nome': usuario.get_full_name(),
+                 'email': usuario.email, 'cpf': obj.cpf,
+                 'foto': foto.url if foto else '', 'aprovado': usuario.is_aprovado}
+    return dados
+
+
+@login_required(login_url='login')
+def api_usuarios(request, tipo, obj_id=None):
+    """CRUD JSON usado pela tela institucional; mantém regras e dados no servidor."""
+    if not hasattr(request.user, 'instituicao'):
+        return JsonResponse({'erro': 'Acesso permitido apenas à instituição.'}, status=403)
+    if tipo not in {'aluno', 'motorista', 'responsavel'}:
+        return JsonResponse({'erro': 'Categoria inválida.'}, status=404)
+    model = {'aluno': Aluno, 'motorista': Motorista, 'responsavel': Responsavel}[tipo]
+    qs = model.objects.all()
+    if tipo == 'aluno':
+        qs = qs.filter(is_aprovado=True).select_related('responsavel__usuario').order_by('nome')
+    else:
+        qs = qs.filter(usuario__is_aprovado=True).select_related('usuario').order_by('usuario__first_name', 'usuario__last_name')
+
+    if request.method == 'GET' and obj_id is None:
+        paginator = Paginator(qs, 8)
+        try:
+            page = paginator.page(request.GET.get('page', 1))
+        except (EmptyPage, TypeError, ValueError):
+            page = paginator.page(paginator.num_pages or 1)
+        return JsonResponse({'results': [_usuario_json(tipo, item) for item in page.object_list],
+                             'page': page.number, 'pages': paginator.num_pages,
+                             'total': paginator.count})
+    if request.method == 'GET' and obj_id is not None:
+        return JsonResponse(_usuario_json(tipo, get_object_or_404(qs, pk=obj_id)))
+    if request.method not in {'POST', 'DELETE'}:
+        return HttpResponseNotAllowed(['GET', 'POST', 'DELETE'])
+
+    if request.method == 'DELETE':
+        item = get_object_or_404(qs, pk=obj_id)
+        if tipo == 'responsavel' and item.alunos.exists():
+            return JsonResponse({'erro': 'Não é possível excluir um responsável que ainda possui alunos vinculados.'}, status=409)
+        if tipo == 'motorista':
+            from transporte.models import Rota
+            if Rota.objects.filter(motorista=item, ativa=True).exists():
+                return JsonResponse({'erro': 'Não é possível excluir um motorista com rota ativa.'}, status=409)
+        if tipo == 'aluno':
+            from transporte.models import Rota
+            if item.eventos.exists():
+                return JsonResponse({'erro': 'Não é possível excluir este aluno porque há eventos de transporte associados.'}, status=409)
+            if Rota.objects.filter(ativa=True, veiculo__alunos_autorizados=item).exists():
+                return JsonResponse({'erro': 'Não é possível excluir um aluno vinculado a uma rota ativa.'}, status=409)
+        if tipo in {'motorista', 'responsavel'}:
+            item.usuario.delete()
+        else:
+            item.delete()
+        return JsonResponse({'mensagem': 'Usuário excluído com sucesso.'})
+
+    criando = obj_id is None
+    if not criando:
+        item = get_object_or_404(qs, pk=obj_id)
+    data = request.POST
+    nome, sobrenome = data.get('first_name', '').strip(), data.get('last_name', '').strip()
+    foto = request.FILES.get('foto_perfil')
+    if foto and not _imagem_valida(foto):
+        return JsonResponse({'erro': 'A foto deve ser JPEG, PNG ou WebP válida e ter até 5 MB.'}, status=400)
+    try:
+        with transaction.atomic():
+            if tipo == 'aluno':
+                nome_aluno = data.get('nome', '').strip()
+                try:
+                    idade = int(data.get('idade', ''))
+                except (TypeError, ValueError):
+                    idade = 0
+                if len(nome_aluno) < 2 or len(nome_aluno) > 100 or not 2 <= idade <= 30:
+                    return JsonResponse({'erro': 'Informe nome válido e idade entre 2 e 30 anos.'}, status=400)
+                if criando:
+                    if not data.get('termo_consentimento') or not foto:
+                        return JsonResponse({'erro': 'Consentimento e foto facial são obrigatórios para cadastrar aluno.'}, status=400)
+                    from alunos.views import codificar_foto_aluno
+                    dados_faciais = codificar_foto_aluno(foto)
+                    responsavel = get_object_or_404(Responsavel, pk=data.get('responsavel_id'), usuario__is_aprovado=True)
+                    item = Aluno(nome=nome_aluno, idade=idade, responsavel=responsavel,
+                                 dados_faciais=dados_faciais, termo_consentimento=True, is_aprovado=True)
+                else:
+                    item.nome, item.idade = nome_aluno, idade
+                if foto:
+                    if not criando:
+                        from alunos.views import codificar_foto_aluno
+                        try:
+                            item.dados_faciais = codificar_foto_aluno(foto)
+                        except ValueError as exc:
+                            return JsonResponse({'erro': str(exc)}, status=400)
+                    item.foto_perfil = foto
+                item.save()
+            else:
+                email = data.get('email', '').strip().lower()
+                cpf = re.sub(r'\D', '', data.get('cpf', ''))
+                if not nome or not sobrenome or len(nome) > 150 or len(sobrenome) > 150:
+                    return JsonResponse({'erro': 'Informe nome e sobrenome (até 150 caracteres).'}, status=400)
+                try:
+                    validate_email(email)
+                except ValidationError:
+                    return JsonResponse({'erro': 'Informe um e-mail válido.'}, status=400)
+                if len(cpf) != 11 or model.objects.filter(cpf=cpf).exclude(pk=None if criando else item.pk).exists():
+                    return JsonResponse({'erro': 'CPF inválido ou já cadastrado.'}, status=400)
+                usuario_atual = None if criando else item.usuario
+                if Usuario.objects.filter(email=email).exclude(pk=None if criando else usuario_atual.pk).exists():
+                    return JsonResponse({'erro': 'Este e-mail já está cadastrado.'}, status=400)
+                if criando:
+                    senha = data.get('senha', '')
+                    if not _senha_valida(senha) or not foto:
+                        return JsonResponse({'erro': 'Senha forte e foto de perfil são obrigatórias.'}, status=400)
+                    usuario = Usuario.objects.create_user(username=email, email=email, password=senha,
+                        first_name=nome, last_name=sobrenome, is_aprovado=True)
+                    item = model(usuario=usuario, cpf=cpf, foto_perfil=foto)
+                else:
+                    usuario = item.usuario
+                    usuario.first_name, usuario.last_name, usuario.email, usuario.username = nome, sobrenome, email, email
+                    usuario.save()
+                    item.cpf = cpf
+                    if foto:
+                        item.foto_perfil = foto
+                item.save()
+        return JsonResponse({'mensagem': 'Cadastro salvo com sucesso.', 'item': _usuario_json(tipo, item)}, status=201 if criando else 200)
+    except Exception as exc:
+        if str(exc) and exc.__class__.__name__ in {'IntegrityError', 'ValidationError'}:
+            return JsonResponse({'erro': 'Não foi possível salvar. Verifique se e-mail e CPF são únicos.'}, status=400)
+        return JsonResponse({'erro': 'Não foi possível salvar os dados. Tente novamente.'}, status=400)
 
 @login_required(login_url='login')
 def cadastrar_motorista(request):

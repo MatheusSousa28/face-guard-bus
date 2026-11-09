@@ -9,6 +9,17 @@ from django.core.files.base import ContentFile
 from alunos.models import Aluno
 import uuid
 
+
+def codificar_foto_aluno(arquivo):
+    """Valida imagem de rosto e retorna o vetor facial persistível."""
+    arquivo.seek(0)
+    imagem = face_recognition.load_image_file(arquivo)
+    rostos = face_recognition.face_encodings(imagem)
+    arquivo.seek(0)
+    if len(rostos) != 1:
+        raise ValueError('A foto deve conter exatamente um rosto.')
+    return json.dumps(rostos[0].tolist())
+
 @login_required(login_url='login')
 def cadastro_aluno(request):
     #só Responsáveis podem acessar essa view

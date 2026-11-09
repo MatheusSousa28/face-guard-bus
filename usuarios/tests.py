@@ -2,6 +2,7 @@ import io
 import base64
 import json
 import tempfile
+from urllib.parse import urlencode
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -107,7 +108,10 @@ class FluxosCadastroTests(TestCase):
 
         self.assertRedirects(response, reverse('login'))
         self.assertNotIn('_auth_user_id', self.client.session)
-        self.assertRedirects(self.client.get(reverse('home')), reverse('login') + '?next=/home/')
+        self.assertRedirects(
+            self.client.get(reverse('home')),
+            reverse('login') + '?' + urlencode({'next': reverse('home')}),
+        )
 
     def test_aprovacao_de_cadastro_exige_post(self):
         pendente = Usuario.objects.create_user(
@@ -186,3 +190,83 @@ class FluxosCadastroTests(TestCase):
         self.assertFalse(aluno.is_aprovado)
         self.assertEqual(len(json.loads(aluno.dados_faciais)), 128)
         load_image.assert_called_once()
+
+
+class GerenciamentoUsuariosTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.instituicao_usuario = Usuario.objects.create_user(
+            username='escola.api@test.local', email='escola.api@test.local', password='SenhaForte123!',
+            first_name='Escola', last_name='API', is_aprovado=True,
+        )
+        Instituicao.objects.create(usuario=cls.instituicao_usuario)
+        cls.responsavel_usuario = Usuario.objects.create_user(
+            username='resp.api@test.local', email='resp.api@test.local', password='SenhaForte123!',
+            first_name='Responsável', last_name='API', is_aprovado=True,
+        )
+        cls.responsavel = Responsavel.objects.create(
+            usuario=cls.responsavel_usuario, cpf='12345678908', foto_perfil='fotos/resp-api.png',
+        )
+
+    def setUp(self):
+        self.client.force_login(self.instituicao_usuario)
+
+    def imagem_png(self, nome='foto.png'):
+        buffer = io.BytesIO()
+        Image.new('RGB', (32, 32), color='blue').save(buffer, format='PNG')
+        return SimpleUploadedFile(nome, buffer.getvalue(), content_type='image/png')
+
+    def api(self, tipo, obj_id=None):
+        suffix = f'{tipo}/{obj_id}/' if obj_id else f'{tipo}/'
+        return reverse('api_usuarios', kwargs={'tipo': tipo}) if obj_id is None else reverse('api_usuario_detalhe', kwargs={'tipo': tipo, 'obj_id': obj_id})
+
+    def test_painel_carrega_vazio_e_api_pagina_por_categoria(self):
+        aluno = Aluno.objects.create(nome='Lia', idade=8, responsavel=self.responsavel,
+                                     foto_perfil='alunos/lia.jpg', is_aprovado=True)
+        response = self.client.get(self.api('aluno'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['total'], 1)
+        self.assertEqual(response.json()['results'][0]['nome'], aluno.nome)
+        self.assertEqual(self.client.get(self.api('motorista')).json()['total'], 0)
+
+    def test_api_cria_edita_e_exclui_motorista(self):
+        payload = {'first_name': 'João', 'last_name': 'Condutor', 'email': 'joao.api@example.test',
+                   'cpf': '12345678909', 'senha': 'SenhaForte123!',
+                   'foto_perfil': self.imagem_png('perfil.png')}
+        created = self.client.post(self.api('motorista'), payload)
+        self.assertEqual(created.status_code, 201, created.content)
+        motorista = Motorista.objects.get(usuario__email='joao.api@example.test')
+        self.assertTrue(motorista.usuario.check_password('SenhaForte123!'))
+        updated = self.client.post(self.api('motorista', motorista.pk), {
+            'first_name': 'João Atualizado', 'last_name': 'Condutor',
+            'email': 'joao.api@example.test', 'cpf': '12345678909',
+        })
+        self.assertEqual(updated.status_code, 200, updated.content)
+        motorista.usuario.refresh_from_db()
+        self.assertEqual(motorista.usuario.first_name, 'João Atualizado')
+        deleted = self.client.delete(self.api('motorista', motorista.pk))
+        self.assertEqual(deleted.status_code, 200)
+        self.assertFalse(Motorista.objects.filter(pk=motorista.pk).exists())
+
+    def test_api_exige_perfil_institucional(self):
+        self.client.force_login(self.responsavel_usuario)
+        self.assertEqual(self.client.get(self.api('aluno')).status_code, 403)
+
+    def test_nao_apaga_responsavel_com_alunos(self):
+        Aluno.objects.create(nome='Vinculada', idade=8, responsavel=self.responsavel)
+        response = self.client.delete(self.api('responsavel', self.responsavel.pk))
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(Responsavel.objects.filter(pk=self.responsavel.pk).exists())
+
+    def test_cadastro_de_aluno_preserva_validacao_biometrica_e_consentimento(self):
+        foto = self.imagem_png('crianca.png')
+        with patch('alunos.views.codificar_foto_aluno', return_value='[0.1]') as codificar:
+            response = self.client.post(self.api('aluno'), {
+                'nome': 'Nova Criança', 'idade': 7, 'responsavel_id': self.responsavel.pk,
+                'termo_consentimento': 'on', 'foto_perfil': foto,
+            })
+        self.assertEqual(response.status_code, 201, response.content)
+        aluno = Aluno.objects.get(nome='Nova Criança')
+        self.assertTrue(aluno.is_aprovado)
+        self.assertTrue(aluno.termo_consentimento)
+        codificar.assert_called_once()
