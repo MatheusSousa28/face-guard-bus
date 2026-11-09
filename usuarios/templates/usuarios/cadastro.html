@@ -24,10 +24,19 @@
         }
     </script>
 </head>
-<body class="min-h-screen flex items-center justify-center font-sans py-10 px-4 relative overflow-hidden bg-gradient-to-br from-sky-300 via-blue-500 to-blue-900">
-    <div aria-hidden="true" class="pointer-events-none absolute inset-0 opacity-[.16] text-black"><span class="absolute left-[7%] top-[12%] text-6xl">🚌</span><span class="absolute right-[10%] top-[16%] text-5xl">◉</span><span class="absolute left-[15%] bottom-[12%] text-6xl">♙</span><span class="absolute right-[8%] bottom-[10%] text-6xl">⌖</span><span class="absolute left-[48%] top-[5%] text-4xl">⌁</span></div>
+<body class="min-h-screen flex items-center justify-center font-sans py-8 px-4 relative overflow-x-clip bg-gradient-to-br from-sky-300 via-blue-500 to-blue-900">
+    <div aria-hidden="true" class="pointer-events-none absolute inset-0 overflow-hidden opacity-[.16]">
+        <img src="{% static 'img/icone_onibus.png' %}" class="absolute left-[5%] top-[9%] w-20 rotate-[-9deg]" alt="">
+        <img src="{% static 'img/icone_familia.png' %}" class="absolute right-[9%] top-[12%] w-24 rotate-[8deg]" alt="">
+        <img src="{% static 'img/icone_rota.png' %}" class="absolute left-[13%] top-[57%] w-16 rotate-[12deg]" alt="">
+        <img src="{% static 'img/icone_reconhecimento.png' %}" class="absolute right-[12%] top-[58%] w-16 rotate-[-8deg]" alt="">
+        <img src="{% static 'img/icone_escola.png' %}" class="absolute left-[25%] bottom-[5%] w-14 rotate-[-6deg]" alt="">
+        <img src="{% static 'img/icone_onibus.png' %}" class="absolute right-[30%] bottom-[4%] w-20 rotate-[7deg]" alt="">
+        <img src="{% static 'img/icone_familia.png' %}" class="absolute left-[34%] top-[4%] w-16 rotate-[4deg]" alt="">
+        <svg class="absolute right-0 top-[28%] h-36 w-36" viewBox="0 0 150 150" fill="none" stroke="black" stroke-width="1.2"><path d="M42 4 4 42M88 4 4 88M134 4 4 134"/></svg>
+    </div>
 
-    <div class="w-full max-w-lg px-4">
+    <div class="relative z-10 w-full max-w-lg px-4 my-auto">
         <div class="mb-3">
             {% include '_botao_voltar.html' with voltar_url='login' %}
         </div>
@@ -35,18 +44,7 @@
         <h2 class="font-display text-3xl font-bold text-blue-600 mb-2 text-center text-blue-800">Criar Conta</h2>
         <p class="text-center text-gray-500 mb-6 text-sm">Acesso exclusivo para Pais e Responsáveis</p>
         
-        {% if messages %}
-            <div class="mb-4">
-                {% for message in messages %}
-                    <p class="text-sm p-3 rounded font-semibold align-middle text-center
-                        {% if message.tags == 'error' %} bg-red-100 text-red-700 
-                        {% elif message.tags == 'warning' %} bg-yellow-100 text-yellow-700 
-                        {% else %} bg-green-100 text-green-700 {% endif %}">
-                        {{ message }}
-                    </p>
-                {% endfor %}
-            </div>
-        {% endif %}
+        {% if messages %}<div class="fixed bottom-5 right-5 z-50 flex flex-col gap-2">{% for message in messages %}<div class="toast-message rounded-lg px-5 py-3 text-sm font-semibold text-white shadow-xl {% if message.tags == 'error' %}bg-red-600{% elif 'pending' in message.tags %}bg-green-600{% else %}bg-blue-600{% endif %}">{{ message }}</div>{% endfor %}</div>{% endif %}
         <!-- pegando imagem com enctype -->
         <form method="POST" enctype="multipart/form-data" class="space-y-4">
             {% csrf_token %}
@@ -136,9 +134,9 @@
             </div>
             <p class="text-xs text-gray-500">A senha deve ter min 8 caracteres, maiúsculas, minúsculas, números e 1 símbolo.</p>
                     
-            <button type="submit" 
-                    class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded transition duration-200 mt-4">
-                Cadastrar
+            <button type="submit" disabled
+                    class="submit-button w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded transition duration-200 mt-4 disabled:cursor-not-allowed disabled:opacity-50">
+                <span class="button-label">Cadastrar</span>
             </button>
         </form>
 
@@ -174,6 +172,28 @@
             const reader = new FileReader();
             reader.onload = event => { document.getElementById('photo-preview').innerHTML = `<img src="${event.target.result}" alt="Pré-visualização da foto" class="w-full h-full object-cover">`; };
             reader.readAsDataURL(file);
+        });
+        const registrationForm = document.querySelector('form');
+        const registrationButton = registrationForm.querySelector('[type="submit"]');
+        const registrationInputs = [...registrationForm.querySelectorAll('input[required]')];
+        const registrationPassword = document.getElementById('senha');
+        const registrationConfirm = document.getElementById('confirmar_senha');
+        const updateRegistrationButton = () => {
+            const passwordValid = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/.test(registrationPassword.value);
+            const passwordsMatch = registrationPassword.value === registrationConfirm.value;
+            registrationButton.disabled = !registrationInputs.every(input => input.type === 'file' ? input.files.length > 0 : input.value.trim() && input.validity.valid) || !passwordValid || !passwordsMatch;
+        };
+        registrationInputs.forEach(input => input.addEventListener('input', updateRegistrationButton));
+        registrationInputs.forEach(input => input.addEventListener('change', updateRegistrationButton));
+        updateRegistrationButton();
+        registrationForm.addEventListener('submit', event => {
+            if (!registrationForm.checkValidity() || registrationButton.disabled) { event.preventDefault(); return; }
+            registrationButton.disabled = true;
+            registrationButton.querySelector('.button-label').innerHTML = '<span class="inline-flex items-center gap-2"><span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>Cadastrando...</span>';
+        });
+        document.querySelectorAll('.toast-message').forEach((toast, index) => {
+            setTimeout(() => toast.classList.add('transition-all', 'duration-500', 'opacity-0', 'translate-y-3'), 4000 + index * 100);
+            setTimeout(() => toast.remove(), 4500 + index * 100);
         });
         function toggleSenha(inputId, eyeId, eyeSlashId) {
             const input = document.getElementById(inputId);

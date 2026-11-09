@@ -68,10 +68,11 @@ def login_view(request):
         if usuario is not None:
             if usuario.is_aprovado or usuario.is_superuser:
                 auth_login(request, usuario) #inicia a sessão e cria o cookie de login
+                messages.info(request, 'Logado com sucesso!')
                 return redirect('home')
             else:
                 #senha certa mas a instituição ainda não aprovou
-                messages.warning(request, 'Sua conta ainda aguarda aprovação da instituição.')
+                messages.warning(request, 'Sua conta ainda aguarda aprovação da instituição.', extra_tags='pending')
         else:
             #senha ou email errados
             messages.error(request, 'Email ou senha incorretos.')
@@ -196,7 +197,8 @@ def cadastro_responsavel(request):
                 #cria o perfil e amarra ao login
                 Responsavel.objects.create(usuario=novo_usuario, cpf=cpf_limpo, foto_perfil=foto)
 
-            messages.success(request, 'Cadastro realizado com sucesso! Aguarde a aprovação da instituição.')
+            messages.info(request, 'Cadastro realizado com sucesso!')
+            messages.success(request, 'Sua conta aguarda aprovação da instituição.', extra_tags='pending')
             return redirect('login')
 
         except Exception:
