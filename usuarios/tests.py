@@ -284,9 +284,50 @@ class GerenciamentoUsuariosTests(TestCase):
             response = self.client.post(self.api('aluno'), {
                 'nome': 'Nova Criança', 'idade': 7, 'responsavel_id': self.responsavel.pk,
                 'termo_consentimento': 'on', 'foto_perfil': foto,
+                'foto_base64': 'data:image/jpeg;base64,ZmFrZQ==',
             })
         self.assertEqual(response.status_code, 201, response.content)
         aluno = Aluno.objects.get(nome='Nova Criança')
         self.assertTrue(aluno.is_aprovado)
         self.assertTrue(aluno.termo_consentimento)
         codificar.assert_called_once()
+        self.assertTrue(aluno.foto_perfil.name.endswith('.png'))
+
+    def test_instituicao_redefine_senha_de_motorista_com_hash(self):
+        motorista_usuario = Usuario.objects.create_user(
+            username='motorista.senha@test.local', email='motorista.senha@test.local',
+            password='SenhaAntiga123!', first_name='Motorista', last_name='Teste', is_aprovado=True,
+        )
+        motorista = Motorista.objects.create(
+            usuario=motorista_usuario, cpf='22233344455', foto_perfil='fotos/motorista.png',
+        )
+        response = self.client.post(reverse('api_redefinir_senha_usuario', kwargs={
+            'tipo': 'motorista', 'obj_id': motorista.pk,
+        }), {'senha': 'NovaSenha123!', 'confirmar_senha': 'NovaSenha123!'})
+        self.assertEqual(response.status_code, 200, response.content)
+        motorista_usuario.refresh_from_db()
+        self.assertTrue(motorista_usuario.check_password('NovaSenha123!'))
+
+    def test_redefinicao_de_senha_rejeita_confirmacao_diferente(self):
+        response = self.client.post(reverse('api_redefinir_senha_usuario', kwargs={
+            'tipo': 'responsavel', 'obj_id': self.responsavel.pk,
+        }), {'senha': 'NovaSenha123!', 'confirmar_senha': 'OutraSenha123!'})
+        self.assertEqual(response.status_code, 400)
+        self.responsavel_usuario.refresh_from_db()
+        self.assertTrue(self.responsavel_usuario.check_password('SenhaForte123!'))
+
+    def test_edicao_rejeita_foto_acima_de_dois_megabytes(self):
+        motorista_usuario = Usuario.objects.create_user(
+            username='foto.limite@test.local', email='foto.limite@test.local',
+            password='SenhaForte123!', first_name='Foto', last_name='Limite', is_aprovado=True,
+        )
+        motorista = Motorista.objects.create(
+            usuario=motorista_usuario, cpf='33344455566', foto_perfil='fotos/atual.png',
+        )
+        grande = SimpleUploadedFile('grande.png', b'x' * (2 * 1024 * 1024 + 1), content_type='image/png')
+        response = self.client.post(self.api('motorista', motorista.pk), {
+            'first_name': 'Foto', 'last_name': 'Limite', 'email': 'foto.limite@test.local',
+            'cpf': '33344455566', 'foto_perfil': grande,
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('2 MB', response.json()['erro'])

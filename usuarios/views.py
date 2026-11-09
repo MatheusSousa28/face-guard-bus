@@ -41,6 +41,21 @@ def _imagem_valida(arquivo, limite_bytes=5 * 1024 * 1024):
         arquivo.seek(0)
         return False
 
+
+def _imagem_perfil_edicao_valida(arquivo, limite_bytes=2 * 1024 * 1024):
+    """Valida fotos de perfil alteradas pela gestão: JPEG/PNG até 2 MB."""
+    if not arquivo or arquivo.size > limite_bytes:
+        return False
+    try:
+        arquivo.seek(0)
+        imagem = Image.open(arquivo)
+        imagem.verify()
+        arquivo.seek(0)
+        return imagem.format in {'JPEG', 'PNG'}
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        arquivo.seek(0)
+        return False
+
 def login_view(request):
     #se o usuário clicou no botão entrar então ele enviou um formulário
     if request.method == 'POST':
@@ -342,8 +357,9 @@ def api_usuarios(request, tipo, obj_id=None):
     data = request.POST
     nome, sobrenome = data.get('first_name', '').strip(), data.get('last_name', '').strip()
     foto = request.FILES.get('foto_perfil')
-    if foto and not _imagem_valida(foto):
-        return JsonResponse({'erro': 'A foto deve ser JPEG, PNG ou WebP válida e ter até 5 MB.'}, status=400)
+    if foto and not (_imagem_valida(foto) if criando else _imagem_perfil_edicao_valida(foto)):
+        mensagem = 'Envie uma imagem PNG ou JPEG válida com no máximo 2 MB.' if not criando else 'A foto deve ser JPEG, PNG ou WebP válida e ter até 5 MB.'
+        return JsonResponse({'erro': mensagem}, status=400)
     try:
         with transaction.atomic():
             if tipo == 'aluno':
@@ -355,22 +371,29 @@ def api_usuarios(request, tipo, obj_id=None):
                 if len(nome_aluno) < 2 or len(nome_aluno) > 100 or not 2 <= idade <= 30:
                     return JsonResponse({'erro': 'Informe nome válido e idade entre 2 e 30 anos.'}, status=400)
                 if criando:
-                    if not data.get('termo_consentimento') or not foto:
-                        return JsonResponse({'erro': 'Consentimento e foto facial são obrigatórios para cadastrar aluno.'}, status=400)
+                    if not data.get('termo_consentimento') or not foto or not data.get('foto_base64'):
+                        return JsonResponse({'erro': 'Consentimento, captura facial e foto de perfil são obrigatórios para cadastrar aluno.'}, status=400)
+                    try:
+                        formato, imagem_b64 = data['foto_base64'].split(';base64,', 1)
+                        extensao = formato.split('/')[-1].lower()
+                        if extensao not in {'jpeg', 'png'}:
+                            raise ValueError
+                        bytes_faciais = base64.b64decode(imagem_b64, validate=True)
+                        if len(bytes_faciais) > 8 * 1024 * 1024:
+                            raise ValueError
+                    except (ValueError, TypeError):
+                        return JsonResponse({'erro': 'A captura facial deve ser uma imagem JPEG ou PNG válida, de até 8 MB.'}, status=400)
                     from alunos.views import codificar_foto_aluno
-                    dados_faciais = codificar_foto_aluno(foto)
+                    try:
+                        dados_faciais = codificar_foto_aluno(ContentFile(bytes_faciais, name=f'captura_faciais.{extensao}'))
+                    except ValueError as exc:
+                        return JsonResponse({'erro': str(exc)}, status=400)
                     responsavel = get_object_or_404(Responsavel, pk=data.get('responsavel_id'), usuario__is_aprovado=True)
                     item = Aluno(nome=nome_aluno, idade=idade, responsavel=responsavel,
                                  dados_faciais=dados_faciais, termo_consentimento=True, is_aprovado=True)
                 else:
                     item.nome, item.idade = nome_aluno, idade
                 if foto:
-                    if not criando:
-                        from alunos.views import codificar_foto_aluno
-                        try:
-                            item.dados_faciais = codificar_foto_aluno(foto)
-                        except ValueError as exc:
-                            return JsonResponse({'erro': str(exc)}, status=400)
                     item.foto_perfil = foto
                 item.save()
             else:
@@ -407,6 +430,29 @@ def api_usuarios(request, tipo, obj_id=None):
         if str(exc) and exc.__class__.__name__ in {'IntegrityError', 'ValidationError'}:
             return JsonResponse({'erro': 'Não foi possível salvar. Verifique se e-mail e CPF são únicos.'}, status=400)
         return JsonResponse({'erro': 'Não foi possível salvar os dados. Tente novamente.'}, status=400)
+
+
+@login_required(login_url='login')
+def api_redefinir_senha_usuario(request, tipo, obj_id):
+    if not hasattr(request.user, 'instituicao'):
+        return JsonResponse({'erro': 'Acesso permitido apenas à instituição.'}, status=403)
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    if tipo not in {'motorista', 'responsavel'}:
+        return JsonResponse({'erro': 'A redefinição de senha não está disponível para esta categoria.'}, status=400)
+    usuario = get_object_or_404(Usuario, **{
+        'is_aprovado': True,
+        f'{tipo}__pk': obj_id,
+    })
+    senha = request.POST.get('senha', '')
+    confirmar_senha = request.POST.get('confirmar_senha', '')
+    if senha != confirmar_senha:
+        return JsonResponse({'erro': 'As senhas não coincidem.'}, status=400)
+    if not _senha_valida(senha):
+        return JsonResponse({'erro': 'A senha deve ter ao menos 8 caracteres, letras maiúsculas e minúsculas, número e símbolo.'}, status=400)
+    usuario.set_password(senha)
+    usuario.save(update_fields=['password'])
+    return JsonResponse({'mensagem': 'Senha redefinida com sucesso.'})
 
 @login_required(login_url='login')
 def cadastrar_motorista(request):

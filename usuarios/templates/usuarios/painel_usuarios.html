@@ -45,6 +45,22 @@
     </div>
 </div>
 
+<div id="photo-viewer" class="hidden fixed inset-0 z-[70] bg-gray-950/90 p-4 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Foto ampliada">
+    <button id="close-photo-viewer" type="button" aria-label="Fechar imagem" class="absolute top-4 right-5 text-4xl leading-none text-white hover:text-gray-300">&times;</button>
+    <img id="photo-viewer-image" src="" alt="Foto ampliada do usuário" class="max-h-[90vh] max-w-[95vw] rounded-lg object-contain shadow-2xl">
+</div>
+
+<div id="password-modal" class="hidden fixed inset-0 z-[65] bg-gray-900/60 p-4 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="password-title">
+    <form id="password-form" class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+        <div class="flex items-start justify-between gap-4"><div><h2 id="password-title" class="text-xl font-bold text-gray-900">Redefinir senha</h2><p id="password-user-name" class="text-sm text-gray-600 mt-1"></p></div><button type="button" id="close-password-modal" aria-label="Fechar" class="text-2xl text-gray-500">&times;</button></div>
+        <label class="block text-sm font-semibold text-gray-700">Nova senha<input name="senha" type="password" required minlength="8" autocomplete="new-password" class="mt-1 w-full rounded-lg border px-3 py-2"></label>
+        <label class="block text-sm font-semibold text-gray-700">Repita a nova senha<input name="confirmar_senha" type="password" required minlength="8" autocomplete="new-password" class="mt-1 w-full rounded-lg border px-3 py-2"></label>
+        <p class="text-xs text-gray-500">Use pelo menos 8 caracteres, incluindo maiúsculas, minúsculas, número e símbolo.</p>
+        <p id="password-error" class="hidden text-sm text-red-700" role="alert"></p>
+        <div class="flex justify-end gap-3"><button type="button" id="cancel-password" class="rounded-lg bg-gray-200 px-4 py-2 font-semibold">Cancelar</button><button type="submit" class="rounded-lg bg-blue-600 px-5 py-2 font-bold text-white">Redefinir senha</button></div>
+    </form>
+</div>
+
 <div id="delete-modal" class="hidden fixed inset-0 z-[60] bg-gray-900/60 p-4 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="delete-title">
     <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
         <h2 id="delete-title" class="text-xl font-bold text-gray-900 mb-2">Confirmar exclusão</h2>
@@ -65,16 +81,21 @@
     const labels = {aluno: 'Alunos', motorista: 'Motoristas', responsavel: 'Responsáveis'};
     const singular = {aluno: 'Aluno', motorista: 'Motorista', responsavel: 'Responsável'};
     const pages = {aluno: 1, motorista: 1, responsavel: 1};
-    let category = 'aluno', currentUser = null, editing = false, deleteTarget = null, deleteCode = '';
+    let category = 'aluno', currentUser = null, editing = false, creating = false, deleteTarget = null, deleteCode = '';
     const list = document.getElementById('user-list');
     const status = document.getElementById('list-status');
     const modal = document.getElementById('user-modal');
     const modalContent = document.getElementById('user-modal-content');
+    const photoViewer = document.getElementById('photo-viewer');
+    const photoViewerImage = document.getElementById('photo-viewer-image');
     const searchInput = document.getElementById('user-search');
     const clearSearch = document.getElementById('clear-search');
     let searchTimer = null, listRequest = 0;
+    const listCache = new Map();
+    const pendingLists = new Map();
     const csrf = '{{ csrf_token }}';
     const api = (type, id) => `/usuarios/painel/usuarios/api/${type}/${id ? `${id}/` : ''}`;
+    const passwordApi = (type, id) => `${api(type, id)}senha/`;
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
     async function request(url, options={}) {
@@ -87,67 +108,192 @@
         status.textContent = message;
         status.className = `p-8 text-center ${isError ? 'text-red-700' : 'text-gray-600'}`;
     }
-    async function loadList() {
+    function renderList(data, requestId, query) {
+        if (requestId !== listRequest) return;
+        pages[category] = data.page;
+        document.getElementById('list-title').textContent = labels[category];
+        document.getElementById('total-count').textContent = `${data.total} usuário${data.total === 1 ? '' : 's'}`;
+        document.getElementById('page-label').textContent = `Página ${data.page} de ${data.pages}`;
+        document.getElementById('previous-page').disabled = data.page <= 1;
+        document.getElementById('next-page').disabled = data.page >= data.pages;
+        list.innerHTML = '';
+        if (!data.results.length) {
+            status.classList.remove('hidden');
+            setStatus(query ? 'Nenhum usuário encontrado para essa pesquisa.' : `Nenhum(a) ${singular[category].toLowerCase()} cadastrado(a).`);
+            return;
+        }
+        status.classList.add('hidden');
+        list.innerHTML = data.results.map(user => {
+            const detail = category === 'aluno' ? `${user.idade} anos · Responsável: ${escapeHtml(user.responsavel)}` : `${escapeHtml(user.email)} · CPF: ${escapeHtml(user.cpf)}`;
+            const fallback = `<div class="w-14 h-14 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">${escapeHtml((user.nome || '?').slice(0,1).toUpperCase())}</div>`;
+            const avatar = user.foto
+                ? `<button type="button" data-action="photo" data-photo="${escapeHtml(user.foto)}" data-name="${escapeHtml(user.nome)}" aria-label="Ampliar foto de ${escapeHtml(user.nome)}" class="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-600"><img src="${escapeHtml(user.foto)}" alt="Foto de ${escapeHtml(user.nome)}" class="w-14 h-14 rounded-full object-cover"></button>`
+                : fallback;
+            const resetPassword = category !== 'aluno' ? `<button data-action="password" data-id="${user.id}" data-name="${escapeHtml(user.nome)}" aria-label="Redefinir senha de ${escapeHtml(user.nome)}" title="Redefinir senha" class="rounded-lg border p-2 text-purple-700 hover:bg-purple-50"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4m-5 4v2"/></svg></button>` : '';
+            return `<article class="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                <div class="flex items-center gap-3 min-w-0"><span class="shrink-0 font-mono text-sm font-semibold text-gray-500">#${user.id}</span>${avatar}
+                    <div class="min-w-0"><p class="font-bold text-gray-900 truncate">${escapeHtml(user.nome)}</p><p class="text-sm text-gray-500 truncate">${detail}</p></div></div>
+                <div class="flex gap-2 self-end sm:self-auto">
+                    <button data-action="view" data-id="${user.id}" aria-label="Visualizar ${escapeHtml(user.nome)}" title="Visualizar" class="rounded-lg border p-2 text-blue-700 hover:bg-blue-50"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                    <button data-action="edit" data-id="${user.id}" aria-label="Editar ${escapeHtml(user.nome)}" title="Editar" class="rounded-lg border p-2 text-amber-700 hover:bg-amber-50"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m16 4 4 4M4 20l4-.8L19 8a2.8 2.8 0 0 0-4-4L4 15z"/><path d="M13 6 18 11"/></svg></button>
+                    ${resetPassword}
+                    <button data-action="delete" data-id="${user.id}" data-name="${escapeHtml(user.nome)}" aria-label="Excluir ${escapeHtml(user.nome)}" title="Excluir" class="rounded-lg border p-2 text-red-700 hover:bg-red-50"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg></button>
+                </div></article>`;
+        }).join('');
+    }
+    async function loadList({force=false}={}) {
         const requestId = ++listRequest;
         const query = searchInput.value.trim();
+        const params = new URLSearchParams({page: pages[category], q: query});
+        const cacheKey = `${category}|${query}|${pages[category]}`;
+        document.getElementById('list-title').textContent = labels[category];
+        if (!force && listCache.has(cacheKey)) {
+            renderList(listCache.get(cacheKey), requestId, query);
+            return;
+        }
         list.innerHTML = '';
         status.classList.remove('hidden'); setStatus('Carregando usuários…');
-        document.getElementById('list-title').textContent = labels[category];
+        let pending;
         try {
-            const params = new URLSearchParams({page: pages[category], q: query});
-            const data = await request(`${api(category)}?${params}`);
-            if (requestId !== listRequest) return;
-            pages[category] = data.page;
-            status.classList.add('hidden');
-            document.getElementById('total-count').textContent = `${data.total} usuário${data.total === 1 ? '' : 's'}`;
-            document.getElementById('page-label').textContent = `Página ${data.page} de ${data.pages}`;
-            document.getElementById('previous-page').disabled = data.page <= 1;
-            document.getElementById('next-page').disabled = data.page >= data.pages;
-            if (!data.results.length) {
-                status.classList.remove('hidden');
-                setStatus(query ? 'Nenhum usuário encontrado para essa pesquisa.' : `Nenhum(a) ${singular[category].toLowerCase()} cadastrado(a).`);
-                return;
+            pending = pendingLists.get(cacheKey);
+            if (!pending) {
+                pending = request(`${api(category)}?${params}`);
+                pendingLists.set(cacheKey, pending);
             }
-            list.innerHTML = data.results.map(user => {
-                const detail = category === 'aluno' ? `${user.idade} anos · Responsável: ${escapeHtml(user.responsavel)}` : `${escapeHtml(user.email)} · CPF: ${escapeHtml(user.cpf)}`;
-                const fallback = `<div class="w-14 h-14 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">${escapeHtml((user.nome || '?').slice(0,1).toUpperCase())}</div>`;
-                return `<article class="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
-                    <div class="flex items-center gap-3 min-w-0"><span class="shrink-0 font-mono text-sm font-semibold text-gray-500">#${user.id}</span>${user.foto ? `<img src="${escapeHtml(user.foto)}" alt="Foto de ${escapeHtml(user.nome)}" class="w-14 h-14 rounded-full object-cover">` : fallback}
-                        <div class="min-w-0"><p class="font-bold text-gray-900 truncate">${escapeHtml(user.nome)}</p><p class="text-sm text-gray-500 truncate">${detail}</p></div></div>
-                    <div class="flex gap-2 self-end sm:self-auto">
-                        <button data-action="view" data-id="${user.id}" aria-label="Visualizar ${escapeHtml(user.nome)}" title="Visualizar" class="rounded-lg border p-2 text-blue-700 hover:bg-blue-50"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
-                        <button data-action="edit" data-id="${user.id}" aria-label="Editar ${escapeHtml(user.nome)}" title="Editar" class="rounded-lg border p-2 text-amber-700 hover:bg-amber-50"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m16 4 4 4M4 20l4-.8L19 8a2.8 2.8 0 0 0-4-4L4 15z"/><path d="M13 6 18 11"/></svg></button>
-                        <button data-action="delete" data-id="${user.id}" data-name="${escapeHtml(user.nome)}" aria-label="Excluir ${escapeHtml(user.nome)}" title="Excluir" class="rounded-lg border p-2 text-red-700 hover:bg-red-50"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg></button>
-                    </div></article>`;
-            }).join('');
+            const data = await pending;
+            if (requestId !== listRequest) return;
+            listCache.set(cacheKey, data);
+            renderList(data, requestId, query);
         } catch (error) { if (requestId === listRequest) { status.classList.remove('hidden'); setStatus(error.message, true); } }
+        finally {
+            if (pendingLists.get(cacheKey) === pending) pendingLists.delete(cacheKey);
+        }
     }
     function openModal(title, subtitle='') {
         document.getElementById('modal-title').textContent = title;
         document.getElementById('modal-subtitle').textContent = subtitle;
         modal.classList.remove('hidden'); document.body.classList.add('overflow-hidden');
     }
-    function closeModal() { modal.classList.add('hidden'); document.body.classList.remove('overflow-hidden'); }
+    function closeModal() { modal.classList.add('hidden'); document.body.classList.remove('overflow-hidden'); stopFaceCamera(); }
+    function openPhotoViewer(src, name='Foto do usuário') {
+        if (!src) return;
+        photoViewerImage.src = src;
+        photoViewerImage.alt = `Foto ampliada de ${name}`;
+        photoViewer.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+    }
+    function closePhotoViewer() {
+        photoViewer.classList.add('hidden');
+        photoViewerImage.src = '';
+        if (modal.classList.contains('hidden') && document.getElementById('password-modal').classList.contains('hidden')) document.body.classList.remove('overflow-hidden');
+    }
+    let faceCameraStream = null;
+    function stopFaceCamera() {
+        if (faceCameraStream) faceCameraStream.getTracks().forEach(track => track.stop());
+        faceCameraStream = null;
+        const video = modalContent.querySelector('#face-video');
+        if (video) video.srcObject = null;
+    }
+    async function activateFaceCamera() {
+        const message = modalContent.querySelector('#face-capture-error');
+        try {
+            if (!navigator.mediaDevices?.getUserMedia) throw new Error('Este navegador não oferece acesso à câmera.');
+            faceCameraStream = await navigator.mediaDevices.getUserMedia({video: true});
+            const video = modalContent.querySelector('#face-video');
+            video.srcObject = faceCameraStream;
+            await video.play();
+            modalContent.querySelector('#capture-face').disabled = false;
+            message.classList.add('hidden');
+        } catch (error) {
+            message.textContent = error.message || 'Não foi possível acessar a câmera.';
+            message.classList.remove('hidden');
+            stopFaceCamera();
+        }
+    }
+    function captureFace() {
+        const video = modalContent.querySelector('#face-video');
+        const canvas = modalContent.querySelector('#face-canvas');
+        const message = modalContent.querySelector('#face-capture-error');
+        if (!video.videoWidth || !video.videoHeight) {
+            message.textContent = 'Aguarde a câmera iniciar antes de capturar.';
+            message.classList.remove('hidden');
+            return;
+        }
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        const data = canvas.toDataURL('image/jpeg', 0.9);
+        modalContent.querySelector('#face-data').value = data;
+        const preview = modalContent.querySelector('#face-preview');
+        preview.src = data; preview.classList.remove('hidden');
+        modalContent.querySelector('#retake-face').classList.remove('hidden');
+        modalContent.querySelector('#capture-face').classList.add('hidden');
+        message.classList.add('hidden');
+        stopFaceCamera();
+    }
+    function resetFaceCapture() {
+        const data = modalContent.querySelector('#face-data');
+        if (data) data.value = '';
+        const preview = modalContent.querySelector('#face-preview');
+        if (preview) { preview.src = ''; preview.classList.add('hidden'); }
+        modalContent.querySelector('#retake-face')?.classList.add('hidden');
+        modalContent.querySelector('#capture-face')?.classList.remove('hidden');
+        modalContent.querySelector('#capture-face').disabled = true;
+        activateFaceCamera();
+    }
+    function profilePhotoMarkup(user, isNew) {
+        const placeholder = `<div id="profile-photo-placeholder" class="w-32 h-32 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-4xl font-bold">${escapeHtml((user.nome || '?').slice(0,1).toUpperCase())}</div>`;
+        const photo = user.foto ? `<img id="profile-photo-preview" src="${escapeHtml(user.foto)}" alt="Foto de ${escapeHtml(user.nome || 'usuário')}" class="w-32 h-32 rounded-full object-cover">` : placeholder;
+        const accepted = isNew ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png';
+        return `<section class="mb-6 text-center">
+            <div id="profile-photo-container" class="flex justify-center">${photo}</div>
+            ${!isNew ? '<p class="mt-2 text-xs text-gray-500">Somente imagens PNG ou JPEG, com no máximo 2 MB.</p>' : ''}
+            <div class="mt-3 flex justify-center gap-3">
+                <button id="view-profile-photo" type="button" ${user.foto ? '' : 'disabled'} class="rounded-lg border px-4 py-2 font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-40">Visualizar</button>
+                <button id="change-profile-photo" type="button" class="rounded-lg border px-4 py-2 font-semibold text-amber-700 hover:bg-amber-50">${isNew ? 'Adicionar foto' : 'Alterar'}</button>
+            </div>
+            <input id="profile-photo-input" name="foto_perfil" type="file" accept="${accepted}" class="hidden">
+            <p id="profile-photo-error" class="hidden mt-2 text-sm text-red-700" role="alert"></p>
+        </section>`;
+    }
+
+    function faceCaptureMarkup() {
+        return `<section class="mb-6 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-4 text-center">
+            <h3 class="font-semibold text-gray-800">Captura dos dados faciais</h3>
+            <p class="mb-3 text-sm text-gray-500">Posicione o rosto do aluno no centro da câmera, em um local bem iluminado. Esta captura é separada da foto de perfil acima.</p>
+            <button id="activate-face-camera" type="button" class="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white hover:bg-indigo-700">Ativar câmera</button>
+            <div class="relative mx-auto mt-4 aspect-square w-full max-w-xs overflow-hidden rounded-lg bg-black">
+                <video id="face-video" autoplay playsinline class="h-full w-full object-cover"></video>
+                <canvas id="face-canvas" class="hidden"></canvas>
+                <img id="face-preview" alt="Pré-visualização da captura facial" class="hidden absolute inset-0 h-full w-full object-cover">
+            </div>
+            <div class="mt-3 flex justify-center gap-3">
+                <button id="capture-face" type="button" disabled class="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white disabled:opacity-40">Capturar rosto</button>
+                <button id="retake-face" type="button" class="hidden rounded-lg bg-gray-600 px-4 py-2 font-semibold text-white">Refazer captura</button>
+            </div>
+            <input type="hidden" id="face-data" name="foto_base64">
+            <p id="face-capture-error" class="hidden mt-2 text-sm text-red-700" role="alert"></p>
+        </section>`;
+    }
+
     function formMarkup(user={}, isNew=false) {
         const readOnly = !editing && !isNew ? 'readonly' : '';
         const field = (label, name, value, type='text', required=true) => `<label class="block text-sm font-semibold text-gray-700">${label}<input name="${name}" type="${type}" value="${escapeHtml(value)}" ${required ? 'required' : ''} ${readOnly} class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 ${readOnly ? 'bg-gray-50' : 'focus:ring-2 focus:ring-blue-500'}"></label>`;
         let fields;
         if (category === 'aluno') {
-            fields = `<div class="grid sm:grid-cols-2 gap-4">${field('Nome do aluno','nome',user.nome)}${field('Idade','idade',user.idade,'number')}</div>
+            fields = `${profilePhotoMarkup(user, isNew)}<div class="grid sm:grid-cols-2 gap-4">${field('Nome do aluno','nome',user.nome)}${field('Idade','idade',user.idade,'number')}</div>
                 ${isNew ? `<label class="block text-sm font-semibold text-gray-700">Responsável<select name="responsavel_id" required class="mt-1 w-full rounded-lg border px-3 py-2"><option value="">Carregando responsáveis…</option></select></label>
-                <label class="block text-sm font-semibold text-gray-700">Foto facial (JPEG/PNG/WebP, até 5 MB)<input name="foto_perfil" type="file" accept="image/jpeg,image/png,image/webp" required class="mt-1 w-full rounded-lg border p-2"></label>
-                <label class="flex gap-2 text-sm text-gray-700"><input type="checkbox" name="termo_consentimento" required> Confirmo que há consentimento para coleta e armazenamento dos dados faciais para segurança escolar.</label>` : `<p class="text-sm text-gray-600">Responsável: ${escapeHtml(user.responsavel)} · ${escapeHtml(user.email)}</p><label class="block text-sm font-semibold text-gray-700">Substituir foto facial (opcional)<input name="foto_perfil" type="file" accept="image/jpeg,image/png,image/webp" class="mt-1 w-full rounded-lg border p-2"></label>`}`;
+                ${faceCaptureMarkup()}
+                <label class="flex gap-2 text-sm text-gray-700"><input type="checkbox" name="termo_consentimento" required> Confirmo que há consentimento para coleta e armazenamento dos dados faciais para segurança escolar.</label>` : `<p class="text-sm text-gray-600">Responsável: ${escapeHtml(user.responsavel)} · ${escapeHtml(user.email)}</p>`}`;
         } else {
-            fields = `<div class="grid sm:grid-cols-2 gap-4">${field('Nome','first_name',user.first_name)}${field('Sobrenome','last_name',user.last_name)}</div>${field('E-mail','email',user.email,'email')}${field('CPF','cpf',user.cpf)}
-                ${isNew ? `${field('Senha inicial','senha','','password')}<p class="text-xs text-gray-500">Mínimo de 8 caracteres, com maiúscula, minúscula, número e símbolo.</p>` : ''}
-                <label class="block text-sm font-semibold text-gray-700">${isNew ? 'Foto de perfil' : 'Alterar foto (opcional)'}<input name="foto_perfil" type="file" accept="image/jpeg,image/png,image/webp" ${isNew ? 'required' : ''} ${!editing && !isNew ? 'disabled' : ''} class="mt-1 w-full rounded-lg border p-2"></label>`;
+            fields = `${profilePhotoMarkup(user, isNew)}<div class="grid sm:grid-cols-2 gap-4">${field('Nome','first_name',user.first_name)}${field('Sobrenome','last_name',user.last_name)}</div>${field('E-mail','email',user.email,'email')}${field('CPF','cpf',user.cpf)}
+                ${isNew ? `${field('Senha inicial','senha','','password')}<p class="text-xs text-gray-500">Mínimo de 8 caracteres, com maiúscula, minúscula, número e símbolo.</p>` : ''}`;
         }
-        return `<form id="user-form" class="space-y-4" enctype="multipart/form-data">${user.foto ? `<button type="button" id="expand-photo" class="block mb-4"><img src="${escapeHtml(user.foto)}" alt="Ampliar foto" class="w-24 h-24 rounded-full object-cover"></button>` : ''}${fields}
+        return `<form id="user-form" class="space-y-4" enctype="multipart/form-data">${fields}
             <p id="form-error" class="hidden text-sm text-red-700" role="alert"></p>
             <div class="flex justify-end gap-3 pt-3"><button type="button" data-close-user-modal class="rounded-lg bg-gray-200 px-4 py-2 font-semibold">${editing || isNew ? 'Cancelar' : 'Fechar'}</button>${editing || isNew ? `<button type="submit" class="rounded-lg bg-blue-600 px-5 py-2 font-bold text-white hover:bg-blue-700">${isNew ? 'Cadastrar' : 'Salvar'}</button>` : ''}</div></form>`;
     }
     async function startForm(user={}, isNew=false, forceEditing=false) {
-        editing = isNew || forceEditing; currentUser = user;
+        editing = isNew || forceEditing; creating = isNew; currentUser = user;
         openModal(isNew ? `Cadastrar ${singular[category]}` : editing ? `Editar ${singular[category]}` : `Visualizar ${singular[category]}`);
         modalContent.innerHTML = formMarkup(user, isNew);
         if (category === 'aluno' && isNew) {
@@ -164,14 +310,24 @@
             } catch (error) { modalContent.querySelector('[name="responsavel_id"]').innerHTML = '<option value="">Falha ao carregar</option>'; }
         }
     }
+    function showPasswordModal(type, id, name) {
+        passwordTarget = {type, id};
+        document.getElementById('password-user-name').textContent = name;
+        document.getElementById('password-form').reset();
+        document.getElementById('password-error').classList.add('hidden');
+        document.getElementById('password-modal').classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+    }
+    let passwordTarget = null;
     document.querySelectorAll('.category-tab').forEach(button => button.addEventListener('click', () => {
+        window.clearTimeout(searchTimer);
         category = button.dataset.category; pages[category] = 1;
         document.querySelectorAll('.category-tab').forEach(tab => { const selected = tab === button; tab.setAttribute('aria-selected', selected); tab.className = `category-tab rounded-lg px-5 py-2 font-semibold ${selected ? 'bg-blue-700 text-white' : 'bg-white text-gray-700 border border-gray-300'}`; });
         document.getElementById('create-user').textContent = `Cadastrar ${singular[category]}`; loadList();
     }));
     document.getElementById('create-user').addEventListener('click', () => startForm({}, true));
-    document.getElementById('previous-page').addEventListener('click', () => { if (pages[category] > 1) { pages[category]--; loadList(); } });
-    document.getElementById('next-page').addEventListener('click', () => { pages[category]++; loadList(); });
+    document.getElementById('previous-page').addEventListener('click', () => { window.clearTimeout(searchTimer); if (pages[category] > 1) { pages[category]--; loadList(); } });
+    document.getElementById('next-page').addEventListener('click', () => { window.clearTimeout(searchTimer); pages[category]++; loadList(); });
     searchInput.addEventListener('input', () => {
         clearSearch.classList.toggle('hidden', !searchInput.value);
         pages[category] = 1;
@@ -188,25 +344,107 @@
     list.addEventListener('click', async event => {
         const button = event.target.closest('[data-action]'); if (!button) return;
         const id = button.dataset.id;
+        if (button.dataset.action === 'photo') { openPhotoViewer(button.dataset.photo, button.dataset.name); return; }
+        if (button.dataset.action === 'password') { showPasswordModal(category, id, button.dataset.name); return; }
         if (button.dataset.action === 'delete') { showDelete(id, button.dataset.name); return; }
         try { const user = await request(api(category, id)); await startForm(user, false, button.dataset.action === 'edit'); }
         catch (error) { status.classList.remove('hidden'); setStatus(error.message, true); }
     });
     modal.addEventListener('click', event => {
         if (event.target === modal || event.target.closest('[data-close-user-modal]')) { closeModal(); return; }
-        if (event.target.closest('#expand-photo') && currentUser?.foto) window.open(currentUser.foto, '_blank', 'noopener');
-        if (!editing && event.target.matches('input[readonly]')) { editing = true; modalContent.innerHTML = formMarkup(currentUser); }
+        if (event.target.closest('#view-profile-photo')) {
+            const preview = modalContent.querySelector('#profile-photo-preview');
+            openPhotoViewer(preview?.src || currentUser?.foto, currentUser?.nome || singular[category]);
+            return;
+        }
+        if (event.target.closest('#change-profile-photo')) {
+            if (!editing && !creating) {
+                editing = true;
+                document.getElementById('modal-title').textContent = `Editar ${singular[category]}`;
+                modalContent.innerHTML = formMarkup(currentUser);
+            }
+            modalContent.querySelector('#profile-photo-input').click();
+            return;
+        }
+        if (event.target.closest('#activate-face-camera')) { activateFaceCamera(); return; }
+        if (event.target.closest('#capture-face')) { captureFace(); return; }
+        if (event.target.closest('#retake-face')) { resetFaceCapture(); return; }
+        if (!editing && event.target.matches('input[readonly]')) {
+            editing = true;
+            document.getElementById('modal-title').textContent = `Editar ${singular[category]}`;
+            modalContent.innerHTML = formMarkup(currentUser);
+        }
+    });
+    modalContent.addEventListener('change', event => {
+        if (event.target.id !== 'profile-photo-input' || !event.target.files.length) return;
+        const file = event.target.files[0];
+        const maxBytes = creating ? 5 * 1024 * 1024 : 2 * 1024 * 1024;
+        const allowed = creating ? ['image/jpeg', 'image/png', 'image/webp'] : ['image/jpeg', 'image/png'];
+        const error = modalContent.querySelector('#profile-photo-error');
+        if (!allowed.includes(file.type) || file.size > maxBytes) {
+            error.textContent = creating ? 'Envie uma imagem JPEG, PNG ou WebP com até 5 MB.' : 'Envie uma imagem PNG ou JPEG com no máximo 2 MB.';
+            error.classList.remove('hidden'); event.target.value = ''; return;
+        }
+        error.classList.add('hidden');
+        const previewUrl = URL.createObjectURL(file);
+        const container = modalContent.querySelector('#profile-photo-container');
+        container.innerHTML = `<img id="profile-photo-preview" src="${previewUrl}" alt="Pré-visualização da foto de perfil" class="w-32 h-32 rounded-full object-cover">`;
+        modalContent.querySelector('#view-profile-photo').disabled = false;
     });
     modalContent.addEventListener('submit', async event => {
         if (event.target.id !== 'user-form') return;
         event.preventDefault();
-        const submit = event.target.querySelector('[type="submit"]'); submit.disabled = true;
         const errorBox = event.target.querySelector('#form-error');
+        const formData = new FormData(event.target);
+        if (creating && !formData.get('foto_perfil')?.size) {
+            errorBox.textContent = 'Adicione uma foto de perfil antes de cadastrar.'; errorBox.classList.remove('hidden'); return;
+        }
+        if (creating && category === 'aluno' && !formData.get('foto_base64')) {
+            errorBox.textContent = 'Ative a câmera e capture os dados faciais do aluno.'; errorBox.classList.remove('hidden'); return;
+        }
+        const submit = event.target.querySelector('[type="submit"]'); submit.disabled = true;
+        const wasCreating = creating;
         try {
-            const result = await request(api(category, currentUser?.id), {method: 'POST', body: new FormData(event.target)});
-            closeModal(); pages[category] = result.item ? 1 : pages[category]; await loadList();
+            const result = await request(api(category, currentUser?.id), {method: 'POST', body: formData});
+            closeModal(); creating = false; editing = false;
+            if (wasCreating) pages[category] = 1;
+            listCache.clear(); pendingLists.clear(); await loadList();
             if (window.Swal) Swal.fire({toast:true,position:'bottom-end',icon:'success',title:result.mensagem,showConfirmButton:false,timer:2500});
         } catch (error) { errorBox.textContent = error.message; errorBox.classList.remove('hidden'); submit.disabled = false; }
+    });
+    document.getElementById('close-photo-viewer').addEventListener('click', closePhotoViewer);
+    photoViewer.addEventListener('click', event => { if (event.target === photoViewer) closePhotoViewer(); });
+    document.getElementById('close-password-modal').addEventListener('click', closePasswordModal);
+    document.getElementById('cancel-password').addEventListener('click', closePasswordModal);
+    function closePasswordModal() {
+        document.getElementById('password-modal').classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+        passwordTarget = null;
+    }
+    document.getElementById('password-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!passwordTarget) return;
+        const form = event.currentTarget;
+        const submit = form.querySelector('[type="submit"]');
+        const error = document.getElementById('password-error');
+        const senha = form.elements.senha.value;
+        const confirmar = form.elements.confirmar_senha.value;
+        if (senha !== confirmar) { error.textContent = 'As senhas não coincidem.'; error.classList.remove('hidden'); return; }
+        submit.disabled = true;
+        try {
+            const data = await request(passwordApi(passwordTarget.type, passwordTarget.id), {method:'POST', body:new FormData(form)});
+            closePasswordModal();
+            if (window.Swal) Swal.fire({toast:true,position:'bottom-end',icon:'success',title:data.mensagem,showConfirmButton:false,timer:2500});
+        } catch (err) { error.textContent = err.message; error.classList.remove('hidden'); }
+        finally { submit.disabled = false; }
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            if (!photoViewer.classList.contains('hidden')) closePhotoViewer();
+            else if (!document.getElementById('password-modal').classList.contains('hidden')) closePasswordModal();
+            else if (!modal.classList.contains('hidden')) closeModal();
+            else document.getElementById('delete-modal').classList.add('hidden');
+        }
     });
     function showDelete(id, name) {
         deleteTarget = id; deleteCode = String(Math.floor(1000 + Math.random() * 9000));
@@ -221,7 +459,7 @@
     document.getElementById('cancel-delete').addEventListener('click', () => document.getElementById('delete-modal').classList.add('hidden'));
     document.getElementById('confirm-delete').addEventListener('click', async event => {
         event.currentTarget.disabled = true;
-        try { const result = await request(api(category, deleteTarget), {method:'DELETE'}); document.getElementById('delete-modal').classList.add('hidden'); await loadList(); if (window.Swal) Swal.fire({toast:true,position:'bottom-end',icon:'success',title:result.mensagem,showConfirmButton:false,timer:2500}); }
+        try { const result = await request(api(category, deleteTarget), {method:'DELETE'}); document.getElementById('delete-modal').classList.add('hidden'); listCache.clear(); pendingLists.clear(); await loadList(); if (window.Swal) Swal.fire({toast:true,position:'bottom-end',icon:'success',title:result.mensagem,showConfirmButton:false,timer:2500}); }
         catch (error) { const box = document.getElementById('delete-error'); box.textContent = error.message; box.classList.remove('hidden'); event.currentTarget.disabled = document.getElementById('delete-input').value !== deleteCode; }
     });
     loadList();
