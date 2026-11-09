@@ -143,44 +143,44 @@ def cadastro_responsavel(request):
 
         if len(nome) < 2 or len(nome) > 50:
             messages.error(request, 'O nome deve ter entre 2 e 50 caracteres.')
-            return redirect('cadastro')
+            return render(request, 'usuarios/cadastro.html')
             
         if len(sobrenome) < 2 or len(sobrenome) > 100:
             messages.error(request, 'O sobrenome deve ter entre 2 e 100 caracteres.')
-            return redirect('cadastro')
+            return render(request, 'usuarios/cadastro.html')
 
         if senha != confirmar_senha:
             messages.error(request, 'As senhas não coincidem.')
-            return redirect('cadastro')
+            return render(request, 'usuarios/cadastro.html')
 
         if not _senha_valida(senha):
             messages.error(request, 'A senha deve ter no mínimo 8 caracteres, letras maiúsculas e minúsculas, número e símbolo.')
-            return redirect('cadastro')
+            return render(request, 'usuarios/cadastro.html')
 
         try:
             validate_email(email)
         except ValidationError:
             messages.error(request, 'Digite um formato de e-mail válido.')
-            return redirect('cadastro')
+            return render(request, 'usuarios/cadastro.html')
 
         #tirando traços e pontos caso o usuario tenha digitado
         cpf_limpo = re.sub(r'[^0-9]', '', cpf)
         if len(cpf_limpo) != 11:
             messages.error(request, 'O CPF deve conter exatamente 11 números.')
-            return redirect('cadastro')
+            return render(request, 'usuarios/cadastro.html')
 
         #verifica se o e-mail ou CPF já existem no banco
         if Usuario.objects.filter(email=email).exists():
             messages.error(request, 'Este e-mail já está cadastrado.')
-            return redirect('cadastro')
+            return render(request, 'usuarios/cadastro.html')
             
         if Responsavel.objects.filter(cpf=cpf_limpo).exists():
             messages.error(request, 'Este CPF já está cadastrado no sistema.')
-            return redirect('cadastro')
+            return render(request, 'usuarios/cadastro.html')
 
         if not _imagem_valida(foto):
             messages.error(request, 'Envie uma foto válida em JPEG, PNG ou WebP com até 5 MB.')
-            return redirect('cadastro')
+            return render(request, 'usuarios/cadastro.html')
 
         try:
             with transaction.atomic():
@@ -201,7 +201,7 @@ def cadastro_responsavel(request):
 
         except Exception:
             messages.error(request, 'Não foi possível concluir o cadastro. Verifique os dados enviados e tente novamente.')
-            return redirect('cadastro')
+            return render(request, 'usuarios/cadastro.html')
 
     return render(request, 'usuarios/cadastro.html')
 

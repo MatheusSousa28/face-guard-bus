@@ -43,7 +43,7 @@ Não faça `fetch`, `pull`, `add`, `commit` ou `push` nesta etapa. Não trate um
 - Confirmar branch de destino e estratégia de push. Para Spaces, usar a branch configurada pelo Space, normalmente `main`. Não presumir destino se divergir do branch local/remoto.
 - O token de Hugging Face é usado pela autenticação local do CLI/credential helper no push Git HTTPS; não construir URL com token nem enviar conteúdo por API alternativa.
 
-### 3. Apresentar manifesto e pedir seleção/confirmação
+### 3. Apresentar manifesto e pedir uma confirmação única
 
 Monte a lista exata de arquivos candidatos por estado do Git, incluindo adições, edições e exclusões. Revise nomes e, quando necessário, diff/conteúdo para detectar segredos e artefatos impróprios.
 
@@ -58,9 +58,9 @@ Mostre claramente:
 
 Como a publicação usa o mesmo commit para ambos os destinos, as duas listas devem ser idênticas. Se for tecnicamente necessário que difiram, explique e peça aprovação explícita das duas listas antes de continuar.
 
-Peça ao usuário para escolher/aprovar os arquivos e então pergunte **qual texto exato** usar como mensagem do commit. Não invente, ajuste, traduza, acrescente prefixo ou pontuação à mensagem aprovada.
+Após revisar os arquivos e destinos, apresente em uma única mensagem o manifesto exato (destinos, branches, arquivos a publicar e arquivos excluídos), proponha uma mensagem de commit adequada ao que foi alterado e peça uma única confirmação que autorize tanto essa mensagem quanto a publicação. Use uma pergunta direta, por exemplo: **“Sugestão de commit: `...`. Posso usar essa mensagem e publicar estes arquivos no GitHub e no Hugging Face?”**
 
-Depois de obter arquivos e mensagem, apresente um resumo final de confirmação contendo os dois destinos, as duas listas idênticas e a mensagem literal. Pergunte explicitamente se pode **criar o commit local e publicar nos dois destinos**. Só prossiga após resposta inequívoca afirmativa a esse resumo. Se qualquer arquivo, destino ou mensagem mudar, repita a confirmação final.
+Não faça perguntas separadas para selecionar arquivos, obter mensagem e confirmar publicação. A pergunta única deve deixar explícitos os arquivos, destinos e a mensagem sugerida, e permitir ao usuário corrigir qualquer item. Só prossiga se a resposta aprovar claramente a mensagem proposta e autorizar commit e publicação. Se o usuário corrigir a mensagem, lista ou destinos, atualize o manifesto e solicite confirmação da versão corrigida; isso substitui, não se soma, à confirmação anterior. Nunca invente ou altere a mensagem após ela ser aprovada.
 
 ### 4. Preparar e validar o commit
 
@@ -88,5 +88,5 @@ Informar: mensagem literal do commit, hash, arquivos publicados, branch e result
 2. O comando OpenCode fica em `.opencode/commands/publicar-alteracoes.md` (diretório `commands`, no plural).
 3. Para autenticar Hugging Face, instale `huggingface_hub` no ambiente local e execute `hf auth login`; faça isso diretamente no terminal e não compartilhe o token. Verifique com `hf auth whoami`.
 4. Configure os remotos GitHub e Hugging Face uma vez, ou autorize a skill a propor sua configuração quando invocada. O token não deve estar no remote URL.
-5. No OpenCode, invoque `/publicar-alteracoes` e siga as perguntas de seleção, mensagem do commit e confirmação final.
+5. No OpenCode, invoque `/publicar-alteracoes`; revise o manifesto, a sugestão de mensagem de commit e confirme ou corrija tudo na mesma resposta.
 6. A skill não executa publicação na sua própria configuração nem apenas porque o token está autenticado.

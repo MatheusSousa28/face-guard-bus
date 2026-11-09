@@ -24,13 +24,14 @@
         }
     </script>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center font-sans py-10">
+<body class="min-h-screen flex items-center justify-center font-sans py-10 px-4 relative overflow-hidden bg-gradient-to-br from-sky-300 via-blue-500 to-blue-900">
+    <div aria-hidden="true" class="pointer-events-none absolute inset-0 opacity-[.16] text-black"><span class="absolute left-[7%] top-[12%] text-6xl">🚌</span><span class="absolute right-[10%] top-[16%] text-5xl">◉</span><span class="absolute left-[15%] bottom-[12%] text-6xl">♙</span><span class="absolute right-[8%] bottom-[10%] text-6xl">⌖</span><span class="absolute left-[48%] top-[5%] text-4xl">⌁</span></div>
 
     <div class="w-full max-w-lg px-4">
         <div class="mb-3">
             {% include '_botao_voltar.html' with voltar_url='login' %}
         </div>
-        <div class="bg-white p-8 rounded-lg shadow-md">
+        <div class="relative bg-white/95 backdrop-blur p-8 rounded-2xl shadow-2xl ring-1 ring-white/50">
         <h2 class="font-display text-3xl font-bold text-blue-600 mb-2 text-center text-blue-800">Criar Conta</h2>
         <p class="text-center text-gray-500 mb-6 text-sm">Acesso exclusivo para Pais e Responsáveis</p>
         
@@ -53,37 +54,40 @@
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Primeiro Nome</label>
-                    <input type="text" name="first_name" required 
+                    <input type="text" name="first_name" required maxlength="50" data-count data-filter="name" value="{{ request.POST.first_name|default:'' }}"
                         class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <p class="text-right text-xs text-gray-500"><span data-counter>0</span>/50</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Sobrenome</label>
-                    <input type="text" name="last_name" required 
+                    <input type="text" name="last_name" required maxlength="100" data-count data-filter="name" value="{{ request.POST.last_name|default:'' }}"
                         class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <p class="text-right text-xs text-gray-500"><span data-counter>0</span>/100</p>
                 </div>
             </div>
 
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">CPF</label>
-                <input type="text" name="cpf" placeholder="Apenas números" required 
+                <input type="text" name="cpf" placeholder="000.000.000-00" required maxlength="14" data-count data-filter="cpf" inputmode="numeric" value="{{ request.POST.cpf|default:'' }}"
                     class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                <p class="text-right text-xs text-gray-500"><span data-counter>0</span>/14</p>
             </div>
 
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
-                <input type="email" name="email" required 
+                <input type="email" name="email" required maxlength="254" data-count data-filter="email" value="{{ request.POST.email|default:'' }}"
                     class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                <p class="text-right text-xs text-gray-500"><span data-counter>0</span>/254</p>
             </div>
             
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Foto de Perfil</label>
-                <input type="file" name="foto_perfil" accept="image/jpeg,image/png,image/webp" required
-                    class="w-full text-sm text-gray-500 
-                    file:mr-4 file:py-2 file:px-4 
-                    file:rounded-md file:border-0 
-                    file:text-sm file:font-semibold 
-                    file:bg-blue-50 file:text-blue-700 
-                    hover:file:bg-blue-100 cursor-pointer border border-gray-300 rounded p-1">
+                <div class="flex flex-col items-center gap-3">
+                    <div id="photo-preview" class="w-28 h-28 rounded-full bg-blue-50 border-2 border-dashed border-blue-300 flex items-center justify-center overflow-hidden text-blue-400 text-4xl">◉</div>
+                    <button type="button" id="add-photo" class="rounded-lg bg-blue-50 px-5 py-2 font-semibold text-blue-700 hover:bg-blue-100">Adicionar imagem</button>
+                    <input id="photo-input" type="file" name="foto_perfil" accept="image/jpeg,image/png,image/webp" required class="hidden">
+                    <span id="photo-name" class="text-xs text-gray-500">JPEG, PNG ou WebP (até 5 MB)</span>
+                </div>
             </div>
             
             <div class="grid grid-cols-2 gap-4">
@@ -91,7 +95,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Senha</label>
                     
                     <div class="relative">
-                        <input type="password" id="senha" name="senha" required 
+                        <input type="password" id="senha" name="senha" required maxlength="128"
                             class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 pr-10">
                         
                         <button type="button" onclick="toggleSenha('senha', 'eye-senha', 'eye-slash-senha')" 
@@ -112,7 +116,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Confirmar Senha</label>
                     
                     <div class="relative">
-                        <input type="password" id="confirmar_senha" name="confirmar_senha" required 
+                        <input type="password" id="confirmar_senha" name="confirmar_senha" required maxlength="128"
                             class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 pr-10">
                         
                         <button type="button" onclick="toggleSenha('confirmar_senha', 'eye-conf', 'eye-slash-conf')" 
@@ -146,6 +150,31 @@
     </div>
 
     <script>
+        const emojiPattern = /[\p{Extended_Pictographic}\p{Emoji_Presentation}]/gu;
+        document.querySelectorAll('[data-count]').forEach(input => {
+            const counter = input.parentElement.querySelector('[data-counter]');
+            const filterValue = value => {
+                value = value.replace(emojiPattern, '');
+                if (input.dataset.filter === 'name') return value.replace(/[^\p{L}\s'-]/gu, '');
+                if (input.dataset.filter === 'cpf') {
+                    const digits = value.replace(/\D/g, '').slice(0, 11);
+                    return digits.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3}\.\d{3})(\d)/, '$1.$2').replace(/\.(\d{3})(\d)/, '.$1-$2');
+                }
+                if (input.dataset.filter === 'email') return value.replace(/[^\p{L}\p{N}@._+%-]/gu, '');
+                return value;
+            };
+            const update = () => { input.value = filterValue(input.value); if (counter) counter.textContent = input.value.length; };
+            input.addEventListener('input', update); update();
+        });
+        const photoInput = document.getElementById('photo-input');
+        document.getElementById('add-photo').addEventListener('click', () => photoInput.click());
+        photoInput.addEventListener('change', () => {
+            const file = photoInput.files[0]; if (!file) return;
+            document.getElementById('photo-name').textContent = file.name;
+            const reader = new FileReader();
+            reader.onload = event => { document.getElementById('photo-preview').innerHTML = `<img src="${event.target.result}" alt="Pré-visualização da foto" class="w-full h-full object-cover">`; };
+            reader.readAsDataURL(file);
+        });
         function toggleSenha(inputId, eyeId, eyeSlashId) {
             const input = document.getElementById(inputId);
             const eyeIcon = document.getElementById(eyeId);
