@@ -145,27 +145,29 @@ class TransporteFluxosTests(TestCase):
         self.assertContains(response, 'setInterval(enviarLocalizacao, 3000)')
         self.assertContains(response, 'maximumAge: 0')
 
-    def test_painel_da_instituicao_resume_gps_e_alunos_a_bordo(self):
+    def test_tela_de_monitoramento_resume_gps_e_alunos_a_bordo(self):
         rota = self.criar_rota()
         Evento.objects.create(rota=rota, aluno=self.aluno, tipo='embarque', autorizado=True)
         Localizacao.objects.create(rota=rota, latitude=-15.78, longitude=-47.92)
         self.client.force_login(self.instituicao_usuario)
 
-        response = self.client.get(reverse('home'))
+        response = self.client.get(reverse('mapa_unificado'))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Alunos a bordo')
         self.assertContains(response, 'GPS atualizado')
         self.assertEqual(response.context['total_alunos_abordo'], 1)
 
-    def test_cards_de_acao_da_instituicao_aparecem_antes_do_resumo(self):
+    def test_home_da_instituicao_mantem_acesso_ao_monitoramento_sem_resumo(self):
         self.client.force_login(self.instituicao_usuario)
 
         response = self.client.get(reverse('home'))
         html = response.content.decode()
 
-        self.assertLess(html.index('Acesso Administrativo (Instituição)'), html.index('Monitoramento Ao Vivo'))
-        self.assertLess(html.index('Monitoramento Ao Vivo'), html.index('Resumo do monitoramento'))
+        self.assertLess(html.index('Acesso Administrativo (Instituição)'), html.index('href="/transporte/mapa-unificado/"'))
+        self.assertContains(response, 'Monitoramento')
+        self.assertNotContains(response, 'Resumo do monitoramento')
+        self.assertNotContains(response, 'Rotas com GPS atualizado')
 
     def test_tela_de_mapa_mostra_resumo_institucional_abaixo_do_mapa(self):
         self.client.force_login(self.instituicao_usuario)
@@ -239,7 +241,7 @@ class TransporteFluxosTests(TestCase):
         Rota.objects.filter(pk=rota.pk).update(inicio=timezone.now() - timedelta(minutes=16))
         self.client.force_login(self.instituicao_usuario)
 
-        response = self.client.get(reverse('home'))
+        response = self.client.get(reverse('mapa_unificado'))
 
         rota.refresh_from_db()
         self.assertEqual(response.status_code, 200)
@@ -254,7 +256,7 @@ class TransporteFluxosTests(TestCase):
         Evento.objects.create(rota=rota, aluno=self.aluno, tipo='embarque', autorizado=True)
         self.client.force_login(self.instituicao_usuario)
 
-        response = self.client.get(reverse('home'))
+        response = self.client.get(reverse('mapa_unificado'))
 
         rota.refresh_from_db()
         self.assertTrue(rota.ativa)
@@ -268,7 +270,7 @@ class TransporteFluxosTests(TestCase):
         Localizacao.objects.filter(pk=ponto.pk).update(timestamp=timezone.now() - timedelta(minutes=2))
         self.client.force_login(self.instituicao_usuario)
 
-        response = self.client.get(reverse('home'))
+        response = self.client.get(reverse('mapa_unificado'))
 
         rota.refresh_from_db()
         self.assertTrue(rota.ativa)
@@ -294,7 +296,7 @@ class TransporteFluxosTests(TestCase):
         Rota.objects.filter(pk=rota.pk).update(inicio=timezone.now() - timedelta(minutes=16))
         Evento.objects.create(rota=rota, aluno=self.aluno, tipo='embarque', autorizado=True)
         self.client.force_login(self.instituicao_usuario)
-        self.client.get(reverse('home'))
+        self.client.get(reverse('mapa_unificado'))
 
         response = self.client.post(reverse('resolver_rota_interrompida', args=(rota.pk,)), {
             'observacao': 'Aluno localizado e situação confirmada pela instituição.',

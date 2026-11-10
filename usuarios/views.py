@@ -4,7 +4,6 @@ from django.contrib.auth import authenticate, login as auth_login, logout as aut
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import Usuario, Responsavel, Motorista
-from .monitoramento import obter_contexto_monitoramento
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -186,7 +185,7 @@ def painel_home(request):
     usuario = request.user
     
     if hasattr(usuario, 'instituicao') or usuario.is_superuser:
-        return render(request, 'usuarios/home_instituicao.html', obter_contexto_monitoramento())
+        return render(request, 'usuarios/home_instituicao.html')
 
     elif hasattr(usuario, 'motorista'):
         motorista = usuario.motorista
