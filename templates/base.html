@@ -54,13 +54,12 @@
         <p class="text-sm">Sistema FaceGuard Bus &copy; 2026</p>
     </footer>
     {% if messages %}
-        <div id="snackbar-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+        <div id="snackbar-container" class="fixed bottom-5 left-1/2 z-[100] flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 flex-col items-center gap-2 pointer-events-none">
             {% for message in messages %}
                 <div class="snackbar transition-all duration-500 transform translate-y-10 opacity-0 pointer-events-auto flex items-center justify-between p-4 rounded shadow-2xl max-w-sm text-sm font-semibold
                     {% if message.tags == 'error' %} bg-red-600 text-white
-                    {% elif message.tags == 'warning' %} bg-yellow-500 text-white
-                    {% elif message.tags == 'success' %} bg-green-600 text-white
-                    {% else %} bg-blue-600 text-white {% endif %}">
+                    {% elif 'pending' in message.tags %} bg-green-600 text-white
+                    {% else %} bg-blue-600 text-white {% endif %} w-full text-center">
                     
                     <span>{{ message }}</span>
                     

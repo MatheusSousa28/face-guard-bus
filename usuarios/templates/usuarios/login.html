@@ -37,6 +37,8 @@
         <img src="{% static 'img/icone_onibus.png' %}" class="absolute right-[30%] bottom-[4%] w-20 rotate-[7deg]" alt="">
         <img src="{% static 'img/icone_familia.png' %}" class="absolute left-[34%] top-[4%] w-16 rotate-[4deg]" alt="">
         <svg class="absolute right-0 top-[28%] h-36 w-36" viewBox="0 0 150 150" fill="none" stroke="black" stroke-width="1.2"><path d="M42 4 4 42M88 4 4 88M134 4 4 134"/></svg>
+        <svg class="absolute -left-8 top-[20%] h-40 w-40" viewBox="0 0 160 160" fill="none" stroke="black" stroke-width="1.2"><path d="M-10 55 55-10M-10 85 85-10M-10 115 115-10M-10 145 145-10"/></svg>
+        <svg class="absolute -left-6 bottom-[8%] h-28 w-28 rotate-180" viewBox="0 0 120 120" fill="none" stroke="black" stroke-width="1.1"><path d="M-10 45 45-10M-10 70 70-10M-10 95 95-10"/></svg>
     </div>
 
     <div class="relative z-10 bg-white/95 backdrop-blur p-8 rounded-2xl shadow-2xl ring-1 ring-white/50 w-full max-w-md">
@@ -44,8 +46,6 @@
         <h2 class="font-display text-4xl font-bold text-blue-800 mb-6 text-center">Bem vindo!</h2>
         <h2 class= "text-sm font-semibold mt-8 text-center pb-10">Preencha os campos para entrar na sua conta</h2>
         
-        {% if messages %}<div class="fixed bottom-5 right-5 z-50 flex flex-col gap-2">{% for message in messages %}<div class="toast-message rounded-lg px-5 py-3 text-sm font-semibold text-white shadow-xl {% if message.tags == 'error' %}bg-red-600{% elif 'pending' in message.tags %}bg-green-600{% else %}bg-blue-600{% endif %}">{{ message }}</div>{% endfor %}</div>{% endif %}
-
         <form method="POST" class="space-y-4">
             {% csrf_token %}
             <div>
@@ -87,6 +87,7 @@
             <p class="text-sm text-gray-600">Não tem uma conta? <a href="{% url 'cadastro' %}" class="text-blue-600 hover:underline font-medium">Cadastre-se</a></p>
         </div>
     </div>
+    {% if messages %}<div class="fixed bottom-5 left-1/2 z-[100] flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 flex-col items-center gap-2">{% for message in messages %}<div class="toast-message w-full rounded-lg px-5 py-3 text-center text-sm font-semibold text-white shadow-xl {% if message.tags == 'error' %}bg-red-600{% elif 'pending' in message.tags %}bg-green-600{% else %}bg-blue-600{% endif %}">{{ message }}</div>{% endfor %}</div>{% endif %}
     <script>
         document.querySelectorAll('[data-count]').forEach(input => {
             const counter = input.parentElement.querySelector('[data-counter]');

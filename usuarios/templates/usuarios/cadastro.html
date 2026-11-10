@@ -34,6 +34,8 @@
         <img src="{% static 'img/icone_onibus.png' %}" class="absolute right-[30%] bottom-[4%] w-20 rotate-[7deg]" alt="">
         <img src="{% static 'img/icone_familia.png' %}" class="absolute left-[34%] top-[4%] w-16 rotate-[4deg]" alt="">
         <svg class="absolute right-0 top-[28%] h-36 w-36" viewBox="0 0 150 150" fill="none" stroke="black" stroke-width="1.2"><path d="M42 4 4 42M88 4 4 88M134 4 4 134"/></svg>
+        <svg class="absolute -left-8 top-[20%] h-40 w-40" viewBox="0 0 160 160" fill="none" stroke="black" stroke-width="1.2"><path d="M-10 55 55-10M-10 85 85-10M-10 115 115-10M-10 145 145-10"/></svg>
+        <svg class="absolute -left-6 bottom-[8%] h-28 w-28 rotate-180" viewBox="0 0 120 120" fill="none" stroke="black" stroke-width="1.1"><path d="M-10 45 45-10M-10 70 70-10M-10 95 95-10"/></svg>
     </div>
 
     <div class="relative z-10 w-full max-w-lg px-4 my-auto">
@@ -44,7 +46,6 @@
         <h2 class="font-display text-3xl font-bold text-blue-600 mb-2 text-center text-blue-800">Criar Conta</h2>
         <p class="text-center text-gray-500 mb-6 text-sm">Acesso exclusivo para Pais e Responsáveis</p>
         
-        {% if messages %}<div class="fixed bottom-5 right-5 z-50 flex flex-col gap-2">{% for message in messages %}<div class="toast-message rounded-lg px-5 py-3 text-sm font-semibold text-white shadow-xl {% if message.tags == 'error' %}bg-red-600{% elif 'pending' in message.tags %}bg-green-600{% else %}bg-blue-600{% endif %}">{{ message }}</div>{% endfor %}</div>{% endif %}
         <!-- pegando imagem com enctype -->
         <form method="POST" enctype="multipart/form-data" class="space-y-4">
             {% csrf_token %}
@@ -52,15 +53,17 @@
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Primeiro Nome</label>
-                    <input type="text" name="first_name" required maxlength="50" data-count data-filter="name" value="{{ request.POST.first_name|default:'' }}"
+                    <input type="text" name="first_name" required minlength="2" maxlength="50" data-count data-filter="name" value="{{ request.POST.first_name|default:'' }}"
                         class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                     <p class="text-right text-xs text-gray-500"><span data-counter>0</span>/50</p>
+                    <p id="first-name-error" class="hidden text-xs font-medium text-red-600" aria-live="polite"></p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Sobrenome</label>
-                    <input type="text" name="last_name" required maxlength="100" data-count data-filter="name" value="{{ request.POST.last_name|default:'' }}"
+                    <input type="text" name="last_name" required minlength="2" maxlength="100" data-count data-filter="name" value="{{ request.POST.last_name|default:'' }}"
                         class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                     <p class="text-right text-xs text-gray-500"><span data-counter>0</span>/100</p>
+                    <p id="last-name-error" class="hidden text-xs font-medium text-red-600" aria-live="polite"></p>
                 </div>
             </div>
 
@@ -130,6 +133,7 @@
                             </svg>
                         </button>
                     </div>
+                    <p id="password-match-error" class="hidden mt-1 text-xs font-medium text-red-600" aria-live="polite"></p>
                 </div>
             </div>
             <p class="text-xs text-gray-500">A senha deve ter min 8 caracteres, maiúsculas, minúsculas, números e 1 símbolo.</p>
@@ -146,6 +150,7 @@
         </div>
         </div>
     </div>
+    {% if messages %}<div class="fixed bottom-5 left-1/2 z-[100] flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 flex-col items-center gap-2">{% for message in messages %}<div class="toast-message w-full rounded-lg px-5 py-3 text-center text-sm font-semibold text-white shadow-xl {% if message.tags == 'error' %}bg-red-600{% elif 'pending' in message.tags %}bg-green-600{% else %}bg-blue-600{% endif %}">{{ message }}</div>{% endfor %}</div>{% endif %}
 
     <script>
         const emojiPattern = /[\p{Extended_Pictographic}\p{Emoji_Presentation}]/gu;
@@ -178,13 +183,36 @@
         const registrationInputs = [...registrationForm.querySelectorAll('input[required]')];
         const registrationPassword = document.getElementById('senha');
         const registrationConfirm = document.getElementById('confirmar_senha');
+        const firstName = registrationForm.querySelector('[name="first_name"]');
+        const lastName = registrationForm.querySelector('[name="last_name"]');
+        const firstNameError = document.getElementById('first-name-error');
+        const lastNameError = document.getElementById('last-name-error');
+        const passwordMatchError = document.getElementById('password-match-error');
         const updateRegistrationButton = () => {
             const passwordValid = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/.test(registrationPassword.value);
             const passwordsMatch = registrationPassword.value === registrationConfirm.value;
+            const updateFieldError = (input, error, message) => {
+                const invalid = (input.dataset.touched === 'true' || input.value.length > 0) && input.value.trim().length < 2;
+                error.textContent = invalid ? message : '';
+                error.classList.toggle('hidden', !invalid);
+                input.classList.toggle('border-red-500', invalid);
+            };
+            updateFieldError(firstName, firstNameError, 'O nome deve ter pelo menos 2 caracteres.');
+            updateFieldError(lastName, lastNameError, 'O sobrenome deve ter pelo menos 2 caracteres.');
+            const mismatch = registrationConfirm.value.length > 0 && !passwordsMatch;
+            passwordMatchError.textContent = mismatch ? 'As senhas não coincidem.' : '';
+            passwordMatchError.classList.toggle('hidden', !mismatch);
+            registrationConfirm.classList.toggle('border-red-500', mismatch);
             registrationButton.disabled = !registrationInputs.every(input => input.type === 'file' ? input.files.length > 0 : input.value.trim() && input.validity.valid) || !passwordValid || !passwordsMatch;
         };
         registrationInputs.forEach(input => input.addEventListener('input', updateRegistrationButton));
         registrationInputs.forEach(input => input.addEventListener('change', updateRegistrationButton));
+        [firstName, lastName].forEach(input => {
+            const markTouched = () => { input.dataset.touched = 'true'; updateRegistrationButton(); };
+            input.addEventListener('input', markTouched);
+            input.addEventListener('blur', markTouched);
+        });
+        registrationPassword.addEventListener('input', updateRegistrationButton);
         updateRegistrationButton();
         registrationForm.addEventListener('submit', event => {
             if (!registrationForm.checkValidity() || registrationButton.disabled) { event.preventDefault(); return; }
