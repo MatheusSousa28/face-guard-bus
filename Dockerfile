@@ -18,4 +18,4 @@ COPY --chown=user . /app
 RUN python manage.py collectstatic --noinput
 
 EXPOSE 7860
-CMD ["python", "manage.py", "runserver", "0.0.0.0:7860"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && exec python manage.py runserver 0.0.0.0:7860"]

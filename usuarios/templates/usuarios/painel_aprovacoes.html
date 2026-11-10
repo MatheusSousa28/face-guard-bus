@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 py-8">
@@ -39,7 +40,12 @@
             <div class="bg-white p-5 rounded-xl shadow border border-gray-200 flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                     {% if resp.foto_perfil %}
-                        <img src="{{ resp.foto_perfil.url }}" class="w-12 h-12 rounded-full object-cover">
+                        <img src="{{ resp.foto_perfil.url }}" alt="Foto de {{ resp.usuario.get_full_name }}" class="w-12 h-12 rounded-full object-cover">
+                    {% else %}
+                        {% with primeiro=resp.usuario.first_name|slice:":1" ultimo=resp.usuario.last_name|slice:":1" %}
+                            {% if primeiro and ultimo %}<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style="background-color: {{ resp.cor_avatar }}">{{ primeiro|upper }}{{ ultimo|upper }}</div>
+                            {% else %}<img src="{% static 'img/icone_pessoa.png' %}" alt="Ícone de perfil" class="h-12 w-12 rounded-full object-contain">{% endif %}
+                        {% endwith %}
                     {% endif %}
                     <div>
                         <p class="font-bold text-gray-900">{{ resp.usuario.first_name }} {{ resp.usuario.last_name }}</p>

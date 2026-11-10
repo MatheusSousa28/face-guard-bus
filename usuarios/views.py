@@ -140,6 +140,7 @@ def cadastro_responsavel(request):
         senha = request.POST.get('senha', '')
         confirmar_senha = request.POST.get('confirmar_senha', '')
         foto = request.FILES.get('foto_perfil')
+        cor_avatar = request.POST.get('cor_avatar', '#1d4ed8')
 
 
         if len(nome) < 2 or len(nome) > 50:
@@ -179,9 +180,13 @@ def cadastro_responsavel(request):
             messages.error(request, 'Este CPF já está cadastrado no sistema.')
             return render(request, 'usuarios/cadastro.html')
 
-        if not _imagem_valida(foto):
+        if foto and not _imagem_valida(foto):
             messages.error(request, 'Envie uma foto válida em JPEG, PNG ou WebP com até 5 MB.')
             return render(request, 'usuarios/cadastro.html')
+
+        cores_validas = {cor for cor, _ in Responsavel.CORES_AVATAR}
+        if cor_avatar not in cores_validas:
+            cor_avatar = '#1d4ed8'
 
         try:
             with transaction.atomic():
@@ -195,7 +200,7 @@ def cadastro_responsavel(request):
                 )
                 
                 #cria o perfil e amarra ao login
-                Responsavel.objects.create(usuario=novo_usuario, cpf=cpf_limpo, foto_perfil=foto)
+                Responsavel.objects.create(usuario=novo_usuario, cpf=cpf_limpo, foto_perfil=foto, cor_avatar=cor_avatar)
 
             messages.info(request, 'Cadastro realizado com sucesso!')
             messages.success(request, 'Sua conta aguarda aprovação da instituição.', extra_tags='pending')
@@ -296,6 +301,8 @@ def _usuario_json(tipo, obj):
                  'last_name': usuario.last_name, 'nome': usuario.get_full_name(),
                  'email': usuario.email, 'cpf': obj.cpf,
                  'foto': foto.url if foto else '', 'aprovado': usuario.is_aprovado}
+        if tipo == 'responsavel':
+            dados['cor_avatar'] = obj.cor_avatar
     return dados
 
 

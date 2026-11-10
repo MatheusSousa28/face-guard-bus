@@ -41,9 +41,19 @@ class Instituicao(models.Model):
         return f"Instituição: {self.usuario.first_name}"
 
 class Responsavel(models.Model):
+    CORES_AVATAR = [
+        ('#1d4ed8', 'Azul'),
+        ('#6d28d9', 'Roxo'),
+        ('#be185d', 'Rosa'),
+        ('#b45309', 'Âmbar'),
+        ('#15803d', 'Verde'),
+        ('#0f766e', 'Turquesa'),
+        ('#334155', 'Grafite'),
+    ]
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE)
     cpf = models.CharField(max_length=11, unique=True)
-    foto_perfil = models.ImageField(upload_to=renomear_foto_responsavel, null=False, blank=False)
+    foto_perfil = models.ImageField(upload_to=renomear_foto_responsavel, null=True, blank=True)
+    cor_avatar = models.CharField(max_length=7, choices=CORES_AVATAR, default='#1d4ed8')
 
     class Meta:
         verbose_name_plural = "Responsáveis"

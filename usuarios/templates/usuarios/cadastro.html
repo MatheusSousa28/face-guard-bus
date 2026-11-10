@@ -84,10 +84,27 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Foto de Perfil</label>
                 <div class="flex flex-col items-center gap-3">
-                    <div id="photo-preview" class="w-28 h-28 rounded-full bg-blue-50 border-2 border-dashed border-blue-300 flex items-center justify-center overflow-hidden text-blue-400 text-4xl">◉</div>
-                    <button type="button" id="add-photo" class="rounded-lg bg-blue-50 px-5 py-2 font-semibold text-blue-700 hover:bg-blue-100">Adicionar imagem</button>
-                    <input id="photo-input" type="file" name="foto_perfil" accept="image/jpeg,image/png,image/webp" required class="hidden">
-                    <span id="photo-name" class="text-xs text-gray-500">JPEG, PNG ou WebP (até 5 MB)</span>
+                    <div id="photo-preview" class="w-28 h-28 rounded-full bg-blue-50 border-2 border-dashed border-blue-300 flex items-center justify-center overflow-hidden text-blue-400 text-4xl"><img src="{% static 'img/icone_pessoa.png' %}" alt="Ícone padrão de perfil" class="h-12 w-12 object-contain"></div>
+                    <div class="flex flex-wrap justify-center gap-2">
+                        <button type="button" id="add-photo" class="rounded-lg bg-blue-50 px-5 py-2 font-semibold text-blue-700 hover:bg-blue-100">Adicionar foto</button>
+                        <button type="button" id="remove-photo" class="hidden rounded-lg border border-gray-300 px-4 py-2 font-semibold text-gray-600 hover:bg-gray-50">Usar iniciais</button>
+                    </div>
+                    <input id="photo-input" type="file" name="foto_perfil" accept="image/jpeg,image/png,image/webp" class="hidden">
+                    <span id="photo-name" class="text-xs text-gray-500">Foto opcional · JPEG, PNG ou WebP até 5 MB</span>
+                    <fieldset class="text-center">
+                        <legend class="mb-2 text-sm font-medium text-gray-700">Cor do avatar das iniciais</legend>
+                        <input type="hidden" id="avatar-color" name="cor_avatar" value="{{ request.POST.cor_avatar|default:'#1d4ed8' }}">
+                        <div id="avatar-colors" class="flex flex-wrap justify-center gap-3">
+                            <button type="button" data-color="#1d4ed8" aria-label="Azul" aria-pressed="true" class="h-8 w-8 rounded-full bg-[#1d4ed8] ring-2 ring-offset-2 ring-gray-800"></button>
+                            <button type="button" data-color="#6d28d9" aria-label="Roxo" aria-pressed="false" class="h-8 w-8 rounded-full bg-[#6d28d9] ring-offset-2"></button>
+                            <button type="button" data-color="#be185d" aria-label="Rosa" aria-pressed="false" class="h-8 w-8 rounded-full bg-[#be185d] ring-offset-2"></button>
+                            <button type="button" data-color="#b45309" aria-label="Âmbar" aria-pressed="false" class="h-8 w-8 rounded-full bg-[#b45309] ring-offset-2"></button>
+                            <button type="button" data-color="#15803d" aria-label="Verde" aria-pressed="false" class="h-8 w-8 rounded-full bg-[#15803d] ring-offset-2"></button>
+                            <button type="button" data-color="#0f766e" aria-label="Turquesa" aria-pressed="false" class="h-8 w-8 rounded-full bg-[#0f766e] ring-offset-2"></button>
+                            <button type="button" data-color="#334155" aria-label="Grafite" aria-pressed="false" class="h-8 w-8 rounded-full bg-[#334155] ring-offset-2"></button>
+                        </div>
+                        <p class="mt-2 text-xs text-gray-500">As iniciais são brancas para manter o contraste.</p>
+                    </fieldset>
                 </div>
             </div>
             
@@ -170,13 +187,60 @@
             input.addEventListener('input', update); update();
         });
         const photoInput = document.getElementById('photo-input');
+        const photoPreview = document.getElementById('photo-preview');
+        const photoName = document.getElementById('photo-name');
+        const removePhoto = document.getElementById('remove-photo');
+        const avatarColorInput = document.getElementById('avatar-color');
+        const avatarPlaceholder = "{% static 'img/icone_pessoa.png' %}";
         document.getElementById('add-photo').addEventListener('click', () => photoInput.click());
+        const updateAvatarPreview = () => {
+            if (photoInput.files[0]) return;
+            const initials = `${document.querySelector('[name="first_name"]').value.trim().slice(0, 1)}${document.querySelector('[name="last_name"]').value.trim().slice(0, 1)}`.toLocaleUpperCase('pt-BR');
+            if (initials.length === 2) {
+                photoPreview.innerHTML = `<span aria-label="Iniciais ${initials}" class="flex h-full w-full items-center justify-center rounded-full text-3xl font-bold text-white">${initials}</span>`;
+                photoPreview.style.backgroundColor = avatarColorInput.value;
+                photoPreview.classList.remove('border-dashed', 'border-blue-300');
+                photoPreview.classList.add('border-transparent');
+            } else {
+                photoPreview.innerHTML = `<img src="${avatarPlaceholder}" alt="Ícone padrão de perfil" class="h-12 w-12 object-contain">`;
+                photoPreview.style.backgroundColor = '';
+                photoPreview.classList.add('border-dashed', 'border-blue-300');
+                photoPreview.classList.remove('border-transparent');
+            }
+        };
         photoInput.addEventListener('change', () => {
             const file = photoInput.files[0]; if (!file) return;
-            document.getElementById('photo-name').textContent = file.name;
+            photoName.textContent = file.name;
+            removePhoto.classList.remove('hidden');
             const reader = new FileReader();
-            reader.onload = event => { document.getElementById('photo-preview').innerHTML = `<img src="${event.target.result}" alt="Pré-visualização da foto" class="w-full h-full object-cover">`; };
+            reader.onload = event => { photoPreview.innerHTML = `<img src="${event.target.result}" alt="Pré-visualização da foto" class="h-full w-full object-cover">`; photoPreview.classList.remove('border-dashed', 'border-blue-300'); photoPreview.classList.add('border-transparent'); };
             reader.readAsDataURL(file);
+            updateRegistrationButton();
+        });
+        removePhoto.addEventListener('click', () => {
+            photoInput.value = '';
+            photoName.textContent = 'Foto opcional · JPEG, PNG ou WebP até 5 MB';
+            removePhoto.classList.add('hidden');
+            updateAvatarPreview();
+            updateRegistrationButton();
+        });
+        document.getElementById('avatar-colors').querySelectorAll('[data-color]').forEach(button => button.addEventListener('click', () => {
+            avatarColorInput.value = button.dataset.color;
+            document.getElementById('avatar-colors').querySelectorAll('[data-color]').forEach(option => {
+                const selected = option === button;
+                option.setAttribute('aria-pressed', String(selected));
+                option.classList.toggle('ring-2', selected);
+                option.classList.toggle('ring-gray-800', selected);
+            });
+            updateAvatarPreview();
+        }));
+        const availableAvatarColors = [...document.getElementById('avatar-colors').querySelectorAll('[data-color]')];
+        if (!availableAvatarColors.some(button => button.dataset.color === avatarColorInput.value)) avatarColorInput.value = '#1d4ed8';
+        availableAvatarColors.forEach(button => {
+            const selected = button.dataset.color === avatarColorInput.value;
+            button.setAttribute('aria-pressed', String(selected));
+            button.classList.toggle('ring-2', selected);
+            button.classList.toggle('ring-gray-800', selected);
         });
         const registrationForm = document.querySelector('form');
         const registrationButton = registrationForm.querySelector('[type="submit"]');
@@ -205,12 +269,14 @@
             registrationConfirm.classList.toggle('border-red-500', mismatch);
             registrationButton.disabled = !registrationInputs.every(input => input.type === 'file' ? input.files.length > 0 : input.value.trim() && input.validity.valid) || !passwordValid || !passwordsMatch;
         };
+        updateAvatarPreview();
         registrationInputs.forEach(input => input.addEventListener('input', updateRegistrationButton));
         registrationInputs.forEach(input => input.addEventListener('change', updateRegistrationButton));
         [firstName, lastName].forEach(input => {
             const markTouched = () => { input.dataset.touched = 'true'; updateRegistrationButton(); };
             input.addEventListener('input', markTouched);
             input.addEventListener('blur', markTouched);
+            input.addEventListener('input', updateAvatarPreview);
         });
         registrationPassword.addEventListener('input', updateRegistrationButton);
         updateRegistrationButton();

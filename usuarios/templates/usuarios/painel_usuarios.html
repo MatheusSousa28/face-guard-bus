@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 py-8">
     <div class="mb-4">{% include '_botao_voltar.html' with voltar_url='home' %}</div>
@@ -78,6 +79,7 @@
 
 <script>
 (() => {
+    const avatarPlaceholder = "{% static 'img/icone_pessoa.png' %}";
     const labels = {aluno: 'Alunos', motorista: 'Motoristas', responsavel: 'Responsáveis'};
     const singular = {aluno: 'Aluno', motorista: 'Motorista', responsavel: 'Responsável'};
     const pages = {aluno: 1, motorista: 1, responsavel: 1};
@@ -125,7 +127,12 @@
         status.classList.add('hidden');
         list.innerHTML = data.results.map(user => {
             const detail = category === 'aluno' ? `${user.idade} anos · Responsável: ${escapeHtml(user.responsavel)}` : `${escapeHtml(user.email)} · CPF: ${escapeHtml(user.cpf)}`;
-            const fallback = `<div class="w-14 h-14 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">${escapeHtml((user.nome || '?').slice(0,1).toUpperCase())}</div>`;
+            const words = (user.nome || '').trim().split(/\s+/).filter(Boolean);
+            const initials = words.length > 1 ? `${words[0].slice(0, 1)}${words[words.length - 1].slice(0, 1)}`.toLocaleUpperCase('pt-BR') : (words[0] || '').slice(0, 1).toLocaleUpperCase('pt-BR');
+            const avatarColor = /^#[0-9a-f]{6}$/i.test(user.cor_avatar || '') ? user.cor_avatar : '#1d4ed8';
+            const fallback = initials
+                ? `<div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full font-bold text-white" style="background-color:${avatarColor}">${escapeHtml(initials)}</div>`
+                : `<img src="${avatarPlaceholder}" alt="Ícone de perfil" class="h-14 w-14 rounded-full object-contain">`;
             const avatar = user.foto
                 ? `<button type="button" data-action="photo" data-photo="${escapeHtml(user.foto)}" data-name="${escapeHtml(user.nome)}" aria-label="Ampliar foto de ${escapeHtml(user.nome)}" class="rounded-full focus:outline-none focus:ring-2 focus:ring-blue-600"><img src="${escapeHtml(user.foto)}" alt="Foto de ${escapeHtml(user.nome)}" class="w-14 h-14 rounded-full object-cover"></button>`
                 : fallback;

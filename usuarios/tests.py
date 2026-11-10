@@ -65,15 +65,28 @@ class FluxosCadastroTests(TestCase):
         self.assertTrue(usuario.check_password('SenhaForte123!'))
         self.assertTrue(Responsavel.objects.filter(usuario=usuario).exists())
 
-    def test_responsavel_nao_pode_cadastrar_sem_foto_valida(self):
+    def test_responsavel_pode_cadastrar_sem_foto_com_avatar_de_iniciais(self):
         response = self.client.post(reverse('cadastro'), {
             'first_name': 'Ana', 'last_name': 'Silva', 'email': 'ana@example.test',
             'cpf': '12345678902', 'senha': 'SenhaForte123!',
             'confirmar_senha': 'SenhaForte123!',
+            'cor_avatar': '#6d28d9',
         })
 
-        self.assertRedirects(response, reverse('cadastro'))
-        self.assertFalse(Usuario.objects.filter(email='ana@example.test').exists())
+        self.assertRedirects(response, reverse('login'))
+        responsavel = Responsavel.objects.get(usuario__email='ana@example.test')
+        self.assertFalse(responsavel.foto_perfil)
+        self.assertEqual(responsavel.cor_avatar, '#6d28d9')
+
+    def test_responsavel_sem_foto_usa_cor_padrao_quando_cor_for_invalida(self):
+        self.client.post(reverse('cadastro'), {
+            'first_name': 'Bea', 'last_name': 'Lima', 'email': 'bea@example.test',
+            'cpf': '12345678912', 'senha': 'SenhaForte123!',
+            'confirmar_senha': 'SenhaForte123!', 'cor_avatar': 'red; background: url(x)',
+        })
+
+        responsavel = Responsavel.objects.get(usuario__email='bea@example.test')
+        self.assertEqual(responsavel.cor_avatar, '#1d4ed8')
 
     def test_instituicao_cadastra_motorista_aprovado_com_senha_hash(self):
         self.client.force_login(self.instituicao_usuario)
