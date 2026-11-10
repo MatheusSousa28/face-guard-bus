@@ -33,17 +33,60 @@
             <a href="{% url 'home' %}" aria-label="FaceGuard Bus - início" class="inline-flex items-center">
                 <img src="{% static 'img/logo_branco.png' %}" alt="FaceGuard Bus" class="h-14 w-auto max-w-[160px] object-contain">
             </a>
-            <div class="space-x-4">
+            <div class="relative">
                 {% if user.is_authenticated %}
-                    <span class="text-gray-100">Olá, {{ user.first_name }}</span>
-                    <form method="POST" action="{% url 'logout' %}" class="inline">
-                        {% csrf_token %}
-                        <button type="submit" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded font-display font-semibold">Sair</button>
-                    </form>
+                    <button id="profile-menu-button" type="button" aria-expanded="false" aria-controls="profile-menu" class="flex items-center gap-3 rounded-xl px-2 py-1.5 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/70">
+                        {% if user.instituicao.foto_perfil %}
+                            <img src="{{ user.instituicao.foto_perfil.url }}" alt="" class="h-11 w-11 rounded-full border-2 border-white/70 object-cover">
+                        {% elif user.motorista.foto_perfil %}
+                            <img src="{{ user.motorista.foto_perfil.url }}" alt="" class="h-11 w-11 rounded-full border-2 border-white/70 object-cover">
+                        {% elif user.responsavel.foto_perfil %}
+                            <img src="{{ user.responsavel.foto_perfil.url }}" alt="" class="h-11 w-11 rounded-full border-2 border-white/70 object-cover">
+                        {% else %}
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-white/70 text-sm font-bold text-white" style="background-color:{% if user.responsavel %}{{ user.responsavel.cor_avatar }}{% else %}#334155{% endif %}">
+                                {% if user.first_name and user.last_name %}{{ user.first_name|slice:":1"|upper }}{{ user.last_name|slice:":1"|upper }}{% elif user.first_name %}{{ user.first_name|slice:":1"|upper }}{% else %}<img src="{% static 'img/icone_pessoa.png' %}" alt="Perfil" class="h-6 w-6 object-contain">{% endif %}
+                            </span>
+                        {% endif %}
+                        <span class="min-w-0">
+                            <span class="block max-w-40 truncate font-semibold text-white">{{ user.first_name|default:user.email }}</span>
+                            <span class="mt-0.5 inline-block rounded-md bg-black px-2 py-0.5 text-xs font-semibold text-white">
+                                {% if user.is_superuser or user.instituicao %}Instituição{% elif user.motorista %}Motorista{% elif user.responsavel %}Responsável{% else %}Usuário{% endif %}
+                            </span>
+                        </span>
+                        <svg class="h-4 w-4 shrink-0 text-white/80" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.22 7.47a.75.75 0 011.06 0L10 11.19l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 8.53a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
+                    </button>
+                    <div id="profile-menu" class="absolute right-0 top-full z-50 mt-2 hidden w-56 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 text-gray-800 shadow-xl" role="menu">
+                        <a href="{% url 'editar_perfil' %}" role="menuitem" class="block px-4 py-3 text-sm font-medium hover:bg-blue-50">Editar perfil</a>
+                        <button id="open-password-modal" type="button" role="menuitem" class="block w-full px-4 py-3 text-left text-sm font-medium hover:bg-blue-50">Alterar senha</button>
+                        <form method="POST" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" role="menuitem" class="block w-full px-4 py-3 text-left text-sm font-medium text-red-700 hover:bg-red-50">Sair</button></form>
+                    </div>
                 {% endif %}
             </div>
         </div>
     </nav>
+
+    {% if user.is_authenticated %}
+        <div id="password-change-modal" class="fixed inset-0 z-[80] hidden items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="password-modal-title">
+            <form id="password-change-form" action="{% url 'alterar_senha_propria' %}" method="POST" class="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-2xl">
+                {% csrf_token %}
+                <div class="flex items-start justify-between gap-4"><div><h2 id="password-modal-title" class="text-xl font-bold text-gray-900">Alterar senha</h2><p class="mt-1 text-sm text-gray-500">Confirme sua senha atual para continuar.</p></div><button id="close-password-modal" type="button" aria-label="Fechar" class="text-2xl leading-none text-gray-400 hover:text-gray-700">&times;</button></div>
+                <label class="block text-sm font-semibold text-gray-700">Senha atual
+                    <span class="relative mt-1 block"><input name="senha_atual" type="password" required autocomplete="current-password" class="w-full rounded-lg border border-gray-300 px-3 py-2 pr-12 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"><button type="button" data-toggle-password class="absolute inset-y-0 right-0 px-3 text-sm text-blue-700">Mostrar</button></span>
+                </label>
+                <label class="block text-sm font-semibold text-gray-700">Nova senha
+                    <span class="relative mt-1 block"><input id="new-password" name="nova_senha" type="password" required minlength="8" maxlength="128" autocomplete="new-password" class="w-full rounded-lg border border-gray-300 px-3 py-2 pr-12 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"><button type="button" data-toggle-password class="absolute inset-y-0 right-0 px-3 text-sm text-blue-700">Mostrar</button></span>
+                </label>
+                <p class="-mt-2 text-xs text-gray-500">Mínimo de 8 caracteres, com maiúscula, minúscula, número e símbolo.</p>
+                <p id="new-password-feedback" class="hidden text-xs font-medium text-red-600" aria-live="polite"></p>
+                <label class="block text-sm font-semibold text-gray-700">Confirmar nova senha
+                    <span class="relative mt-1 block"><input id="confirm-new-password" name="confirmar_senha" type="password" required minlength="8" maxlength="128" autocomplete="new-password" class="w-full rounded-lg border border-gray-300 px-3 py-2 pr-12 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"><button type="button" data-toggle-password class="absolute inset-y-0 right-0 px-3 text-sm text-blue-700">Mostrar</button></span>
+                </label>
+                <p id="password-match-feedback" class="hidden text-sm font-medium" aria-live="polite"></p>
+                <p id="password-change-error" class="hidden text-sm font-medium text-red-600" role="alert"></p>
+                <div class="flex justify-end gap-3 pt-1"><button id="cancel-password-modal" type="button" class="rounded-lg bg-gray-100 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-200">Cancelar</button><button type="submit" disabled class="cursor-not-allowed rounded-lg bg-blue-700 px-5 py-2 font-semibold text-white opacity-50 hover:bg-blue-800">Salvar senha</button></div>
+            </form>
+        </div>
+    {% endif %}
 
     <main class="container mx-auto mt-8 p-4 flex-grow">
         {% block content %}
@@ -94,6 +137,78 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const menuButton = document.getElementById('profile-menu-button');
+            const menu = document.getElementById('profile-menu');
+            if (menuButton && menu) {
+                const closeMenu = () => { menu.classList.add('hidden'); menuButton.setAttribute('aria-expanded', 'false'); };
+                menuButton.addEventListener('click', () => {
+                    const isOpen = menuButton.getAttribute('aria-expanded') === 'true';
+                    menu.classList.toggle('hidden', isOpen);
+                    menuButton.setAttribute('aria-expanded', String(!isOpen));
+                });
+                document.addEventListener('click', event => { if (!menu.contains(event.target) && !menuButton.contains(event.target)) closeMenu(); });
+                document.addEventListener('keydown', event => { if (event.key === 'Escape') closeMenu(); });
+            }
+
+            const passwordModal = document.getElementById('password-change-modal');
+            const passwordForm = document.getElementById('password-change-form');
+            if (!passwordModal || !passwordForm) return;
+            const openPasswordModal = () => { menu?.classList.add('hidden'); menuButton?.setAttribute('aria-expanded', 'false'); passwordForm.reset(); passwordError?.classList.add('hidden'); passwordModal.classList.remove('hidden'); passwordModal.classList.add('flex'); updatePasswordFeedback(); };
+            const closePasswordModal = () => { passwordModal.classList.add('hidden'); passwordModal.classList.remove('flex'); passwordForm.reset(); passwordError.classList.add('hidden'); passwordForm.querySelectorAll('[data-toggle-password]').forEach(button => { const input = button.parentElement.querySelector('input'); input.type = 'password'; button.textContent = 'Mostrar'; }); updatePasswordFeedback(); };
+            document.getElementById('open-password-modal')?.addEventListener('click', openPasswordModal);
+            document.getElementById('close-password-modal')?.addEventListener('click', closePasswordModal);
+            document.getElementById('cancel-password-modal')?.addEventListener('click', closePasswordModal);
+            passwordModal.addEventListener('click', event => { if (event.target === passwordModal) closePasswordModal(); });
+            document.addEventListener('keydown', event => { if (event.key === 'Escape') closePasswordModal(); });
+            passwordForm.querySelectorAll('[data-toggle-password]').forEach(button => button.addEventListener('click', () => {
+                const input = button.parentElement.querySelector('input');
+                input.type = input.type === 'password' ? 'text' : 'password';
+                button.textContent = input.type === 'password' ? 'Mostrar' : 'Ocultar';
+            }));
+
+            const newPassword = document.getElementById('new-password');
+            const confirmPassword = document.getElementById('confirm-new-password');
+            const matchFeedback = document.getElementById('password-match-feedback');
+            const strengthFeedback = document.getElementById('new-password-feedback');
+            const passwordError = document.getElementById('password-change-error');
+            const passwordSubmit = passwordForm.querySelector('[type="submit"]');
+            const updatePasswordFeedback = () => {
+                const strong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/.test(newPassword.value);
+                const mismatch = confirmPassword.value.length > 0 && newPassword.value !== confirmPassword.value;
+                strengthFeedback.textContent = newPassword.value && !strong ? 'A senha deve ter ao menos 8 caracteres, com maiúscula, minúscula, número e símbolo.' : '';
+                strengthFeedback.classList.toggle('hidden', !newPassword.value || strong);
+                matchFeedback.textContent = mismatch ? 'As senhas não coincidem.' : (confirmPassword.value && newPassword.value ? 'As senhas coincidem.' : '');
+                matchFeedback.classList.toggle('hidden', !confirmPassword.value);
+                matchFeedback.classList.toggle('text-red-600', mismatch);
+                matchFeedback.classList.toggle('text-green-600', !mismatch && strong && Boolean(confirmPassword.value));
+                passwordSubmit.disabled = !strong || mismatch || !confirmPassword.value || !passwordForm.querySelector('[name="senha_atual"]').value;
+                passwordSubmit.classList.toggle('opacity-50', passwordSubmit.disabled);
+                passwordSubmit.classList.toggle('cursor-not-allowed', passwordSubmit.disabled);
+            };
+            passwordForm.addEventListener('input', () => { passwordError.classList.add('hidden'); updatePasswordFeedback(); });
+            updatePasswordFeedback();
+            passwordForm.addEventListener('submit', async event => {
+                event.preventDefault();
+                if (!passwordForm.reportValidity() || passwordSubmit.disabled) return;
+                passwordSubmit.disabled = true;
+                passwordSubmit.textContent = 'Salvando...';
+                try {
+                    const response = await fetch(passwordForm.action, {method: 'POST', body: new FormData(passwordForm), headers: {'X-Requested-With': 'XMLHttpRequest'}});
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.erro || 'Não foi possível alterar a senha.');
+                    closePasswordModal();
+                    if (window.Swal) Swal.fire({toast: true, position: 'bottom', icon: 'success', title: result.mensagem, showConfirmButton: false, timer: 3000});
+                } catch (error) {
+                    passwordError.textContent = error.message;
+                    passwordError.classList.remove('hidden');
+                } finally {
+                    passwordSubmit.textContent = 'Salvar senha';
+                    updatePasswordFeedback();
+                }
+            });
+        });
+
         // Esse script procura todos os links que tenham a classe 'btn-deletar'
         document.addEventListener('DOMContentLoaded', function() {
             const botoesDeletar = document.querySelectorAll('.btn-deletar');

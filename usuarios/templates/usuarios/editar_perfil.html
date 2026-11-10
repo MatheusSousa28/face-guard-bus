@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<section class="mx-auto max-w-2xl rounded-2xl bg-white p-6 shadow-lg sm:p-8">
+    <div class="mb-6">
+        <h1 class="font-display text-2xl font-bold text-gray-900">Editar perfil</h1>
+        <p class="mt-1 text-sm text-gray-500">Atualize seus dados de {{ tipo_perfil|lower }}.</p>
+    </div>
+    <form method="POST" enctype="multipart/form-data" class="space-y-5">
+        {% csrf_token %}
+        <div class="flex flex-col items-center gap-3">
+            <div id="profile-preview" class="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-2 border-blue-100 text-2xl font-bold text-white" style="background-color:{% if perfil.cor_avatar %}{{ perfil.cor_avatar }}{% else %}#334155{% endif %}">
+                {% if perfil.foto_perfil %}
+                    <img src="{{ perfil.foto_perfil.url }}" alt="Foto de perfil" class="h-full w-full object-cover">
+                {% elif user.first_name and user.last_name %}
+                    {{ user.first_name|slice:":1"|upper }}{{ user.last_name|slice:":1"|upper }}
+                {% elif user.first_name %}{{ user.first_name|slice:":1"|upper }}
+                {% else %}<img src="{% static 'img/icone_pessoa.png' %}" alt="Ícone de perfil" class="h-12 w-12 object-contain">{% endif %}
+            </div>
+            <label for="profile-photo" class="cursor-pointer rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">Alterar foto</label>
+            <input id="profile-photo" type="file" name="foto_perfil" accept="image/jpeg,image/png,image/webp" class="sr-only">
+            <p id="profile-photo-name" class="text-xs text-gray-500">Foto opcional · JPEG, PNG ou WebP até 5 MB</p>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block text-sm font-semibold text-gray-700">Nome
+                <input type="text" name="first_name" required minlength="2" maxlength="150" value="{{ request.POST.first_name|default:user.first_name }}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            </label>
+            <label class="block text-sm font-semibold text-gray-700">Sobrenome
+                <input type="text" name="last_name" required minlength="2" maxlength="150" value="{{ request.POST.last_name|default:user.last_name }}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            </label>
+        </div>
+        <label class="block text-sm font-semibold text-gray-700">E-mail
+            <input type="email" name="email" required maxlength="254" value="{{ request.POST.email|default:user.email }}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </label>
+        {% if perfil.cpf %}
+            <label class="block text-sm font-semibold text-gray-700">CPF
+                <input id="profile-cpf" type="text" name="cpf" required inputmode="numeric" maxlength="14" value="{{ cpf }}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            </label>
+        {% endif %}
+        <div class="flex justify-end gap-3 border-t pt-5">
+            <a href="{% url 'home' %}" class="rounded-lg bg-gray-100 px-5 py-2.5 font-semibold text-gray-700 hover:bg-gray-200">Cancelar</a>
+            <button type="submit" class="rounded-lg bg-blue-700 px-5 py-2.5 font-semibold text-white hover:bg-blue-800">Salvar alterações</button>
+        </div>
+    </form>
+</section>
+<script>
+    const profilePhotoInput = document.getElementById('profile-photo');
+    profilePhotoInput.addEventListener('change', () => {
+        const file = profilePhotoInput.files[0];
+        if (!file) return;
+        document.getElementById('profile-photo-name').textContent = file.name;
+        const reader = new FileReader();
+        reader.onload = event => { document.getElementById('profile-preview').innerHTML = `<img src="${event.target.result}" alt="Pré-visualização da foto" class="h-full w-full object-cover">`; };
+        reader.readAsDataURL(file);
+    });
+    const profileCpf = document.getElementById('profile-cpf');
+    if (profileCpf) profileCpf.addEventListener('input', () => {
+        const digits = profileCpf.value.replace(/\D/g, '').slice(0, 11);
+        profileCpf.value = digits.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3}\.\d{3})(\d)/, '$1.$2').replace(/\.(\d{3})(\d)/, '.$1-$2');
+    });
+</script>
+{% endblock %}

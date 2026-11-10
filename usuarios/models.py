@@ -15,6 +15,10 @@ def renomear_foto_motorista(instance, filename):
     novo_nome = f"{uuid.uuid4().hex}.{extensao}"
     return os.path.join('perfil_motoristas/', novo_nome)
 
+def renomear_foto_instituicao(instance, filename):
+    extensao = filename.split('.')[-1]
+    return os.path.join('perfil_instituicoes/', f'{uuid.uuid4().hex}.{extensao}')
+
 class Usuario(AbstractUser):
     email = models.EmailField(unique=True)
     #este campo existe pra que cadastros de responsáveis e alunos sejam aprovados pela instituição
@@ -33,6 +37,7 @@ class Usuario(AbstractUser):
 class Instituicao(models.Model):
     #oneToOneField liga este perfil diretamente ao usuário base de login
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE)
+    foto_perfil = models.ImageField(upload_to=renomear_foto_instituicao, null=True, blank=True)
     
     class Meta:
         verbose_name_plural = "Instituições"

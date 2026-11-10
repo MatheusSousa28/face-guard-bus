@@ -126,6 +126,61 @@ class FluxosCadastroTests(TestCase):
             reverse('login') + '?' + urlencode({'next': reverse('home')}),
         )
 
+    def test_usuario_edita_perfil_e_retorna_para_inicio(self):
+        self.client.force_login(self.responsavel_usuario)
+
+        response = self.client.post(reverse('editar_perfil'), {
+            'first_name': 'Rita', 'last_name': 'Silva', 'email': 'rita@example.test',
+            'cpf': '123.456.789-11',
+        })
+
+        self.assertRedirects(response, reverse('home'))
+        self.responsavel_usuario.refresh_from_db()
+        self.responsavel.refresh_from_db()
+        self.assertEqual(self.responsavel_usuario.get_full_name(), 'Rita Silva')
+        self.assertEqual(self.responsavel_usuario.email, 'rita@example.test')
+        self.assertEqual(self.responsavel.cpf, '12345678911')
+
+    def test_pagina_de_edicao_de_perfil_carrega_para_usuario_logado(self):
+        self.client.force_login(self.responsavel_usuario)
+
+        response = self.client.get(reverse('editar_perfil'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Editar perfil')
+        self.assertContains(response, 'Alterar senha')
+
+    def test_instituicao_pode_carregar_foto_no_perfil(self):
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.post(reverse('editar_perfil'), {
+            'first_name': 'Escola', 'last_name': 'Atualizada',
+            'email': self.instituicao_usuario.email,
+            'foto_perfil': self.imagem_png('instituicao.png'),
+        })
+
+        self.assertRedirects(response, reverse('home'))
+        self.instituicao.refresh_from_db()
+        self.assertTrue(self.instituicao.foto_perfil.name.endswith('.png'))
+
+    def test_usuario_altera_senha_validando_senha_atual_e_repeticao(self):
+        self.client.force_login(self.responsavel_usuario)
+        url = reverse('alterar_senha_propria')
+
+        resposta_incorreta = self.client.post(url, {
+            'senha_atual': 'SenhaErrada123!', 'nova_senha': 'NovaSenha123!',
+            'confirmar_senha': 'NovaSenha123!',
+        })
+        self.assertEqual(resposta_incorreta.status_code, 400)
+
+        resposta = self.client.post(url, {
+            'senha_atual': 'SenhaForte123!', 'nova_senha': 'NovaSenha123!',
+            'confirmar_senha': 'NovaSenha123!',
+        })
+        self.assertEqual(resposta.status_code, 200)
+        self.responsavel_usuario.refresh_from_db()
+        self.assertTrue(self.responsavel_usuario.check_password('NovaSenha123!'))
+
     def test_aprovacao_de_cadastro_exige_post(self):
         pendente = Usuario.objects.create_user(
             username='pendente@test.local', email='pendente@test.local',

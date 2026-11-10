@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponseNotAllowed, JsonResponse
-from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
+from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import Usuario, Responsavel, Motorista
@@ -88,6 +88,86 @@ def logout_view(request):
     auth_logout(request)
     messages.success(request, 'Sessão encerrada. Você já pode entrar com outro perfil.')
     return redirect('login')
+
+
+@login_required(login_url='login')
+def editar_perfil(request):
+    usuario = request.user
+    perfil = None
+    tipo_perfil = 'Instituição' if usuario.is_superuser else 'Usuário'
+    if hasattr(usuario, 'instituicao'):
+        perfil, tipo_perfil = usuario.instituicao, 'Instituição'
+    elif hasattr(usuario, 'motorista'):
+        perfil, tipo_perfil = usuario.motorista, 'Motorista'
+    elif hasattr(usuario, 'responsavel'):
+        perfil, tipo_perfil = usuario.responsavel, 'Responsável'
+
+    if request.method == 'POST':
+        nome = request.POST.get('first_name', '').strip()
+        sobrenome = request.POST.get('last_name', '').strip()
+        email = request.POST.get('email', '').strip().lower()
+        cpf = re.sub(r'\D', '', request.POST.get('cpf', ''))
+        foto = request.FILES.get('foto_perfil')
+
+        if not 2 <= len(nome) <= 150 or not 2 <= len(sobrenome) <= 150:
+            messages.error(request, 'Nome e sobrenome devem ter entre 2 e 150 caracteres.')
+        else:
+            try:
+                validate_email(email)
+            except ValidationError:
+                messages.error(request, 'Digite um formato de e-mail válido.')
+            else:
+                cpf_duplicado = perfil and hasattr(perfil, 'cpf') and (
+                    len(cpf) != 11 or perfil.__class__.objects.filter(cpf=cpf).exclude(pk=perfil.pk).exists()
+                )
+                if cpf_duplicado:
+                    messages.error(request, 'O CPF deve conter 11 números e não pode estar em uso por outra conta.')
+                elif Usuario.objects.filter(email=email).exclude(pk=usuario.pk).exists():
+                    messages.error(request, 'Este e-mail já está cadastrado.')
+                elif foto and not _imagem_valida(foto):
+                    messages.error(request, 'Envie uma foto válida em JPEG, PNG ou WebP com até 5 MB.')
+                else:
+                    with transaction.atomic():
+                        usuario.first_name = nome
+                        usuario.last_name = sobrenome
+                        usuario.email = email
+                        usuario.username = email
+                        usuario.save(update_fields=['first_name', 'last_name', 'email', 'username'])
+                        if perfil is None and usuario.is_superuser:
+                            perfil = Instituicao.objects.create(usuario=usuario)
+                        if perfil and hasattr(perfil, 'cpf'):
+                            perfil.cpf = cpf
+                        if perfil and foto:
+                            perfil.foto_perfil = foto
+                        if perfil:
+                            perfil.save()
+                    messages.success(request, 'Perfil atualizado com sucesso.')
+                    return redirect('home')
+
+    return render(request, 'usuarios/editar_perfil.html', {
+        'perfil': perfil,
+        'tipo_perfil': tipo_perfil,
+        'cpf': request.POST.get('cpf', perfil.cpf if perfil and hasattr(perfil, 'cpf') else ''),
+    })
+
+
+@login_required(login_url='login')
+def alterar_senha_propria(request):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    senha_atual = request.POST.get('senha_atual', '')
+    nova_senha = request.POST.get('nova_senha', '')
+    confirmar_senha = request.POST.get('confirmar_senha', '')
+    if not request.user.check_password(senha_atual):
+        return JsonResponse({'erro': 'A senha atual está incorreta.'}, status=400)
+    if nova_senha != confirmar_senha:
+        return JsonResponse({'erro': 'As senhas novas não coincidem.'}, status=400)
+    if not _senha_valida(nova_senha) or len(nova_senha) > 128:
+        return JsonResponse({'erro': 'A nova senha deve ter no mínimo 8 caracteres, letras maiúsculas e minúsculas, número e símbolo.'}, status=400)
+    request.user.set_password(nova_senha)
+    request.user.save(update_fields=['password'])
+    update_session_auth_hash(request, request.user)
+    return JsonResponse({'mensagem': 'Senha alterada com sucesso.'})
 
 #o login requiered protege a página, se não estiver logado, vai pro login
 @login_required(login_url='login')
