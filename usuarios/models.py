@@ -3,6 +3,16 @@ from django.contrib.auth.models import AbstractUser
 import uuid
 import os
 
+CORES_AVATAR = [
+    ('#1d4ed8', 'Azul'),
+    ('#6d28d9', 'Roxo'),
+    ('#be185d', 'Rosa'),
+    ('#b45309', 'Âmbar'),
+    ('#15803d', 'Verde'),
+    ('#0f766e', 'Turquesa'),
+    ('#334155', 'Grafite'),
+]
+
 def renomear_foto_responsavel(instance, filename):
     extensao = filename.split('.')[-1]
     # Gera um nome como: 8f2a1b3c9d.jpg
@@ -38,6 +48,7 @@ class Instituicao(models.Model):
     #oneToOneField liga este perfil diretamente ao usuário base de login
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE)
     foto_perfil = models.ImageField(upload_to=renomear_foto_instituicao, null=True, blank=True)
+    cor_avatar = models.CharField(max_length=7, choices=CORES_AVATAR, default='#334155')
     
     class Meta:
         verbose_name_plural = "Instituições"
@@ -46,15 +57,7 @@ class Instituicao(models.Model):
         return f"Instituição: {self.usuario.first_name}"
 
 class Responsavel(models.Model):
-    CORES_AVATAR = [
-        ('#1d4ed8', 'Azul'),
-        ('#6d28d9', 'Roxo'),
-        ('#be185d', 'Rosa'),
-        ('#b45309', 'Âmbar'),
-        ('#15803d', 'Verde'),
-        ('#0f766e', 'Turquesa'),
-        ('#334155', 'Grafite'),
-    ]
+    CORES_AVATAR = CORES_AVATAR
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE)
     cpf = models.CharField(max_length=11, unique=True)
     foto_perfil = models.ImageField(upload_to=renomear_foto_responsavel, null=True, blank=True)
@@ -69,7 +72,8 @@ class Responsavel(models.Model):
 class Motorista(models.Model):
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE)
     cpf = models.CharField(max_length=11, unique=True)
-    foto_perfil = models.ImageField(upload_to=renomear_foto_motorista, null=False, blank=False)
+    foto_perfil = models.ImageField(upload_to=renomear_foto_motorista, null=True, blank=True)
+    cor_avatar = models.CharField(max_length=7, choices=CORES_AVATAR, default='#334155')
 
     def __str__(self):
         return f"Motorista: {self.usuario.first_name}"

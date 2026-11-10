@@ -131,7 +131,7 @@ class FluxosCadastroTests(TestCase):
 
         response = self.client.post(reverse('editar_perfil'), {
             'first_name': 'Rita', 'last_name': 'Silva', 'email': 'rita@example.test',
-            'cpf': '123.456.789-11',
+            'cpf': '123.456.789-11', 'cor_avatar': '#6d28d9', 'remover_foto': '1',
         })
 
         self.assertRedirects(response, reverse('home'))
@@ -140,6 +140,8 @@ class FluxosCadastroTests(TestCase):
         self.assertEqual(self.responsavel_usuario.get_full_name(), 'Rita Silva')
         self.assertEqual(self.responsavel_usuario.email, 'rita@example.test')
         self.assertEqual(self.responsavel.cpf, '12345678911')
+        self.assertEqual(self.responsavel.cor_avatar, '#6d28d9')
+        self.assertFalse(self.responsavel.foto_perfil)
 
     def test_pagina_de_edicao_de_perfil_carrega_para_usuario_logado(self):
         self.client.force_login(self.responsavel_usuario)

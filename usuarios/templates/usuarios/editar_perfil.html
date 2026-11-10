@@ -10,7 +10,7 @@
     <form method="POST" enctype="multipart/form-data" class="space-y-5">
         {% csrf_token %}
         <div class="flex flex-col items-center gap-3">
-            <div id="profile-preview" class="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-2 border-blue-100 text-2xl font-bold text-white" style="background-color:{% if perfil.cor_avatar %}{{ perfil.cor_avatar }}{% else %}#334155{% endif %}">
+            <div id="profile-preview" data-has-photo="{% if perfil.foto_perfil %}true{% else %}false{% endif %}" class="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-2 border-blue-100 text-2xl font-bold text-white" style="background-color:{% if perfil.cor_avatar %}{{ perfil.cor_avatar }}{% else %}#334155{% endif %}">
                 {% if perfil.foto_perfil %}
                     <img src="{{ perfil.foto_perfil.url }}" alt="Foto de perfil" class="h-full w-full object-cover">
                 {% elif user.first_name and user.last_name %}
@@ -18,10 +18,28 @@
                 {% elif user.first_name %}{{ user.first_name|slice:":1"|upper }}
                 {% else %}<img src="{% static 'img/icone_pessoa.png' %}" alt="Ícone de perfil" class="h-12 w-12 object-contain">{% endif %}
             </div>
-            <label for="profile-photo" class="cursor-pointer rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">Alterar foto</label>
+            <div class="flex flex-wrap justify-center gap-2">
+                <label for="profile-photo" class="cursor-pointer rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">Alterar foto</label>
+                <button id="use-profile-initials" type="button" class="{% if not perfil.foto_perfil %}hidden {% endif %}rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Usar iniciais</button>
+            </div>
             <input id="profile-photo" type="file" name="foto_perfil" accept="image/jpeg,image/png,image/webp" class="sr-only">
+            <input id="remove-profile-photo" type="hidden" name="remover_foto" value="0">
             <p id="profile-photo-name" class="text-xs text-gray-500">Foto opcional · JPEG, PNG ou WebP até 5 MB</p>
         </div>
+        <fieldset id="profile-avatar-color-options" class="{% if perfil.foto_perfil %}hidden {% endif %}text-center">
+            <legend class="mb-2 text-sm font-semibold text-gray-700">Cor de fundo das iniciais</legend>
+            <input type="hidden" id="profile-avatar-color" name="cor_avatar" value="{{ cor_avatar }}">
+            <div id="profile-avatar-colors" class="flex flex-wrap justify-center gap-3">
+                <button type="button" data-color="#1d4ed8" aria-label="Azul" class="h-8 w-8 rounded-full bg-[#1d4ed8] ring-offset-2"></button>
+                <button type="button" data-color="#6d28d9" aria-label="Roxo" class="h-8 w-8 rounded-full bg-[#6d28d9] ring-offset-2"></button>
+                <button type="button" data-color="#be185d" aria-label="Rosa" class="h-8 w-8 rounded-full bg-[#be185d] ring-offset-2"></button>
+                <button type="button" data-color="#b45309" aria-label="Âmbar" class="h-8 w-8 rounded-full bg-[#b45309] ring-offset-2"></button>
+                <button type="button" data-color="#15803d" aria-label="Verde" class="h-8 w-8 rounded-full bg-[#15803d] ring-offset-2"></button>
+                <button type="button" data-color="#0f766e" aria-label="Turquesa" class="h-8 w-8 rounded-full bg-[#0f766e] ring-offset-2"></button>
+                <button type="button" data-color="#334155" aria-label="Grafite" class="h-8 w-8 rounded-full bg-[#334155] ring-offset-2"></button>
+            </div>
+            <p class="mt-2 text-xs text-gray-500">As cores aparecem quando o avatar usa iniciais.</p>
+        </fieldset>
 
         <div class="grid gap-4 sm:grid-cols-2">
             <label class="block text-sm font-semibold text-gray-700">Nome
@@ -47,13 +65,58 @@
 </section>
 <script>
     const profilePhotoInput = document.getElementById('profile-photo');
+    const profilePreview = document.getElementById('profile-preview');
+    const profileAvatarColor = document.getElementById('profile-avatar-color');
+    const profileAvatarOptions = document.getElementById('profile-avatar-color-options');
+    const useProfileInitials = document.getElementById('use-profile-initials');
+    const removeProfilePhoto = document.getElementById('remove-profile-photo');
+    const profileAvatarColors = [...document.querySelectorAll('#profile-avatar-colors [data-color]')];
+    const profileFirstName = document.querySelector('[name="first_name"]');
+    const profileLastName = document.querySelector('[name="last_name"]');
+    const updateProfileAvatar = () => {
+        if (profilePhotoInput.files[0] || profilePreview.dataset.hasPhoto === 'true') return;
+        const initials = `${profileFirstName.value.trim().slice(0, 1)}${profileLastName.value.trim().slice(0, 1)}`.toLocaleUpperCase('pt-BR');
+        profilePreview.style.backgroundColor = profileAvatarColor.value;
+        profilePreview.textContent = initials;
+    };
+    profileAvatarColors.forEach(button => {
+        const selected = button.dataset.color === profileAvatarColor.value;
+        button.setAttribute('aria-pressed', String(selected));
+        button.classList.toggle('ring-2', selected);
+        button.classList.toggle('ring-gray-800', selected);
+        button.addEventListener('click', () => {
+            profileAvatarColor.value = button.dataset.color;
+            profileAvatarColors.forEach(option => {
+                const isSelected = option === button;
+                option.setAttribute('aria-pressed', String(isSelected));
+                option.classList.toggle('ring-2', isSelected);
+                option.classList.toggle('ring-gray-800', isSelected);
+            });
+            updateProfileAvatar();
+        });
+    });
+    profileFirstName.addEventListener('input', updateProfileAvatar);
+    profileLastName.addEventListener('input', updateProfileAvatar);
     profilePhotoInput.addEventListener('change', () => {
         const file = profilePhotoInput.files[0];
         if (!file) return;
+        profileAvatarOptions.classList.add('hidden');
+        useProfileInitials.classList.remove('hidden');
+        removeProfilePhoto.value = '0';
+        profilePreview.dataset.hasPhoto = 'false';
         document.getElementById('profile-photo-name').textContent = file.name;
         const reader = new FileReader();
-        reader.onload = event => { document.getElementById('profile-preview').innerHTML = `<img src="${event.target.result}" alt="Pré-visualização da foto" class="h-full w-full object-cover">`; };
+        reader.onload = event => { profilePreview.innerHTML = `<img src="${event.target.result}" alt="Pré-visualização da foto" class="h-full w-full object-cover">`; };
         reader.readAsDataURL(file);
+    });
+    useProfileInitials.addEventListener('click', () => {
+        profilePhotoInput.value = '';
+        removeProfilePhoto.value = '1';
+        profilePreview.dataset.hasPhoto = 'false';
+        profileAvatarOptions.classList.remove('hidden');
+        useProfileInitials.classList.add('hidden');
+        document.getElementById('profile-photo-name').textContent = 'Usando iniciais';
+        updateProfileAvatar();
     });
     const profileCpf = document.getElementById('profile-cpf');
     if (profileCpf) profileCpf.addEventListener('input', () => {

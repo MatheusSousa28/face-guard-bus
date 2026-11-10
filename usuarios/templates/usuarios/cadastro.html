@@ -91,7 +91,8 @@
                     </div>
                     <input id="photo-input" type="file" name="foto_perfil" accept="image/jpeg,image/png,image/webp" class="hidden">
                     <span id="photo-name" class="text-xs text-gray-500">Foto opcional · JPEG, PNG ou WebP até 5 MB</span>
-                    <fieldset class="text-center">
+                </div>
+                <fieldset id="avatar-color-options" class="mt-4 text-center">
                         <legend class="mb-2 text-sm font-medium text-gray-700">Cor do avatar das iniciais</legend>
                         <input type="hidden" id="avatar-color" name="cor_avatar" value="{{ request.POST.cor_avatar|default:'#1d4ed8' }}">
                         <div id="avatar-colors" class="flex flex-wrap justify-center gap-3">
@@ -103,9 +104,8 @@
                             <button type="button" data-color="#0f766e" aria-label="Turquesa" aria-pressed="false" class="h-8 w-8 rounded-full bg-[#0f766e] ring-offset-2"></button>
                             <button type="button" data-color="#334155" aria-label="Grafite" aria-pressed="false" class="h-8 w-8 rounded-full bg-[#334155] ring-offset-2"></button>
                         </div>
-                        <p class="mt-2 text-xs text-gray-500">As iniciais são brancas para manter o contraste.</p>
-                    </fieldset>
-                </div>
+                        <p class="mt-2 text-xs text-gray-500">A cor fica salva para as iniciais, mesmo com uma foto enviada.</p>
+                </fieldset>
             </div>
             
             <div class="grid grid-cols-2 gap-4">
@@ -191,6 +191,7 @@
         const photoName = document.getElementById('photo-name');
         const removePhoto = document.getElementById('remove-photo');
         const avatarColorInput = document.getElementById('avatar-color');
+        const avatarColorOptions = document.getElementById('avatar-color-options');
         const avatarPlaceholder = "{% static 'img/icone_pessoa.png' %}";
         document.getElementById('add-photo').addEventListener('click', () => photoInput.click());
         const updateAvatarPreview = () => {
@@ -210,6 +211,7 @@
         };
         photoInput.addEventListener('change', () => {
             const file = photoInput.files[0]; if (!file) return;
+            avatarColorOptions.classList.add('hidden');
             photoName.textContent = file.name;
             removePhoto.classList.remove('hidden');
             const reader = new FileReader();
@@ -219,6 +221,7 @@
         });
         removePhoto.addEventListener('click', () => {
             photoInput.value = '';
+            avatarColorOptions.classList.remove('hidden');
             photoName.textContent = 'Foto opcional · JPEG, PNG ou WebP até 5 MB';
             removePhoto.classList.add('hidden');
             updateAvatarPreview();

@@ -43,7 +43,7 @@
                         {% elif user.responsavel.foto_perfil %}
                             <img src="{{ user.responsavel.foto_perfil.url }}" alt="" class="h-11 w-11 rounded-full border-2 border-white/70 object-cover">
                         {% else %}
-                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-white/70 text-sm font-bold text-white" style="background-color:{% if user.responsavel %}{{ user.responsavel.cor_avatar }}{% else %}#334155{% endif %}">
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-white/70 text-sm font-bold text-white" style="background-color:{% if user.responsavel %}{{ user.responsavel.cor_avatar }}{% elif user.motorista %}{{ user.motorista.cor_avatar }}{% elif user.instituicao %}{{ user.instituicao.cor_avatar }}{% else %}#334155{% endif %}">
                                 {% if user.first_name and user.last_name %}{{ user.first_name|slice:":1"|upper }}{{ user.last_name|slice:":1"|upper }}{% elif user.first_name %}{{ user.first_name|slice:":1"|upper }}{% else %}<img src="{% static 'img/icone_pessoa.png' %}" alt="Perfil" class="h-6 w-6 object-contain">{% endif %}
                             </span>
                         {% endif %}

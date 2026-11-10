@@ -108,6 +108,8 @@ def editar_perfil(request):
         email = request.POST.get('email', '').strip().lower()
         cpf = re.sub(r'\D', '', request.POST.get('cpf', ''))
         foto = request.FILES.get('foto_perfil')
+        remover_foto = request.POST.get('remover_foto') == '1'
+        cor_avatar = request.POST.get('cor_avatar', getattr(perfil, 'cor_avatar', '#334155'))
 
         if not 2 <= len(nome) <= 150 or not 2 <= len(sobrenome) <= 150:
             messages.error(request, 'Nome e sobrenome devem ter entre 2 e 150 caracteres.')
@@ -127,6 +129,9 @@ def editar_perfil(request):
                 elif foto and not _imagem_valida(foto):
                     messages.error(request, 'Envie uma foto válida em JPEG, PNG ou WebP com até 5 MB.')
                 else:
+                    cores_validas = {cor for cor, _ in Responsavel.CORES_AVATAR}
+                    if cor_avatar not in cores_validas:
+                        cor_avatar = getattr(perfil, 'cor_avatar', '#334155')
                     with transaction.atomic():
                         usuario.first_name = nome
                         usuario.last_name = sobrenome
@@ -139,6 +144,11 @@ def editar_perfil(request):
                             perfil.cpf = cpf
                         if perfil and foto:
                             perfil.foto_perfil = foto
+                        elif perfil and remover_foto and perfil.foto_perfil:
+                            perfil.foto_perfil.delete(save=False)
+                            perfil.foto_perfil = None
+                        if perfil and hasattr(perfil, 'cor_avatar'):
+                            perfil.cor_avatar = cor_avatar
                         if perfil:
                             perfil.save()
                     messages.success(request, 'Perfil atualizado com sucesso.')
@@ -148,6 +158,7 @@ def editar_perfil(request):
         'perfil': perfil,
         'tipo_perfil': tipo_perfil,
         'cpf': request.POST.get('cpf', perfil.cpf if perfil and hasattr(perfil, 'cpf') else ''),
+        'cor_avatar': request.POST.get('cor_avatar', getattr(perfil, 'cor_avatar', '#334155')),
     })
 
 
@@ -381,7 +392,7 @@ def _usuario_json(tipo, obj):
                  'last_name': usuario.last_name, 'nome': usuario.get_full_name(),
                  'email': usuario.email, 'cpf': obj.cpf,
                  'foto': foto.url if foto else '', 'aprovado': usuario.is_aprovado}
-        if tipo == 'responsavel':
+        if hasattr(obj, 'cor_avatar'):
             dados['cor_avatar'] = obj.cor_avatar
     return dados
 
