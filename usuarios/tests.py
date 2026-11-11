@@ -317,7 +317,8 @@ class GerenciamentoUsuariosTests(TestCase):
         self.assertContains(response, '✔ Senha forte')
         self.assertContains(response, 'data-avatar-color="#1d4ed8"')
         self.assertContains(response, 'id="toggle-deleted-users"')
-        self.assertContains(response, 'aria-pressed="false" class="rounded-lg bg-blue-600')
+        self.assertContains(response, 'role="switch" aria-checked="false"')
+        self.assertContains(response, 'data-switch-knob')
 
     def test_cadastro_exibe_regras_de_senha_em_estados_vermelho_e_verde(self):
         response = self.client.get(reverse('cadastro'))

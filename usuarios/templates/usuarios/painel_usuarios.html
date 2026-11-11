@@ -28,7 +28,12 @@
             <h2 id="list-title" class="text-xl font-bold text-gray-800">Alunos</h2>
             <div class="flex items-center gap-3">
                 <span id="total-count" class="text-sm text-gray-500"></span>
-                <button id="toggle-deleted-users" type="button" aria-pressed="false" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 aria-pressed:bg-blue-800">Excluídos</button>
+                <button id="toggle-deleted-users" type="button" role="switch" aria-checked="false" class="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100">
+                    <span>Excluídos</span>
+                    <span data-switch-track class="relative h-6 w-11 rounded-full bg-gray-300 transition-colors" aria-hidden="true">
+                        <span data-switch-knob class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform"></span>
+                    </span>
+                </button>
             </div>
         </div>
         <div id="list-status" class="hidden p-8 text-center text-gray-600"></div>
@@ -565,7 +570,10 @@
         const isAudit = category === 'auditoria';
         const toggle = document.getElementById('toggle-deleted-users');
         toggle.classList.toggle('hidden', isAudit);
-        toggle.setAttribute('aria-pressed', String(showDeleted));
+        toggle.setAttribute('aria-checked', String(showDeleted));
+        toggle.querySelector('[data-switch-track]').classList.toggle('bg-blue-600', showDeleted);
+        toggle.querySelector('[data-switch-track]').classList.toggle('bg-gray-300', !showDeleted);
+        toggle.querySelector('[data-switch-knob]').classList.toggle('translate-x-5', showDeleted);
         document.getElementById('create-user-container').classList.toggle('hidden', showDeleted || isAudit);
     }
     document.getElementById('toggle-deleted-users').addEventListener('click', () => {
