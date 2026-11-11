@@ -60,7 +60,9 @@ class FluxosCadastroTests(TestCase):
         for regra in ('length', 'lowercase', 'uppercase', 'number', 'symbol'):
             self.assertContains(response, f'data-password-rule="{regra}"')
         self.assertContains(response, 'updatePasswordRules')
-        self.assertContains(response, 'Falta: uma letra maiúscula.')
+        self.assertContains(response, 'Crie uma senha forte:')
+        self.assertContains(response, '✘ Uma letra maiúscula.')
+        self.assertContains(response, "met ? '✔' : '✘'")
 
     def test_responsavel_cadastrado_fica_pendente_e_senha_tem_hash(self):
         response = self.client.post(reverse('cadastro'), {
@@ -311,6 +313,18 @@ class GerenciamentoUsuariosTests(TestCase):
         self.assertIsNotNone(password_form)
         self.assertEqual(password_form.group(0).count('data-toggle-password'), 2)
         self.assertEqual(password_form.group(0).count('aria-label="Mostrar senha"'), 2)
+        self.assertContains(response, 'id="reset-password-strength"')
+        self.assertContains(response, '✔ Senha forte')
+        self.assertContains(response, 'data-avatar-color="#1d4ed8"')
+
+    def test_cadastro_exibe_regras_de_senha_em_estados_vermelho_e_verde(self):
+        response = self.client.get(reverse('cadastro'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Crie uma senha forte:')
+        self.assertContains(response, '✘ Pelo menos 8 caracteres.')
+        self.assertContains(response, "met ? '✔' : '✘'")
+        self.assertContains(response, 'class="hidden rounded-lg border border-red-200 bg-red-50')
 
     def test_api_lista_e_pesquisa_perfis_institucionais(self):
         outro_usuario = Usuario.objects.create_user(
@@ -331,6 +345,7 @@ class GerenciamentoUsuariosTests(TestCase):
         payload = {
             'first_name': 'Ana', 'last_name': 'Secretaria',
             'email': 'ana.secretaria@example.test', 'senha': 'SenhaForte123!',
+            'cor_avatar': '#6d28d9',
             'foto_perfil': self.imagem_png('ana.png'),
         }
         created = self.client.post(self.api('instituicao'), payload)
@@ -338,14 +353,19 @@ class GerenciamentoUsuariosTests(TestCase):
         conta = Instituicao.objects.get(usuario__email='ana.secretaria@example.test')
         self.assertTrue(conta.usuario.check_password('SenhaForte123!'))
         self.assertTrue(conta.usuario.is_aprovado)
+        self.assertEqual(conta.cor_avatar, '#6d28d9')
 
         updated = self.client.post(self.api('instituicao', conta.pk), {
             'first_name': 'Ana Atualizada', 'last_name': 'Secretaria',
             'email': 'ana.secretaria@example.test',
+            'cor_avatar': '#0f766e', 'remover_foto': '1',
         })
         self.assertEqual(updated.status_code, 200, updated.content)
         conta.usuario.refresh_from_db()
         self.assertEqual(conta.usuario.first_name, 'Ana Atualizada')
+        conta.refresh_from_db()
+        self.assertEqual(conta.cor_avatar, '#0f766e')
+        self.assertFalse(conta.foto_perfil)
 
         deleted = self.client.delete(self.api('instituicao', conta.pk))
         self.assertEqual(deleted.status_code, 200)

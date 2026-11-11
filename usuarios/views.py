@@ -3,7 +3,7 @@ from django.http import HttpResponseNotAllowed, JsonResponse
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import Usuario, Instituicao, Responsavel, Motorista, RegistroAuditoria
+from .models import Usuario, Instituicao, Responsavel, Motorista, RegistroAuditoria, CORES_AVATAR
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -485,6 +485,8 @@ def api_usuarios(request, tipo, obj_id=None):
     data = request.POST
     nome, sobrenome = data.get('first_name', '').strip(), data.get('last_name', '').strip()
     foto = request.FILES.get('foto_perfil')
+    remover_foto = data.get('remover_foto') == '1'
+    cor_avatar = data.get('cor_avatar', '')
     if foto and not (_imagem_valida(foto) if criando else _imagem_perfil_edicao_valida(foto)):
         mensagem = 'Envie uma imagem PNG ou JPEG válida com no máximo 2 MB.' if not criando else 'A foto deve ser JPEG, PNG ou WebP válida e ter até 5 MB.'
         return JsonResponse({'erro': mensagem}, status=400)
@@ -555,8 +557,13 @@ def api_usuarios(request, tipo, obj_id=None):
                     usuario.save()
                     if tipo != 'instituicao':
                         item.cpf = cpf
-                    if foto:
-                        item.foto_perfil = foto
+                if foto:
+                    item.foto_perfil = foto
+                elif remover_foto and getattr(item, 'foto_perfil', None):
+                    item.foto_perfil.delete(save=False)
+                    item.foto_perfil = None
+                if hasattr(item, 'cor_avatar') and cor_avatar in {cor for cor, _ in CORES_AVATAR}:
+                    item.cor_avatar = cor_avatar
                 item.save()
         return JsonResponse({'mensagem': 'Cadastro salvo com sucesso.', 'item': _usuario_json(tipo, item, request)}, status=201 if criando else 200)
     except Exception as exc:

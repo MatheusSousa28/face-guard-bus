@@ -153,14 +153,14 @@
                     <p id="password-match-error" class="hidden mt-1 text-xs font-medium text-red-600" aria-live="polite"></p>
                 </div>
             </div>
-            <div id="password-rules" class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-                <p class="mb-2 font-semibold">Regras da senha — os itens são atualizados enquanto você digita:</p>
+            <div id="password-rules" class="hidden rounded-lg border border-red-200 bg-red-50 p-3 text-sm transition-colors duration-300">
+                <p class="mb-2 font-semibold text-gray-900">Crie uma senha forte:</p>
                 <ul class="space-y-1 text-xs" aria-live="polite">
-                    <li data-password-rule="length" aria-label="Regra de comprimento">• Falta: pelo menos 8 caracteres.</li>
-                    <li data-password-rule="lowercase" aria-label="Regra de letra minúscula">• Falta: uma letra minúscula.</li>
-                    <li data-password-rule="uppercase" aria-label="Regra de letra maiúscula">• Falta: uma letra maiúscula.</li>
-                    <li data-password-rule="number" aria-label="Regra de número">• Falta: um número.</li>
-                    <li data-password-rule="symbol" aria-label="Regra de símbolo">• Falta: um símbolo.</li>
+                    <li data-password-rule="length" class="font-semibold text-red-700 transition-colors duration-300">✘ Pelo menos 8 caracteres.</li>
+                    <li data-password-rule="lowercase" class="font-semibold text-red-700 transition-colors duration-300">✘ Uma letra minúscula.</li>
+                    <li data-password-rule="uppercase" class="font-semibold text-red-700 transition-colors duration-300">✘ Uma letra maiúscula.</li>
+                    <li data-password-rule="number" class="font-semibold text-red-700 transition-colors duration-300">✘ Um número.</li>
+                    <li data-password-rule="symbol" class="font-semibold text-red-700 transition-colors duration-300">✘ Um símbolo.</li>
                 </ul>
             </div>
                     
@@ -266,28 +266,31 @@
         const passwordMatchError = document.getElementById('password-match-error');
         const passwordRulesBox = document.getElementById('password-rules');
         const passwordRules = [
-            {name: 'length', label: 'pelo menos 8 caracteres', test: value => value.length >= 8},
-            {name: 'lowercase', label: 'uma letra minúscula', test: value => /[a-z]/.test(value)},
-            {name: 'uppercase', label: 'uma letra maiúscula', test: value => /[A-Z]/.test(value)},
-            {name: 'number', label: 'um número', test: value => /\d/.test(value)},
-            {name: 'symbol', label: 'um símbolo', test: value => /[^A-Za-z\d]/.test(value)},
+            {name: 'length', label: 'Pelo menos 8 caracteres', test: value => value.length >= 8},
+            {name: 'lowercase', label: 'Uma letra minúscula', test: value => /[a-z]/.test(value)},
+            {name: 'uppercase', label: 'Uma letra maiúscula', test: value => /[A-Z]/.test(value)},
+            {name: 'number', label: 'Um número', test: value => /\d/.test(value)},
+            {name: 'symbol', label: 'Um símbolo', test: value => /[^A-Za-z\d]/.test(value)},
         ];
         const updatePasswordRules = () => {
             const password = registrationPassword.value;
-            let allRulesMet = true;
+            const allRulesMet = passwordRules.every(rule => rule.test(password));
+            passwordRulesBox.classList.toggle('hidden', password.length === 0);
             passwordRules.forEach(rule => {
                 const met = rule.test(password);
-                allRulesMet = allRulesMet && met;
                 const item = passwordRulesBox.querySelector(`[data-password-rule="${rule.name}"]`);
-                item.textContent = met ? `✓ Atendido: ${rule.label}.` : `• Falta: ${rule.label}.`;
-                item.className = met ? 'text-green-800 font-semibold' : (password ? 'text-red-700 font-semibold' : 'text-amber-950');
+                const text = `${met ? '✔' : '✘'} ${rule.label}.`;
+                if (item.textContent !== text) {
+                    item.textContent = text;
+                    item.animate?.([{opacity: 0.35, transform: 'translateY(3px)'}, {opacity: 1, transform: 'translateY(0)'}], {duration: 220, easing: 'ease-out'});
+                }
+                item.classList.toggle('text-green-700', met);
+                item.classList.toggle('text-red-700', !met);
             });
-            passwordRulesBox.classList.toggle('border-green-400', allRulesMet);
-            passwordRulesBox.classList.toggle('bg-green-50', allRulesMet);
-            passwordRulesBox.classList.toggle('text-green-950', allRulesMet);
-            passwordRulesBox.classList.toggle('border-amber-300', !allRulesMet);
-            passwordRulesBox.classList.toggle('bg-amber-50', !allRulesMet);
-            passwordRulesBox.classList.toggle('text-amber-950', !allRulesMet);
+            passwordRulesBox.classList.toggle('border-green-300', allRulesMet && password.length > 0);
+            passwordRulesBox.classList.toggle('bg-green-50', allRulesMet && password.length > 0);
+            passwordRulesBox.classList.toggle('border-red-200', !allRulesMet);
+            passwordRulesBox.classList.toggle('bg-red-50', !allRulesMet);
             return allRulesMet;
         };
         const updateRegistrationButton = () => {

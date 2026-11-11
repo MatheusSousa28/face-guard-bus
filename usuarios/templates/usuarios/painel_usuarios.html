@@ -70,20 +70,21 @@
     <form id="password-form" class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
         <div class="flex items-start justify-between gap-4"><div><h2 id="password-title" class="text-xl font-bold text-gray-900">Redefinir senha</h2><p id="password-user-name" class="text-sm text-gray-600 mt-1"></p></div><button type="button" id="close-password-modal" aria-label="Fechar" class="text-2xl text-gray-500">&times;</button></div>
         <label class="block text-sm font-semibold text-gray-700">Nova senha
-            <span class="relative mt-1 block"><input name="senha" type="password" required minlength="8" autocomplete="new-password" class="w-full rounded-lg border px-3 py-2 pr-12"><button type="button" data-toggle-password aria-label="Mostrar senha" title="Mostrar senha" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-800">
+            <span class="relative mt-1 block"><input name="senha" type="password" required minlength="8" maxlength="128" autocomplete="new-password" class="w-full rounded-lg border px-3 py-2 pr-12"><button type="button" data-toggle-password aria-label="Mostrar senha" title="Mostrar senha" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-800">
                 <svg data-eye-visible class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
                 <svg data-eye-hidden class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a15 15 0 0 1-3.1 4.1M6.2 6.2C3.4 8.1 2 12 2 12s3.5 7 10 7c1 0 1.9-.2 2.8-.5"/></svg>
             </button></span>
         </label>
+        <p id="reset-password-strength" class="hidden rounded-md px-2 py-1 text-sm font-semibold transition-all duration-300" aria-live="polite"></p>
         <label class="block text-sm font-semibold text-gray-700">Repita a nova senha
-            <span class="relative mt-1 block"><input name="confirmar_senha" type="password" required minlength="8" autocomplete="new-password" class="w-full rounded-lg border px-3 py-2 pr-12"><button type="button" data-toggle-password aria-label="Mostrar senha" title="Mostrar senha" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-800">
+            <span class="relative mt-1 block"><input name="confirmar_senha" type="password" required minlength="8" maxlength="128" autocomplete="new-password" class="w-full rounded-lg border px-3 py-2 pr-12"><button type="button" data-toggle-password aria-label="Mostrar senha" title="Mostrar senha" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-800">
                 <svg data-eye-visible class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
                 <svg data-eye-hidden class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a15 15 0 0 1-3.1 4.1M6.2 6.2C3.4 8.1 2 12 2 12s3.5 7 10 7c1 0 1.9-.2 2.8-.5"/></svg>
             </button></span>
         </label>
-        <p class="text-xs text-gray-500">Use pelo menos 8 caracteres, incluindo maiúsculas, minúsculas, número e símbolo.</p>
+        <p id="reset-password-match" class="hidden text-xs font-medium" aria-live="polite"></p>
         <p id="password-error" class="hidden text-sm text-red-700" role="alert"></p>
-        <div class="flex justify-end gap-3"><button type="button" id="cancel-password" class="rounded-lg bg-gray-200 px-4 py-2 font-semibold">Cancelar</button><button type="submit" class="rounded-lg bg-blue-600 px-5 py-2 font-bold text-white">Redefinir senha</button></div>
+        <div class="flex justify-end gap-3"><button type="button" id="cancel-password" class="rounded-lg bg-gray-200 px-4 py-2 font-semibold">Cancelar</button><button type="submit" disabled class="rounded-lg bg-blue-600 px-5 py-2 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">Redefinir senha</button></div>
     </form>
 </div>
 
@@ -319,20 +320,78 @@
         modalContent.querySelector('#capture-face').disabled = true;
         activateFaceCamera();
     }
+    function initialsFor(user) {
+        const first = (user.first_name || '').trim();
+        const last = (user.last_name || '').trim();
+        if (last) return `${first.slice(0, 1)}${last.slice(0, 1)}`.toLocaleUpperCase('pt-BR');
+        if (first && first.split(/\s+/).length === 1) return first.slice(0, 1).toLocaleUpperCase('pt-BR');
+        const words = (user.nome || '').trim().split(/\s+/).filter(Boolean);
+        return words.length > 1 ? `${words[0].slice(0, 1)}${words[words.length - 1].slice(0, 1)}`.toLocaleUpperCase('pt-BR')
+            : (words[0] || '').slice(0, 1).toLocaleUpperCase('pt-BR');
+    }
     function profilePhotoMarkup(user, isNew) {
-        const placeholder = `<div id="profile-photo-placeholder" class="w-32 h-32 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-4xl font-bold">${escapeHtml((user.nome || '?').slice(0,1).toUpperCase())}</div>`;
-        const photo = user.foto ? `<img id="profile-photo-preview" src="${escapeHtml(user.foto)}" alt="Foto de ${escapeHtml(user.nome || 'usuário')}" class="w-32 h-32 rounded-full object-cover">` : placeholder;
+        const supportsAvatarColor = category !== 'aluno';
+        const disabledControl = !editing && !isNew ? 'disabled' : '';
+        const avatarColor = /^#[0-9a-f]{6}$/i.test(user.cor_avatar || '') ? user.cor_avatar : '#334155';
+        const initials = initialsFor(user);
+        const hasPhoto = Boolean(user.foto);
+        const avatar = hasPhoto
+            ? `<img id="profile-photo-image" src="${escapeHtml(user.foto)}" alt="Foto de ${escapeHtml(user.nome || 'usuário')}" class="h-full w-full object-cover">`
+            : initials
+                ? `<span id="profile-photo-initials" class="flex h-full w-full items-center justify-center text-3xl font-bold text-white">${escapeHtml(initials)}</span>`
+                : `<img id="profile-photo-placeholder" src="${avatarPlaceholder}" alt="Ícone padrão de perfil" class="h-12 w-12 object-contain">`;
+        const colorOptions = supportsAvatarColor ? `<fieldset id="profile-avatar-color-options" class="${hasPhoto ? 'hidden ' : ''}text-center">
+                <legend class="mb-2 text-sm font-semibold text-gray-700">Cor de fundo das iniciais</legend>
+                <input type="hidden" name="cor_avatar" value="${avatarColor}">
+                <div class="flex flex-wrap justify-center gap-3">
+                    <button type="button" data-avatar-color="#1d4ed8" aria-label="Azul" aria-pressed="false" ${disabledControl} class="h-8 w-8 rounded-full bg-[#1d4ed8] ring-offset-2 disabled:opacity-50"></button>
+                    <button type="button" data-avatar-color="#6d28d9" aria-label="Roxo" aria-pressed="false" ${disabledControl} class="h-8 w-8 rounded-full bg-[#6d28d9] ring-offset-2 disabled:opacity-50"></button>
+                    <button type="button" data-avatar-color="#be185d" aria-label="Rosa" aria-pressed="false" ${disabledControl} class="h-8 w-8 rounded-full bg-[#be185d] ring-offset-2 disabled:opacity-50"></button>
+                    <button type="button" data-avatar-color="#b45309" aria-label="Âmbar" aria-pressed="false" ${disabledControl} class="h-8 w-8 rounded-full bg-[#b45309] ring-offset-2 disabled:opacity-50"></button>
+                    <button type="button" data-avatar-color="#15803d" aria-label="Verde" aria-pressed="false" ${disabledControl} class="h-8 w-8 rounded-full bg-[#15803d] ring-offset-2 disabled:opacity-50"></button>
+                    <button type="button" data-avatar-color="#0f766e" aria-label="Turquesa" aria-pressed="false" ${disabledControl} class="h-8 w-8 rounded-full bg-[#0f766e] ring-offset-2 disabled:opacity-50"></button>
+                    <button type="button" data-avatar-color="#334155" aria-label="Grafite" aria-pressed="false" ${disabledControl} class="h-8 w-8 rounded-full bg-[#334155] ring-offset-2 disabled:opacity-50"></button>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">As cores aparecem quando o avatar usa iniciais.</p>
+            </fieldset>` : '';
+        const canUseInitials = supportsAvatarColor;
         const accepted = isNew ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png';
-        return `<section class="mb-6 text-center">
-            <div id="profile-photo-container" class="flex justify-center">${photo}</div>
+        return `<section class="mb-6 flex flex-col items-center gap-3 text-center">
+            <div id="profile-photo-preview" data-has-photo="${hasPhoto}" class="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-2 border-blue-100 text-2xl font-bold text-white" style="background-color:${avatarColor}">${avatar}</div>
             ${!isNew ? '<p class="mt-2 text-xs text-gray-500">Somente imagens PNG ou JPEG, com no máximo 2 MB.</p>' : ''}
-            <div class="mt-3 flex justify-center gap-3">
-                <button id="view-profile-photo" type="button" ${user.foto ? '' : 'disabled'} class="rounded-lg border px-4 py-2 font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-40">Visualizar</button>
-                <button id="change-profile-photo" type="button" class="rounded-lg border px-4 py-2 font-semibold text-amber-700 hover:bg-amber-50">${isNew ? 'Adicionar foto' : 'Alterar'}</button>
+            <div class="flex flex-wrap justify-center gap-2">
+                <button id="view-profile-photo" type="button" ${hasPhoto ? '' : 'disabled'} class="rounded-lg border px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-40">Visualizar</button>
+                <button id="change-profile-photo" type="button" class="rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">${isNew ? 'Adicionar foto' : 'Alterar foto'}</button>
+                ${canUseInitials ? `<button id="use-profile-initials" type="button" ${hasPhoto && !disabledControl ? '' : 'disabled'} class="${hasPhoto ? '' : 'hidden '}rounded-lg border px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40">Usar iniciais</button>` : ''}
             </div>
             <input id="profile-photo-input" name="foto_perfil" type="file" accept="${accepted}" class="hidden">
+            <input id="remove-profile-photo" type="hidden" name="remover_foto" value="0">
+            ${colorOptions}
+            <p id="profile-photo-name" class="text-xs text-gray-500">${hasPhoto ? 'Foto de perfil' : 'Usando iniciais'}</p>
             <p id="profile-photo-error" class="hidden mt-2 text-sm text-red-700" role="alert"></p>
         </section>`;
+    }
+    function updateModalAvatar() {
+        const preview = modalContent.querySelector('#profile-photo-preview');
+        if (!preview || preview.dataset.hasPhoto === 'true') return;
+        const firstName = modalContent.querySelector('[name="first_name"]')?.value
+            || modalContent.querySelector('[name="nome"]')?.value || '';
+        const lastName = modalContent.querySelector('[name="last_name"]')?.value || '';
+        const initials = initialsFor({...currentUser, first_name: firstName, last_name: lastName, nome: firstName});
+        const color = modalContent.querySelector('[name="cor_avatar"]')?.value || '#334155';
+        preview.style.backgroundColor = color;
+        preview.innerHTML = initials
+            ? `<span class="flex h-full w-full items-center justify-center text-3xl font-bold text-white">${escapeHtml(initials)}</span>`
+            : `<img src="${avatarPlaceholder}" alt="Ícone padrão de perfil" class="h-12 w-12 object-contain">`;
+    }
+    function setupAvatarColorButtons() {
+        const selectedColor = modalContent.querySelector('[name="cor_avatar"]')?.value;
+        modalContent.querySelectorAll('[data-avatar-color]').forEach(button => {
+            const selected = button.dataset.avatarColor === selectedColor;
+            button.setAttribute('aria-pressed', String(selected));
+            button.classList.toggle('ring-2', selected);
+            button.classList.toggle('ring-gray-800', selected);
+        });
     }
 
     function faceCaptureMarkup() {
@@ -378,6 +437,7 @@
         editing = isNew || forceEditing; creating = isNew; currentUser = user;
         openModal(isNew ? `Cadastrar ${singular[category]}` : editing ? `Editar ${singular[category]}` : `Visualizar ${singular[category]}`);
         modalContent.innerHTML = formMarkup(user, isNew);
+        setupAvatarColorButtons();
         if (category === 'aluno' && isNew) {
             try {
                 let guardians = await request(`${api('responsavel')}?page=1`);
@@ -398,10 +458,93 @@
         document.getElementById('password-form').reset();
         resetPasswordVisibility();
         document.getElementById('password-error').classList.add('hidden');
+        updateResetPasswordStrength(true);
+        updateResetPasswordMatch();
         document.getElementById('password-modal').classList.remove('hidden');
         document.body.classList.add('overflow-hidden');
     }
     let passwordTarget = null;
+    const passwordForm = document.getElementById('password-form');
+    const resetPasswordRules = [
+        {label: 'Pelo menos 8 caracteres', test: value => value.length >= 8},
+        {label: 'Uma letra minúscula', test: value => /[a-z]/.test(value)},
+        {label: 'Uma letra maiúscula', test: value => /[A-Z]/.test(value)},
+        {label: 'Um número', test: value => /\d/.test(value)},
+        {label: 'Um símbolo', test: value => /[^A-Za-z\d]/.test(value)},
+    ];
+    let resetRuleIndex = 0, resetRuleTimer = null;
+    function renderResetStrength(text, strong) {
+        const message = document.getElementById('reset-password-strength');
+        const state = `${text}|${strong}`;
+        if (message.dataset.state !== state) {
+            message.textContent = text;
+            message.dataset.state = state;
+            message.animate?.([{opacity: 0.25, transform: 'translateY(5px)'}, {opacity: 1, transform: 'translateY(0)'}], {duration: 240, easing: 'ease-out'});
+        }
+        message.classList.remove('hidden', 'text-red-700', 'text-green-700', 'bg-red-50', 'bg-green-50');
+        message.classList.add(strong ? 'text-green-700' : 'text-red-700', strong ? 'bg-green-50' : 'bg-red-50');
+    }
+    function updateResetPasswordStrength(reset=false) {
+        const message = document.getElementById('reset-password-strength');
+        if (resetRuleTimer) window.clearTimeout(resetRuleTimer);
+        if (reset) resetRuleIndex = 0;
+        const password = passwordForm.elements.senha.value;
+        if (!password) {
+            message.classList.add('hidden');
+            message.textContent = '';
+            message.dataset.state = '';
+            resetRuleIndex = 0;
+            updateResetPasswordSubmit();
+            return false;
+        }
+        const firstUnmet = resetPasswordRules.findIndex(rule => !rule.test(password));
+        if (firstUnmet >= 0 && firstUnmet < resetRuleIndex) resetRuleIndex = firstUnmet;
+        if (resetRuleIndex >= resetPasswordRules.length) {
+            renderResetStrength('✔ Senha forte', true);
+            updateResetPasswordSubmit();
+            return true;
+        }
+        const rule = resetPasswordRules[resetRuleIndex];
+        const met = rule.test(password);
+        renderResetStrength(`${met ? '✔' : '✘'} ${rule.label}.`, met);
+        if (met) {
+            resetRuleTimer = window.setTimeout(() => {
+                const latestPassword = passwordForm.elements.senha.value;
+                const nextUnmet = resetPasswordRules.findIndex(item => !item.test(latestPassword));
+                if (nextUnmet >= 0) resetRuleIndex = nextUnmet;
+                else resetRuleIndex += 1;
+                updateResetPasswordStrength();
+            }, 380);
+        } else {
+            resetRuleIndex = firstUnmet;
+        }
+        updateResetPasswordSubmit();
+        return firstUnmet === -1;
+    }
+    function updateResetPasswordMatch() {
+        const senha = passwordForm.elements.senha.value;
+        const confirmacao = passwordForm.elements.confirmar_senha.value;
+        const feedback = document.getElementById('reset-password-match');
+        const visivel = confirmacao.length > 0;
+        const coincide = senha === confirmacao;
+        feedback.textContent = visivel ? (coincide ? 'As senhas coincidem.' : 'As senhas não coincidem.') : '';
+        feedback.className = `text-xs font-medium ${visivel ? (coincide ? 'text-green-700' : 'text-red-700') : 'hidden'}`;
+        updateResetPasswordSubmit();
+    }
+    function updateResetPasswordSubmit() {
+        const allRulesMet = resetPasswordRules.every(rule => rule.test(passwordForm.elements.senha.value));
+        const passwordsMatch = passwordForm.elements.senha.value === passwordForm.elements.confirmar_senha.value;
+        passwordForm.querySelector('[type="submit"]').disabled = !allRulesMet || !passwordForm.elements.confirmar_senha.value || !passwordsMatch;
+    }
+    passwordForm.elements.senha.addEventListener('input', () => {
+        document.getElementById('password-error').classList.add('hidden');
+        updateResetPasswordStrength();
+        updateResetPasswordMatch();
+    });
+    passwordForm.elements.confirmar_senha.addEventListener('input', () => {
+        document.getElementById('password-error').classList.add('hidden');
+        updateResetPasswordMatch();
+    });
     document.querySelectorAll('.category-tab').forEach(button => button.addEventListener('click', () => {
         window.clearTimeout(searchTimer);
         category = button.dataset.category; pages[category] = 1;
@@ -444,8 +587,28 @@
     modal.addEventListener('click', event => {
         if (event.target === modal || event.target.closest('[data-close-user-modal]')) { closeModal(); return; }
         if (event.target.closest('#view-profile-photo')) {
-            const preview = modalContent.querySelector('#profile-photo-preview');
+            const preview = modalContent.querySelector('#profile-photo-image');
             openPhotoViewer(preview?.src || currentUser?.foto, currentUser?.nome || singular[category]);
+            return;
+        }
+        const colorButton = event.target.closest('[data-avatar-color]');
+        if (colorButton && !colorButton.disabled) {
+            const colorInput = modalContent.querySelector('[name="cor_avatar"]');
+            if (colorInput) colorInput.value = colorButton.dataset.avatarColor;
+            setupAvatarColorButtons();
+            updateModalAvatar();
+            return;
+        }
+        if (event.target.closest('#use-profile-initials')) {
+            const fileInput = modalContent.querySelector('#profile-photo-input');
+            fileInput.value = '';
+            modalContent.querySelector('#remove-profile-photo').value = currentUser?.foto ? '1' : '0';
+            const preview = modalContent.querySelector('#profile-photo-preview');
+            preview.dataset.hasPhoto = 'false';
+            modalContent.querySelector('#profile-avatar-color-options')?.classList.remove('hidden');
+            modalContent.querySelector('#use-profile-initials').classList.add('hidden');
+            modalContent.querySelector('#profile-photo-name').textContent = 'Usando iniciais';
+            updateModalAvatar();
             return;
         }
         if (event.target.closest('#change-profile-photo')) {
@@ -453,6 +616,7 @@
                 editing = true;
                 document.getElementById('modal-title').textContent = `Editar ${singular[category]}`;
                 modalContent.innerHTML = formMarkup(currentUser);
+                setupAvatarColorButtons();
             }
             modalContent.querySelector('#profile-photo-input').click();
             return;
@@ -464,7 +628,11 @@
             editing = true;
             document.getElementById('modal-title').textContent = `Editar ${singular[category]}`;
             modalContent.innerHTML = formMarkup(currentUser);
+            setupAvatarColorButtons();
         }
+    });
+    modalContent.addEventListener('input', event => {
+        if (event.target.matches('[name="first_name"], [name="last_name"], [name="nome"]')) updateModalAvatar();
     });
     modalContent.addEventListener('change', event => {
         if (event.target.id !== 'profile-photo-input' || !event.target.files.length) return;
@@ -477,10 +645,19 @@
             error.classList.remove('hidden'); event.target.value = ''; return;
         }
         error.classList.add('hidden');
-        const previewUrl = URL.createObjectURL(file);
-        const container = modalContent.querySelector('#profile-photo-container');
-        container.innerHTML = `<img id="profile-photo-preview" src="${previewUrl}" alt="Pré-visualização da foto de perfil" class="w-32 h-32 rounded-full object-cover">`;
+        modalContent.querySelector('#remove-profile-photo').value = '0';
+        const preview = modalContent.querySelector('#profile-photo-preview');
+        preview.dataset.hasPhoto = 'true';
+        preview.style.backgroundColor = 'transparent';
+        modalContent.querySelector('#profile-avatar-color-options')?.classList.add('hidden');
+        const useInitialsButton = modalContent.querySelector('#use-profile-initials');
+        useInitialsButton?.classList.remove('hidden');
+        if (useInitialsButton) useInitialsButton.disabled = false;
+        modalContent.querySelector('#profile-photo-name').textContent = file.name;
         modalContent.querySelector('#view-profile-photo').disabled = false;
+        const reader = new FileReader();
+        reader.onload = loadEvent => { preview.innerHTML = `<img id="profile-photo-image" src="${loadEvent.target.result}" alt="Pré-visualização da foto" class="h-full w-full object-cover">`; };
+        reader.readAsDataURL(file);
     });
     modalContent.addEventListener('submit', async event => {
         if (event.target.id !== 'user-form') return;
@@ -511,7 +688,10 @@
         document.getElementById('password-modal').classList.add('hidden');
         document.body.classList.remove('overflow-hidden');
         passwordTarget = null;
+        passwordForm.reset();
         resetPasswordVisibility();
+        updateResetPasswordStrength(true);
+        updateResetPasswordMatch();
     }
     function resetPasswordVisibility() {
         document.querySelectorAll('#password-form [data-toggle-password]').forEach(button => {
@@ -539,6 +719,10 @@
         const error = document.getElementById('password-error');
         const senha = form.elements.senha.value;
         const confirmar = form.elements.confirmar_senha.value;
+        if (!resetPasswordRules.every(rule => rule.test(senha))) {
+            updateResetPasswordStrength();
+            return;
+        }
         if (senha !== confirmar) { error.textContent = 'As senhas não coincidem.'; error.classList.remove('hidden'); return; }
         submit.disabled = true;
         try {
@@ -546,7 +730,7 @@
             closePasswordModal();
             if (window.Swal) Swal.fire({toast:true,position:'bottom-end',icon:'success',title:data.mensagem,showConfirmButton:false,timer:2500});
         } catch (err) { error.textContent = err.message; error.classList.remove('hidden'); }
-        finally { submit.disabled = false; }
+        finally { updateResetPasswordSubmit(); }
     });
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
