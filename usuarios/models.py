@@ -77,3 +77,26 @@ class Motorista(models.Model):
 
     def __str__(self):
         return f"Motorista: {self.usuario.first_name}"
+
+
+class RegistroAuditoria(models.Model):
+    usuario = models.ForeignKey(
+        Usuario, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='registros_auditoria',
+    )
+    usuario_email = models.EmailField(blank=True)
+    acao = models.CharField(max_length=150)
+    caminho = models.CharField(max_length=255)
+    metodo = models.CharField(max_length=10)
+    status_code = models.PositiveSmallIntegerField()
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=512, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-criado_em', '-pk']
+        verbose_name = 'registro de auditoria'
+        verbose_name_plural = 'registros de auditoria'
+
+    def __str__(self):
+        return f'{self.usuario_email or "Usuário removido"} — {self.acao}'

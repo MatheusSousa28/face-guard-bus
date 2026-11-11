@@ -13,6 +13,7 @@ urlpatterns = [
     path('painel/usuarios/', views.painel_usuarios_ativos, name='painel_usuarios'),
     path('painel/motoristas/novo/', views.cadastrar_motorista, name='cadastrar_motorista'),
     path('painel/usuarios/deletar/<str:tipo>/<int:obj_id>/', views.deletar_usuario, name='deletar_usuario'),
+    path('painel/auditoria/api/', views.api_auditoria, name='api_auditoria'),
     path('painel/usuarios/api/<str:tipo>/', views.api_usuarios, name='api_usuarios'),
     path('painel/usuarios/api/<str:tipo>/<int:obj_id>/senha/', views.api_redefinir_senha_usuario, name='api_redefinir_senha_usuario'),
     path('painel/usuarios/api/<str:tipo>/<int:obj_id>/', views.api_usuarios, name='api_usuario_detalhe'),

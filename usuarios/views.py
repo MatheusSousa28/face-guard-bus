@@ -3,7 +3,7 @@ from django.http import HttpResponseNotAllowed, JsonResponse
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import Usuario, Responsavel, Motorista
+from .models import Usuario, Instituicao, Responsavel, Motorista, RegistroAuditoria
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -375,7 +375,7 @@ def painel_usuarios_ativos(request):
     return render(request, 'usuarios/painel_usuarios.html')
 
 
-def _usuario_json(tipo, obj):
+def _usuario_json(tipo, obj, request=None):
     if tipo == 'aluno':
         foto = obj.foto_perfil
         dados = {'id': obj.pk, 'nome': obj.nome, 'idade': obj.idade,
@@ -384,6 +384,15 @@ def _usuario_json(tipo, obj):
                  'email': obj.responsavel.usuario.email,
                  'foto': foto.url if foto else '', 'aprovado': obj.is_aprovado,
                  'termo_consentimento': obj.termo_consentimento}
+    elif tipo == 'instituicao':
+        usuario = obj.usuario
+        foto = obj.foto_perfil
+        dados = {'id': obj.pk, 'first_name': usuario.first_name,
+                 'last_name': usuario.last_name, 'nome': usuario.get_full_name(),
+                 'email': usuario.email, 'foto': foto.url if foto else '',
+                 'aprovado': usuario.is_aprovado,
+                 'is_current_user': bool(request and usuario.pk == request.user.pk),
+                 'cor_avatar': obj.cor_avatar}
     else:
         usuario = obj.usuario
         foto = obj.foto_perfil
@@ -401,19 +410,37 @@ def api_usuarios(request, tipo, obj_id=None):
     """CRUD JSON usado pela tela institucional; mantém regras e dados no servidor."""
     if not hasattr(request.user, 'instituicao'):
         return JsonResponse({'erro': 'Acesso permitido apenas à instituição.'}, status=403)
-    if tipo not in {'aluno', 'motorista', 'responsavel'}:
+    if tipo not in {'aluno', 'motorista', 'responsavel', 'instituicao'}:
         return JsonResponse({'erro': 'Categoria inválida.'}, status=404)
-    model = {'aluno': Aluno, 'motorista': Motorista, 'responsavel': Responsavel}[tipo]
+    model = {'aluno': Aluno, 'motorista': Motorista, 'responsavel': Responsavel,
+             'instituicao': Instituicao}[tipo]
     qs = model.objects.all()
     if tipo == 'aluno':
         qs = qs.filter(is_aprovado=True).select_related('responsavel__usuario').order_by('nome')
+    elif tipo == 'instituicao':
+        qs = qs.filter(usuario__is_aprovado=True).select_related('usuario').order_by(
+            'usuario__first_name', 'usuario__last_name'
+        )
     else:
         qs = qs.filter(usuario__is_aprovado=True).select_related('usuario').order_by('usuario__first_name', 'usuario__last_name')
 
     if request.method == 'GET' and obj_id is None:
         termo = request.GET.get('q', '').strip()
         if termo:
-            condicao = Q(nome__icontains=termo) | Q(responsavel__usuario__first_name__icontains=termo) | Q(responsavel__usuario__last_name__icontains=termo) | Q(responsavel__usuario__email__icontains=termo) if tipo == 'aluno' else Q(usuario__first_name__icontains=termo) | Q(usuario__last_name__icontains=termo) | Q(usuario__email__icontains=termo) | Q(cpf__icontains=termo)
+            if tipo == 'aluno':
+                condicao = (Q(nome__icontains=termo)
+                            | Q(responsavel__usuario__first_name__icontains=termo)
+                            | Q(responsavel__usuario__last_name__icontains=termo)
+                            | Q(responsavel__usuario__email__icontains=termo))
+            elif tipo == 'instituicao':
+                condicao = (Q(usuario__first_name__icontains=termo)
+                            | Q(usuario__last_name__icontains=termo)
+                            | Q(usuario__email__icontains=termo))
+            else:
+                condicao = (Q(usuario__first_name__icontains=termo)
+                            | Q(usuario__last_name__icontains=termo)
+                            | Q(usuario__email__icontains=termo)
+                            | Q(cpf__icontains=termo))
             if termo.isdigit():
                 condicao |= Q(pk=int(termo))
             qs = qs.filter(condicao)
@@ -422,16 +449,18 @@ def api_usuarios(request, tipo, obj_id=None):
             page = paginator.page(request.GET.get('page', 1))
         except (EmptyPage, TypeError, ValueError):
             page = paginator.page(paginator.num_pages or 1)
-        return JsonResponse({'results': [_usuario_json(tipo, item) for item in page.object_list],
+        return JsonResponse({'results': [_usuario_json(tipo, item, request) for item in page.object_list],
                              'page': page.number, 'pages': paginator.num_pages,
                              'total': paginator.count})
     if request.method == 'GET' and obj_id is not None:
-        return JsonResponse(_usuario_json(tipo, get_object_or_404(qs, pk=obj_id)))
+        return JsonResponse(_usuario_json(tipo, get_object_or_404(qs, pk=obj_id), request))
     if request.method not in {'POST', 'DELETE'}:
         return HttpResponseNotAllowed(['GET', 'POST', 'DELETE'])
 
     if request.method == 'DELETE':
         item = get_object_or_404(qs, pk=obj_id)
+        if tipo == 'instituicao' and item.usuario_id == request.user.pk:
+            return JsonResponse({'erro': 'Não é possível excluir a própria conta institucional.'}, status=409)
         if tipo == 'responsavel' and item.alunos.exists():
             return JsonResponse({'erro': 'Não é possível excluir um responsável que ainda possui alunos vinculados.'}, status=409)
         if tipo == 'motorista':
@@ -444,7 +473,7 @@ def api_usuarios(request, tipo, obj_id=None):
                 return JsonResponse({'erro': 'Não é possível excluir este aluno porque há eventos de transporte associados.'}, status=409)
             if Rota.objects.filter(ativa=True, veiculo__alunos_autorizados=item).exists():
                 return JsonResponse({'erro': 'Não é possível excluir um aluno vinculado a uma rota ativa.'}, status=409)
-        if tipo in {'motorista', 'responsavel'}:
+        if tipo in {'motorista', 'responsavel', 'instituicao'}:
             item.usuario.delete()
         else:
             item.delete()
@@ -497,15 +526,17 @@ def api_usuarios(request, tipo, obj_id=None):
                 item.save()
             else:
                 email = data.get('email', '').strip().lower()
-                cpf = re.sub(r'\D', '', data.get('cpf', ''))
                 if not nome or not sobrenome or len(nome) > 150 or len(sobrenome) > 150:
                     return JsonResponse({'erro': 'Informe nome e sobrenome (até 150 caracteres).'}, status=400)
                 try:
                     validate_email(email)
                 except ValidationError:
                     return JsonResponse({'erro': 'Informe um e-mail válido.'}, status=400)
-                if len(cpf) != 11 or model.objects.filter(cpf=cpf).exclude(pk=None if criando else item.pk).exists():
-                    return JsonResponse({'erro': 'CPF inválido ou já cadastrado.'}, status=400)
+                cpf = ''
+                if tipo != 'instituicao':
+                    cpf = re.sub(r'\D', '', data.get('cpf', ''))
+                    if len(cpf) != 11 or model.objects.filter(cpf=cpf).exclude(pk=None if criando else item.pk).exists():
+                        return JsonResponse({'erro': 'CPF inválido ou já cadastrado.'}, status=400)
                 usuario_atual = None if criando else item.usuario
                 if Usuario.objects.filter(email=email).exclude(pk=None if criando else usuario_atual.pk).exists():
                     return JsonResponse({'erro': 'Este e-mail já está cadastrado.'}, status=400)
@@ -515,16 +546,19 @@ def api_usuarios(request, tipo, obj_id=None):
                         return JsonResponse({'erro': 'Senha forte e foto de perfil são obrigatórias.'}, status=400)
                     usuario = Usuario.objects.create_user(username=email, email=email, password=senha,
                         first_name=nome, last_name=sobrenome, is_aprovado=True)
-                    item = model(usuario=usuario, cpf=cpf, foto_perfil=foto)
+                    item = (Instituicao(usuario=usuario, foto_perfil=foto)
+                            if tipo == 'instituicao'
+                            else model(usuario=usuario, cpf=cpf, foto_perfil=foto))
                 else:
                     usuario = item.usuario
                     usuario.first_name, usuario.last_name, usuario.email, usuario.username = nome, sobrenome, email, email
                     usuario.save()
-                    item.cpf = cpf
+                    if tipo != 'instituicao':
+                        item.cpf = cpf
                     if foto:
                         item.foto_perfil = foto
                 item.save()
-        return JsonResponse({'mensagem': 'Cadastro salvo com sucesso.', 'item': _usuario_json(tipo, item)}, status=201 if criando else 200)
+        return JsonResponse({'mensagem': 'Cadastro salvo com sucesso.', 'item': _usuario_json(tipo, item, request)}, status=201 if criando else 200)
     except Exception as exc:
         if str(exc) and exc.__class__.__name__ in {'IntegrityError', 'ValidationError'}:
             return JsonResponse({'erro': 'Não foi possível salvar. Verifique se e-mail e CPF são únicos.'}, status=400)
@@ -537,7 +571,7 @@ def api_redefinir_senha_usuario(request, tipo, obj_id):
         return JsonResponse({'erro': 'Acesso permitido apenas à instituição.'}, status=403)
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
-    if tipo not in {'motorista', 'responsavel'}:
+    if tipo not in {'motorista', 'responsavel', 'instituicao'}:
         return JsonResponse({'erro': 'A redefinição de senha não está disponível para esta categoria.'}, status=400)
     usuario = get_object_or_404(Usuario, **{
         'is_aprovado': True,
@@ -552,6 +586,49 @@ def api_redefinir_senha_usuario(request, tipo, obj_id):
     usuario.set_password(senha)
     usuario.save(update_fields=['password'])
     return JsonResponse({'mensagem': 'Senha redefinida com sucesso.'})
+
+
+@login_required(login_url='login')
+def api_auditoria(request):
+    if not hasattr(request.user, 'instituicao'):
+        return JsonResponse({'erro': 'Acesso permitido apenas à instituição.'}, status=403)
+    if request.method != 'GET':
+        return HttpResponseNotAllowed(['GET'])
+    registros = RegistroAuditoria.objects.select_related('usuario').all()
+    termo = request.GET.get('q', '').strip()
+    if termo:
+        registros = registros.filter(
+            Q(usuario_email__icontains=termo)
+            | Q(usuario__first_name__icontains=termo)
+            | Q(usuario__last_name__icontains=termo)
+            | Q(acao__icontains=termo)
+            | Q(caminho__icontains=termo)
+        )
+    paginator = Paginator(registros, 20)
+    try:
+        page = paginator.page(request.GET.get('page', 1))
+    except (EmptyPage, TypeError, ValueError):
+        page = paginator.page(paginator.num_pages or 1)
+    results = []
+    for registro in page.object_list:
+        nome = registro.usuario.get_full_name() if registro.usuario else ''
+        results.append({
+            'id': registro.pk,
+            'usuario': nome or registro.usuario_email or 'Usuário removido',
+            'email': registro.usuario_email,
+            'acao': registro.acao,
+            'caminho': registro.caminho,
+            'metodo': registro.metodo,
+            'status_code': registro.status_code,
+            'ip': registro.ip or '',
+            'criado_em': registro.criado_em.isoformat(),
+        })
+    return JsonResponse({
+        'results': results,
+        'page': page.number,
+        'pages': paginator.num_pages,
+        'total': paginator.count,
+    })
 
 @login_required(login_url='login')
 def cadastrar_motorista(request):

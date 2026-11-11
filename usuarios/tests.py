@@ -1,6 +1,7 @@
 import io
 import base64
 import json
+import re
 import tempfile
 from urllib.parse import urlencode
 from unittest.mock import patch
@@ -12,7 +13,7 @@ from django.urls import reverse
 from PIL import Image
 
 from alunos.models import Aluno
-from usuarios.models import Instituicao, Motorista, Responsavel
+from usuarios.models import Instituicao, Motorista, Responsavel, RegistroAuditoria
 
 
 Usuario = get_user_model()
@@ -278,7 +279,7 @@ class GerenciamentoUsuariosTests(TestCase):
             username='escola.api@test.local', email='escola.api@test.local', password='SenhaForte123!',
             first_name='Escola', last_name='API', is_aprovado=True,
         )
-        Instituicao.objects.create(usuario=cls.instituicao_usuario)
+        cls.instituicao = Instituicao.objects.create(usuario=cls.instituicao_usuario)
         cls.responsavel_usuario = Usuario.objects.create_user(
             username='resp.api@test.local', email='resp.api@test.local', password='SenhaForte123!',
             first_name='Responsável', last_name='API', is_aprovado=True,
@@ -298,6 +299,90 @@ class GerenciamentoUsuariosTests(TestCase):
     def api(self, tipo, obj_id=None):
         suffix = f'{tipo}/{obj_id}/' if obj_id else f'{tipo}/'
         return reverse('api_usuarios', kwargs={'tipo': tipo}) if obj_id is None else reverse('api_usuario_detalhe', kwargs={'tipo': tipo, 'obj_id': obj_id})
+
+    def test_painel_oferece_categoria_instituicao_auditoria_e_olhos_no_reset(self):
+        response = self.client.get(reverse('painel_usuarios'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-category="instituicao"')
+        self.assertContains(response, 'data-category="auditoria"')
+        html = response.content.decode()
+        password_form = re.search(r'<form id="password-form".*?</form>', html, re.DOTALL)
+        self.assertIsNotNone(password_form)
+        self.assertEqual(password_form.group(0).count('data-toggle-password'), 2)
+        self.assertEqual(password_form.group(0).count('aria-label="Mostrar senha"'), 2)
+
+    def test_api_lista_e_pesquisa_perfis_institucionais(self):
+        outro_usuario = Usuario.objects.create_user(
+            username='secretaria@example.test', email='secretaria@example.test',
+            password='SenhaForte123!', first_name='Maria', last_name='Secretaria',
+            is_aprovado=True,
+        )
+        perfil = Instituicao.objects.create(usuario=outro_usuario)
+
+        response = self.client.get(self.api('instituicao'), {'q': 'Maria'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['total'], 1)
+        self.assertEqual(response.json()['results'][0]['id'], perfil.pk)
+        self.assertFalse(response.json()['results'][0]['is_current_user'])
+
+    def test_api_cria_edita_e_exclui_perfil_institucional(self):
+        payload = {
+            'first_name': 'Ana', 'last_name': 'Secretaria',
+            'email': 'ana.secretaria@example.test', 'senha': 'SenhaForte123!',
+            'foto_perfil': self.imagem_png('ana.png'),
+        }
+        created = self.client.post(self.api('instituicao'), payload)
+        self.assertEqual(created.status_code, 201, created.content)
+        conta = Instituicao.objects.get(usuario__email='ana.secretaria@example.test')
+        self.assertTrue(conta.usuario.check_password('SenhaForte123!'))
+        self.assertTrue(conta.usuario.is_aprovado)
+
+        updated = self.client.post(self.api('instituicao', conta.pk), {
+            'first_name': 'Ana Atualizada', 'last_name': 'Secretaria',
+            'email': 'ana.secretaria@example.test',
+        })
+        self.assertEqual(updated.status_code, 200, updated.content)
+        conta.usuario.refresh_from_db()
+        self.assertEqual(conta.usuario.first_name, 'Ana Atualizada')
+
+        deleted = self.client.delete(self.api('instituicao', conta.pk))
+        self.assertEqual(deleted.status_code, 200)
+        self.assertFalse(Instituicao.objects.filter(pk=conta.pk).exists())
+
+    def test_api_nao_permite_excluir_a_propria_conta_institucional(self):
+        response = self.client.delete(self.api('instituicao', self.instituicao.pk))
+
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(Instituicao.objects.filter(pk=self.instituicao.pk).exists())
+
+    def test_redefinicao_de_senha_institucional(self):
+        response = self.client.post(reverse('api_redefinir_senha_usuario', kwargs={
+            'tipo': 'instituicao', 'obj_id': self.instituicao.pk,
+        }), {'senha': 'NovaSenha123!', 'confirmar_senha': 'NovaSenha123!'})
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.instituicao_usuario.refresh_from_db()
+        self.assertTrue(self.instituicao_usuario.check_password('NovaSenha123!'))
+
+    def test_auditoria_registra_acao_e_api_lista_historico(self):
+        response = self.client.post(self.api('instituicao'), {
+            'first_name': 'Ana', 'last_name': 'Secretaria',
+            'email': 'auditada@example.test', 'senha': 'SenhaForte123!',
+            'foto_perfil': self.imagem_png('auditada.png'),
+        })
+
+        self.assertEqual(response.status_code, 201)
+        log = RegistroAuditoria.objects.filter(usuario=self.instituicao_usuario).latest('pk')
+        self.assertEqual(log.acao, 'Criou um perfil de usuário')
+        self.assertEqual(log.metodo, 'POST')
+        self.assertEqual(log.status_code, 201)
+
+        historico = self.client.get(reverse('api_auditoria'), {'q': 'perfil de usuário'})
+        self.assertEqual(historico.status_code, 200)
+        self.assertEqual(historico.json()['total'], 1)
+        self.assertEqual(historico.json()['results'][0]['email'], self.instituicao_usuario.email)
 
     def test_painel_carrega_vazio_e_api_pagina_por_categoria(self):
         aluno = Aluno.objects.create(nome='Lia', idade=8, responsavel=self.responsavel,
