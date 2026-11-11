@@ -169,6 +169,7 @@ class TransporteFluxosTests(TestCase):
         self.assertNotContains(response, 'Resumo do monitoramento')
         self.assertNotContains(response, 'Rotas com GPS atualizado')
 
+    @override_settings(CARTO_API_KEY='cartotestkey')
     def test_tela_de_mapa_mostra_resumo_institucional_abaixo_do_mapa(self):
         self.client.force_login(self.instituicao_usuario)
 
@@ -178,8 +179,33 @@ class TransporteFluxosTests(TestCase):
         html = response.content.decode()
         self.assertLess(html.index('id="mapa-frota"'), html.index('Resumo do monitoramento'))
         self.assertContains(response, 'Acompanhamento da frota')
+        self.assertContains(response, 'id="painel-acompanhamento"')
+        self.assertContains(response, 'Mostrar mapa e informações')
+        self.assertContains(response, "const cartoApiKey = 'cartotestkey';")
         self.assertContains(response, 'basemaps.cartocdn.com')
         self.assertNotContains(response, 'tile.openstreetmap.org')
+
+    def test_interrupcoes_sao_exibidas_em_carrossel_navegavel(self):
+        primeira = self.criar_rota()
+        primeira.interrompida = True
+        primeira.interrompida_em = timezone.now()
+        primeira.save(update_fields=['interrompida', 'interrompida_em'])
+        segundo_veiculo = Veiculo.objects.create(
+            modelo='Ônibus de teste', capacidade=30, placa='DEF5678', cor='Azul',
+        )
+        Rota.objects.create(
+            veiculo=segundo_veiculo, motorista=self.motorista, inicio=timezone.now(),
+            ativa=False, interrompida=True, interrompida_em=timezone.now(),
+        )
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.get(reverse('mapa_unificado'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'aria-roledescription="carrossel"')
+        self.assertContains(response, 'id="interrupcao-anterior"')
+        self.assertContains(response, 'id="proxima-interrupcao"')
+        self.assertEqual(response.content.decode().count('class="interrupcao-slide'), 2)
 
     def test_mapa_sem_rota_selecionada_mostra_todos_os_onibus_ativos(self):
         rota_1 = self.criar_rota()

@@ -153,7 +153,16 @@
                     <p id="password-match-error" class="hidden mt-1 text-xs font-medium text-red-600" aria-live="polite"></p>
                 </div>
             </div>
-            <p class="text-xs text-gray-500">A senha deve ter min 8 caracteres, maiúsculas, minúsculas, números e 1 símbolo.</p>
+            <div id="password-rules" class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+                <p class="mb-2 font-semibold">Regras da senha — os itens são atualizados enquanto você digita:</p>
+                <ul class="space-y-1 text-xs" aria-live="polite">
+                    <li data-password-rule="length" aria-label="Regra de comprimento">• Falta: pelo menos 8 caracteres.</li>
+                    <li data-password-rule="lowercase" aria-label="Regra de letra minúscula">• Falta: uma letra minúscula.</li>
+                    <li data-password-rule="uppercase" aria-label="Regra de letra maiúscula">• Falta: uma letra maiúscula.</li>
+                    <li data-password-rule="number" aria-label="Regra de número">• Falta: um número.</li>
+                    <li data-password-rule="symbol" aria-label="Regra de símbolo">• Falta: um símbolo.</li>
+                </ul>
+            </div>
                     
             <button type="submit" disabled
                     class="submit-button w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded transition duration-200 mt-4 disabled:cursor-not-allowed disabled:opacity-50">
@@ -255,8 +264,34 @@
         const firstNameError = document.getElementById('first-name-error');
         const lastNameError = document.getElementById('last-name-error');
         const passwordMatchError = document.getElementById('password-match-error');
+        const passwordRulesBox = document.getElementById('password-rules');
+        const passwordRules = [
+            {name: 'length', label: 'pelo menos 8 caracteres', test: value => value.length >= 8},
+            {name: 'lowercase', label: 'uma letra minúscula', test: value => /[a-z]/.test(value)},
+            {name: 'uppercase', label: 'uma letra maiúscula', test: value => /[A-Z]/.test(value)},
+            {name: 'number', label: 'um número', test: value => /\d/.test(value)},
+            {name: 'symbol', label: 'um símbolo', test: value => /[^A-Za-z\d]/.test(value)},
+        ];
+        const updatePasswordRules = () => {
+            const password = registrationPassword.value;
+            let allRulesMet = true;
+            passwordRules.forEach(rule => {
+                const met = rule.test(password);
+                allRulesMet = allRulesMet && met;
+                const item = passwordRulesBox.querySelector(`[data-password-rule="${rule.name}"]`);
+                item.textContent = met ? `✓ Atendido: ${rule.label}.` : `• Falta: ${rule.label}.`;
+                item.className = met ? 'text-green-800 font-semibold' : (password ? 'text-red-700 font-semibold' : 'text-amber-950');
+            });
+            passwordRulesBox.classList.toggle('border-green-400', allRulesMet);
+            passwordRulesBox.classList.toggle('bg-green-50', allRulesMet);
+            passwordRulesBox.classList.toggle('text-green-950', allRulesMet);
+            passwordRulesBox.classList.toggle('border-amber-300', !allRulesMet);
+            passwordRulesBox.classList.toggle('bg-amber-50', !allRulesMet);
+            passwordRulesBox.classList.toggle('text-amber-950', !allRulesMet);
+            return allRulesMet;
+        };
         const updateRegistrationButton = () => {
-            const passwordValid = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/.test(registrationPassword.value);
+            const passwordValid = updatePasswordRules() && registrationPassword.value.length <= 128;
             const passwordsMatch = registrationPassword.value === registrationConfirm.value;
             const updateFieldError = (input, error, message) => {
                 const invalid = (input.dataset.touched === 'true' || input.value.length > 0) && input.value.trim().length < 2;

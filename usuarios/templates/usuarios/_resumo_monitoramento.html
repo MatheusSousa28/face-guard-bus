@@ -66,11 +66,11 @@
                     </div>
                 </div>
 
-                <div class="bg-white border rounded-xl p-5">
+                <div class="lg:col-span-2 bg-white border rounded-xl p-5">
                     <h4 class="font-bold text-gray-900 mb-3">Interrupções recentes e revisão</h4>
-                    <div class="space-y-4">
+                    <div id="carrossel-interrupcoes" class="relative" role="group" aria-roledescription="carrossel" aria-label="Interrupções recentes">
                         {% for item in rotas_interrompidas %}
-                        <div class="border-b last:border-0 pb-4 last:pb-0">
+                        <article class="interrupcao-slide rounded-lg border border-gray-200 bg-gray-50 p-4" role="group" aria-roledescription="slide" aria-label="Interrupção {{ forloop.counter }} de {{ forloop.revcounter }}" {% if not forloop.first %}hidden{% endif %}>
                             <p class="font-semibold">{{ item.rota.veiculo.placa|default:'Veículo não informado' }} · {{ item.rota.veiculo.modelo|default:'Veículo indisponível' }}</p>
                             <p class="text-sm text-gray-600">Motorista: {{ item.rota.motorista.usuario.first_name|default:'Não informado' }} · {{ item.alunos_abordo }} aluno(s) registrado(s) a bordo</p>
                             {% if item.ultima_localizacao %}
@@ -96,9 +96,16 @@
                             {% else %}
                                 <p class="mt-2 text-sm font-semibold text-gray-600">Encerrada automaticamente por falta de GPS, sem alunos registrados a bordo.</p>
                             {% endif %}
-                        </div>
+                        </article>
                         {% empty %}<p class="text-sm text-gray-500">Nenhuma interrupção registrada.</p>{% endfor %}
                     </div>
+                    {% if rotas_interrompidas|length > 1 %}
+                    <div class="mt-4 flex items-center justify-between gap-3" aria-label="Navegação das interrupções">
+                        <button type="button" id="interrupcao-anterior" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Interrupção anterior">Anterior</button>
+                        <p id="posicao-interrupcao" class="text-sm font-medium text-gray-600" aria-live="polite">1 de {{ rotas_interrompidas|length }}</p>
+                        <button type="button" id="proxima-interrupcao" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Próxima interrupção">Próxima</button>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </section>

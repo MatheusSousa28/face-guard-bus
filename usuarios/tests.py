@@ -52,6 +52,15 @@ class FluxosCadastroTests(TestCase):
         Image.new('RGB', (32, 32), color='blue').save(buffer, format='PNG')
         return SimpleUploadedFile(nome, buffer.getvalue(), content_type='image/png')
 
+    def test_cadastro_exibe_requisitos_de_senha_para_validacao_dinamica(self):
+        response = self.client.get(reverse('cadastro'))
+
+        self.assertEqual(response.status_code, 200)
+        for regra in ('length', 'lowercase', 'uppercase', 'number', 'symbol'):
+            self.assertContains(response, f'data-password-rule="{regra}"')
+        self.assertContains(response, 'updatePasswordRules')
+        self.assertContains(response, 'Falta: uma letra maiúscula.')
+
     def test_responsavel_cadastrado_fica_pendente_e_senha_tem_hash(self):
         response = self.client.post(reverse('cadastro'), {
             'first_name': 'Ana', 'last_name': 'Silva', 'email': ' ANA@example.test ',

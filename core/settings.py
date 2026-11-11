@@ -81,6 +81,7 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
+CARTO_API_KEY = os.environ.get("CARTO_API_KEY", "")
 
 if SUPABASE_URL:
     DATABASES = {

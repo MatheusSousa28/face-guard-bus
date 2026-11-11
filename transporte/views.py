@@ -1,4 +1,5 @@
 import json
+from django.conf import settings
 from django.shortcuts import redirect, render, get_object_or_404
 from django.http import HttpResponseNotAllowed, JsonResponse
 from django.utils import timezone
@@ -497,6 +498,7 @@ def tela_mapa_unificado(request):
     contexto = {}
     if hasattr(request.user, 'instituicao') or request.user.is_superuser:
         contexto = obter_contexto_monitoramento()
+    contexto['carto_api_key'] = settings.CARTO_API_KEY
     return render(request, 'transporte/mapa_unificado.html', contexto)
 
 @login_required(login_url='login')
