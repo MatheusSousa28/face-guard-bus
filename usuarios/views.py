@@ -211,7 +211,7 @@ def painel_home(request):
         return render(request, 'usuarios/home_motorista.html', contexto)
 
     elif hasattr(usuario, 'responsavel'):
-        meus_alunos = Aluno.objects.filter(responsavel=usuario.responsavel)
+        meus_alunos = Aluno.objects.filter(responsavel=usuario.responsavel, deleted_at__isnull=True)
         
         contexto = {
             'alunos': meus_alunos
@@ -309,9 +309,9 @@ def painel_instituicao_aprovacoes(request):
         return redirect('home')
 
     # Busca todo mundo que o is_aprovado é False
-    responsaveis = Responsavel.objects.filter(usuario__is_aprovado=False)
-    motoristas = Motorista.objects.filter(usuario__is_aprovado=False)
-    alunos = Aluno.objects.filter(is_aprovado=False)
+    responsaveis = Responsavel.objects.filter(usuario__is_aprovado=False, deleted_at__isnull=True)
+    motoristas = Motorista.objects.filter(usuario__is_aprovado=False, deleted_at__isnull=True)
+    alunos = Aluno.objects.filter(is_aprovado=False, deleted_at__isnull=True)
 
     contexto = {
         'responsaveis_pendentes': responsaveis,
@@ -402,6 +402,7 @@ def _usuario_json(tipo, obj, request=None):
                  'foto': foto.url if foto else '', 'aprovado': usuario.is_aprovado}
         if hasattr(obj, 'cor_avatar'):
             dados['cor_avatar'] = obj.cor_avatar
+    dados['deleted_at'] = obj.deleted_at.isoformat() if obj.deleted_at else None
     return dados
 
 
@@ -414,15 +415,16 @@ def api_usuarios(request, tipo, obj_id=None):
         return JsonResponse({'erro': 'Categoria inválida.'}, status=404)
     model = {'aluno': Aluno, 'motorista': Motorista, 'responsavel': Responsavel,
              'instituicao': Instituicao}[tipo]
+    excluidos = request.GET.get('deleted') == '1'
     qs = model.objects.all()
     if tipo == 'aluno':
-        qs = qs.filter(is_aprovado=True).select_related('responsavel__usuario').order_by('nome')
+        qs = qs.filter(is_aprovado=True, deleted_at__isnull=not excluidos).select_related('responsavel__usuario').order_by('nome')
     elif tipo == 'instituicao':
-        qs = qs.filter(usuario__is_aprovado=True).select_related('usuario').order_by(
+        qs = qs.filter(usuario__is_aprovado=True, deleted_at__isnull=not excluidos).select_related('usuario').order_by(
             'usuario__first_name', 'usuario__last_name'
         )
     else:
-        qs = qs.filter(usuario__is_aprovado=True).select_related('usuario').order_by('usuario__first_name', 'usuario__last_name')
+        qs = qs.filter(usuario__is_aprovado=True, deleted_at__isnull=not excluidos).select_related('usuario').order_by('usuario__first_name', 'usuario__last_name')
 
     if request.method == 'GET' and obj_id is None:
         termo = request.GET.get('q', '').strip()
@@ -461,23 +463,20 @@ def api_usuarios(request, tipo, obj_id=None):
         item = get_object_or_404(qs, pk=obj_id)
         if tipo == 'instituicao' and item.usuario_id == request.user.pk:
             return JsonResponse({'erro': 'Não é possível excluir a própria conta institucional.'}, status=409)
-        if tipo == 'responsavel' and item.alunos.exists():
-            return JsonResponse({'erro': 'Não é possível excluir um responsável que ainda possui alunos vinculados.'}, status=409)
         if tipo == 'motorista':
             from transporte.models import Rota
             if Rota.objects.filter(motorista=item, ativa=True).exists():
                 return JsonResponse({'erro': 'Não é possível excluir um motorista com rota ativa.'}, status=409)
         if tipo == 'aluno':
             from transporte.models import Rota
-            if item.eventos.exists():
-                return JsonResponse({'erro': 'Não é possível excluir este aluno porque há eventos de transporte associados.'}, status=409)
             if Rota.objects.filter(ativa=True, veiculo__alunos_autorizados=item).exists():
                 return JsonResponse({'erro': 'Não é possível excluir um aluno vinculado a uma rota ativa.'}, status=409)
+        item.deleted_at = timezone.now()
+        item.save(update_fields=['deleted_at'])
         if tipo in {'motorista', 'responsavel', 'instituicao'}:
-            item.usuario.delete()
-        else:
-            item.delete()
-        return JsonResponse({'mensagem': 'Usuário excluído com sucesso.'})
+            item.usuario.is_active = False
+            item.usuario.save(update_fields=['is_active'])
+        return JsonResponse({'mensagem': 'Usuário movido para excluídos com sucesso.'})
 
     criando = obj_id is None
     if not criando:
@@ -573,6 +572,28 @@ def api_usuarios(request, tipo, obj_id=None):
 
 
 @login_required(login_url='login')
+def api_restaurar_usuario(request, tipo, obj_id):
+    if not hasattr(request.user, 'instituicao'):
+        return JsonResponse({'erro': 'Acesso permitido apenas à instituição.'}, status=403)
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    modelos = {'aluno': Aluno, 'motorista': Motorista, 'responsavel': Responsavel,
+               'instituicao': Instituicao}
+    model = modelos.get(tipo)
+    if model is None:
+        return JsonResponse({'erro': 'Categoria inválida.'}, status=404)
+    item = get_object_or_404(model, pk=obj_id, deleted_at__isnull=False)
+    with transaction.atomic():
+        item.deleted_at = None
+        item.save(update_fields=['deleted_at'])
+        if tipo != 'aluno':
+            usuario = item.usuario
+            usuario.is_active = True
+            usuario.save(update_fields=['is_active'])
+    return JsonResponse({'mensagem': 'Usuário restaurado com sucesso.'})
+
+
+@login_required(login_url='login')
 def api_redefinir_senha_usuario(request, tipo, obj_id):
     if not hasattr(request.user, 'instituicao'):
         return JsonResponse({'erro': 'Acesso permitido apenas à instituição.'}, status=403)
@@ -582,6 +603,8 @@ def api_redefinir_senha_usuario(request, tipo, obj_id):
         return JsonResponse({'erro': 'A redefinição de senha não está disponível para esta categoria.'}, status=400)
     usuario = get_object_or_404(Usuario, **{
         'is_aprovado': True,
+        'is_active': True,
+        f'{tipo}__deleted_at__isnull': True,
         f'{tipo}__pk': obj_id,
     })
     senha = request.POST.get('senha', '')
@@ -701,12 +724,20 @@ def deletar_usuario(request, tipo, obj_id):
     if not hasattr(request.user, 'instituicao'):
         return redirect('home')
 
-    if tipo == 'responsavel':
-        get_object_or_404(Responsavel, id=obj_id).usuario.delete()
-    elif tipo == 'motorista':
-        get_object_or_404(Motorista, id=obj_id).usuario.delete()
-    elif tipo == 'aluno':
-        get_object_or_404(Aluno, id=obj_id).delete()
+    modelos = {'responsavel': Responsavel, 'motorista': Motorista,
+               'aluno': Aluno, 'instituicao': Instituicao}
+    model = modelos.get(tipo)
+    if model is None:
+        return redirect('painel_usuarios')
+    perfil = get_object_or_404(model, pk=obj_id, deleted_at__isnull=True)
+    if tipo == 'instituicao' and perfil.usuario_id == request.user.pk:
+        messages.error(request, 'Não é possível excluir a própria conta institucional.')
+        return redirect('painel_usuarios')
+    perfil.deleted_at = timezone.now()
+    perfil.save(update_fields=['deleted_at'])
+    if tipo != 'aluno':
+        perfil.usuario.is_active = False
+        perfil.usuario.save(update_fields=['is_active'])
 
-    messages.error(request, f"Usuário excluído com sucesso.")
+    messages.success(request, 'Usuário movido para excluídos com sucesso.')
     return redirect('painel_usuarios')

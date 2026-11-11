@@ -259,7 +259,7 @@ def api_reconhecimento(request):
         }, status=400)
 
     encoding_atual = encodings_capturados[0]
-    alunos_autorizados = rota_ativa.veiculo.alunos_autorizados.filter(is_aprovado=True)
+    alunos_autorizados = rota_ativa.veiculo.alunos_autorizados.filter(is_aprovado=True, deleted_at__isnull=True)
     aluno_reconhecido = None
     for aluno in alunos_autorizados:
         if not aluno.dados_faciais:
@@ -286,7 +286,7 @@ def api_reconhecimento(request):
             return JsonResponse({'status': 'erro', 'mensagem': 'A rota foi encerrada durante a captura.'}, status=409)
 
         if aluno_reconhecido and not rota_ativa.veiculo.alunos_autorizados.filter(
-            pk=aluno_reconhecido.pk, is_aprovado=True,
+            pk=aluno_reconhecido.pk, is_aprovado=True, deleted_at__isnull=True,
         ).exists():
             aluno_reconhecido = None
 
@@ -514,8 +514,8 @@ def gerenciar_veiculo(request, id=None):
         return redirect('home')
     
     veiculo = get_object_or_404(Veiculo, id=id) if id else None
-    motoristas = Motorista.objects.filter(usuario__is_aprovado=True)
-    alunos = Aluno.objects.filter(is_aprovado=True).select_related('responsavel__usuario')
+    motoristas = Motorista.objects.filter(usuario__is_aprovado=True, usuario__is_active=True, deleted_at__isnull=True)
+    alunos = Aluno.objects.filter(is_aprovado=True, deleted_at__isnull=True).select_related('responsavel__usuario')
 
     if request.method == 'POST':
         modelo = request.POST.get('modelo', '').strip()

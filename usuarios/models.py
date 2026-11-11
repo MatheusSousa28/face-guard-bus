@@ -49,6 +49,7 @@ class Instituicao(models.Model):
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE)
     foto_perfil = models.ImageField(upload_to=renomear_foto_instituicao, null=True, blank=True)
     cor_avatar = models.CharField(max_length=7, choices=CORES_AVATAR, default='#334155')
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
     
     class Meta:
         verbose_name_plural = "Instituições"
@@ -62,6 +63,7 @@ class Responsavel(models.Model):
     cpf = models.CharField(max_length=11, unique=True)
     foto_perfil = models.ImageField(upload_to=renomear_foto_responsavel, null=True, blank=True)
     cor_avatar = models.CharField(max_length=7, choices=CORES_AVATAR, default='#1d4ed8')
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         verbose_name_plural = "Responsáveis"
@@ -74,6 +76,7 @@ class Motorista(models.Model):
     cpf = models.CharField(max_length=11, unique=True)
     foto_perfil = models.ImageField(upload_to=renomear_foto_motorista, null=True, blank=True)
     cor_avatar = models.CharField(max_length=7, choices=CORES_AVATAR, default='#334155')
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     def __str__(self):
         return f"Motorista: {self.usuario.first_name}"

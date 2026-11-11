@@ -13,6 +13,7 @@ class Aluno(models.Model):
     #campo de aprovação de cadastro pela instituição
     is_aprovado = models.BooleanField(default=False)
     termo_consentimento = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     def __str__(self):
         return f"{self.nome} (resp: {self.responsavel.usuario.first_name})"

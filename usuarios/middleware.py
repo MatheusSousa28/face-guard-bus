@@ -14,6 +14,8 @@ class AuditoriaMiddleware:
         'aprovar_cadastro': 'Aprovou um cadastro',
         'reprovar_cadastro': 'Reprovou um cadastro',
         'api_redefinir_senha_usuario': 'Redefiniu a senha de uma conta',
+        'api_restaurar_usuario': 'Restaurou um perfil de usuário',
+        'deletar_usuario': 'Excluiu um perfil de usuário',
         'iniciar_rota': 'Iniciou uma rota',
         'finalizar_rota': 'Finalizou uma rota',
         'resolver_rota_interrompida': 'Revisou uma rota interrompida',

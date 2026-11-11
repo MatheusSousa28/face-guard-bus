@@ -24,7 +24,10 @@ class Command(BaseCommand):
         veiculos = list(
             Veiculo.objects.filter(
                 motoristas_autorizados__usuario__is_aprovado=True,
+                motoristas_autorizados__usuario__is_active=True,
+                motoristas_autorizados__deleted_at__isnull=True,
                 alunos_autorizados__is_aprovado=True,
+                alunos_autorizados__deleted_at__isnull=True,
             ).distinct().prefetch_related('motoristas_autorizados', 'alunos_autorizados')
         )
         if not veiculos:
@@ -50,8 +53,8 @@ class Command(BaseCommand):
         criadas = []
         for indice in range(quantidade):
             veiculo = veiculos[indice % len(veiculos)]
-            motoristas = [m for m in veiculo.motoristas_autorizados.all() if m.usuario.is_aprovado]
-            alunos = [a for a in veiculo.alunos_autorizados.all() if a.is_aprovado]
+            motoristas = [m for m in veiculo.motoristas_autorizados.all() if m.usuario.is_aprovado and m.usuario.is_active and not m.deleted_at]
+            alunos = [a for a in veiculo.alunos_autorizados.all() if a.is_aprovado and not a.deleted_at]
             if not motoristas or not alunos:
                 continue
 

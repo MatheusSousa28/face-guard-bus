@@ -316,6 +316,8 @@ class GerenciamentoUsuariosTests(TestCase):
         self.assertContains(response, 'id="reset-password-strength"')
         self.assertContains(response, '✔ Senha forte')
         self.assertContains(response, 'data-avatar-color="#1d4ed8"')
+        self.assertContains(response, 'id="toggle-deleted-users"')
+        self.assertContains(response, 'aria-pressed="false" class="rounded-lg bg-blue-600')
 
     def test_cadastro_exibe_regras_de_senha_em_estados_vermelho_e_verde(self):
         response = self.client.get(reverse('cadastro'))
@@ -369,13 +371,63 @@ class GerenciamentoUsuariosTests(TestCase):
 
         deleted = self.client.delete(self.api('instituicao', conta.pk))
         self.assertEqual(deleted.status_code, 200)
-        self.assertFalse(Instituicao.objects.filter(pk=conta.pk).exists())
+        conta.refresh_from_db()
+        self.assertIsNotNone(conta.deleted_at)
+        self.assertFalse(conta.usuario.is_active)
 
     def test_api_nao_permite_excluir_a_propria_conta_institucional(self):
         response = self.client.delete(self.api('instituicao', self.instituicao.pk))
 
         self.assertEqual(response.status_code, 409)
         self.assertTrue(Instituicao.objects.filter(pk=self.instituicao.pk).exists())
+
+    def test_excluidos_sao_listados_com_data_e_restaurados_por_categoria(self):
+        responsavel_usuario = Usuario.objects.create_user(
+            username='arquivado.resp@example.test', email='arquivado.resp@example.test',
+            password='SenhaForte123!', first_name='Rita', last_name='Arquivo', is_aprovado=True,
+        )
+        responsavel = Responsavel.objects.create(usuario=responsavel_usuario, cpf='12345678931')
+        aluno = Aluno.objects.create(
+            nome='Aluno Arquivado', idade=9, responsavel=responsavel,
+            foto_perfil='perfil_alunos/arquivado.png', is_aprovado=True,
+        )
+        motorista_usuario = Usuario.objects.create_user(
+            username='arquivado.mot@example.test', email='arquivado.mot@example.test',
+            password='SenhaForte123!', first_name='Mário', last_name='Arquivo', is_aprovado=True,
+        )
+        motorista = Motorista.objects.create(usuario=motorista_usuario, cpf='12345678932')
+        instituicao_usuario = Usuario.objects.create_user(
+            username='arquivado.inst@example.test', email='arquivado.inst@example.test',
+            password='SenhaForte123!', first_name='Inês', last_name='Arquivo', is_aprovado=True,
+        )
+        instituicao = Instituicao.objects.create(usuario=instituicao_usuario)
+        perfis = {
+            'aluno': aluno,
+            'responsavel': responsavel,
+            'motorista': motorista,
+            'instituicao': instituicao,
+        }
+
+        for tipo, perfil in perfis.items():
+            removido = self.client.delete(self.api(tipo, perfil.pk))
+            self.assertEqual(removido.status_code, 200, removido.content)
+            ativos = self.client.get(self.api(tipo))
+            self.assertNotIn(perfil.pk, [registro['id'] for registro in ativos.json()['results']])
+            arquivados = self.client.get(self.api(tipo), {'deleted': '1'})
+            item = next(registro for registro in arquivados.json()['results'] if registro['id'] == perfil.pk)
+            self.assertTrue(item['deleted_at'])
+
+        for tipo, perfil in reversed(list(perfis.items())):
+            restaurado = self.client.post(reverse('api_restaurar_usuario', kwargs={
+                'tipo': tipo, 'obj_id': perfil.pk,
+            }))
+            self.assertEqual(restaurado.status_code, 200, restaurado.content)
+            perfil.refresh_from_db()
+            self.assertIsNone(perfil.deleted_at)
+            if tipo != 'aluno':
+                self.assertTrue(perfil.usuario.is_active)
+            ativos = self.client.get(self.api(tipo))
+            self.assertIn(perfil.pk, [registro['id'] for registro in ativos.json()['results']])
 
     def test_redefinicao_de_senha_institucional(self):
         response = self.client.post(reverse('api_redefinir_senha_usuario', kwargs={
@@ -450,17 +502,23 @@ class GerenciamentoUsuariosTests(TestCase):
         self.assertEqual(motorista.usuario.first_name, 'João Atualizado')
         deleted = self.client.delete(self.api('motorista', motorista.pk))
         self.assertEqual(deleted.status_code, 200)
-        self.assertFalse(Motorista.objects.filter(pk=motorista.pk).exists())
+        motorista.refresh_from_db()
+        self.assertIsNotNone(motorista.deleted_at)
 
     def test_api_exige_perfil_institucional(self):
         self.client.force_login(self.responsavel_usuario)
         self.assertEqual(self.client.get(self.api('aluno')).status_code, 403)
 
-    def test_nao_apaga_responsavel_com_alunos(self):
-        Aluno.objects.create(nome='Vinculada', idade=8, responsavel=self.responsavel)
+    def test_arquiva_responsavel_com_alunos_sem_apagar_relacoes(self):
+        aluno = Aluno.objects.create(nome='Vinculada', idade=8, responsavel=self.responsavel)
         response = self.client.delete(self.api('responsavel', self.responsavel.pk))
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
         self.assertTrue(Responsavel.objects.filter(pk=self.responsavel.pk).exists())
+        self.responsavel.refresh_from_db()
+        self.responsavel_usuario.refresh_from_db()
+        self.assertIsNotNone(self.responsavel.deleted_at)
+        self.assertFalse(self.responsavel_usuario.is_active)
+        self.assertEqual(aluno.responsavel_id, self.responsavel.pk)
 
     def test_cadastro_de_aluno_preserva_validacao_biometrica_e_consentimento(self):
         foto = self.imagem_png('crianca.png')
