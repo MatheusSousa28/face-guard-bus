@@ -213,6 +213,78 @@ class FluxosCadastroTests(TestCase):
         self.assertRedirects(response_post, reverse('painel_aprovacoes'))
         self.assertTrue(Usuario.objects.get(pk=pendente.pk).is_aprovado)
 
+    def test_instituicao_edita_responsavel_pendente_antes_de_aprovar(self):
+        pendente = Usuario.objects.create_user(
+            username='editar.resp@test.local', email='editar.resp@test.local',
+            password='SenhaForte123!', first_name='Nome', last_name='Antigo',
+        )
+        responsavel = Responsavel.objects.create(usuario=pendente, cpf='12345678941')
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.post(reverse('aprovar_cadastro', args=('responsavel', responsavel.pk)), {
+            'editar': '1', 'first_name': 'Nome', 'last_name': 'Corrigido',
+            'email': 'nome.corrigido@test.local', 'cpf': '12345678942',
+        })
+
+        self.assertRedirects(response, reverse('painel_aprovacoes'))
+        pendente.refresh_from_db()
+        responsavel.refresh_from_db()
+        self.assertTrue(pendente.is_aprovado)
+        self.assertEqual(pendente.get_full_name(), 'Nome Corrigido')
+        self.assertEqual(pendente.email, 'nome.corrigido@test.local')
+        self.assertEqual(pendente.username, 'nome.corrigido@test.local')
+        self.assertEqual(responsavel.cpf, '12345678942')
+
+    def test_instituicao_edita_aluno_pendente_antes_de_aprovar(self):
+        aluno = Aluno.objects.create(
+            nome='Nome Antigo', idade=7, responsavel=self.responsavel,
+            foto_perfil='fotos/aluno-pendente.png',
+        )
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.post(reverse('aprovar_cadastro', args=('aluno', aluno.pk)), {
+            'editar': '1', 'nome': 'Nome Corrigido', 'idade': '9',
+        })
+
+        self.assertRedirects(response, reverse('painel_aprovacoes'))
+        aluno.refresh_from_db()
+        self.assertTrue(aluno.is_aprovado)
+        self.assertEqual(aluno.nome, 'Nome Corrigido')
+        self.assertEqual(aluno.idade, 9)
+
+    def test_edicao_invalida_nao_aprova_cadastro_pendente(self):
+        aluno = Aluno.objects.create(
+            nome='Aluno Pendente', idade=7, responsavel=self.responsavel,
+            foto_perfil='fotos/aluno-pendente.png',
+        )
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.post(reverse('aprovar_cadastro', args=('aluno', aluno.pk)), {
+            'editar': '1', 'nome': '', 'idade': '99',
+        }, follow=True)
+
+        aluno.refresh_from_db()
+        self.assertFalse(aluno.is_aprovado)
+        self.assertContains(response, 'O cadastro não foi aprovado')
+
+    def test_painel_aprovacoes_usa_abas_pesquisa_e_lista_padronizada(self):
+        self.client.force_login(self.instituicao_usuario)
+        Aluno.objects.create(
+            nome='Cadastro para revisar', idade=8, responsavel=self.responsavel,
+            foto_perfil='fotos/aluno-revisao.png',
+        )
+
+        response = self.client.get(reverse('painel_aprovacoes'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-category="aluno"')
+        self.assertContains(response, 'data-category="responsavel"')
+        self.assertNotContains(response, 'data-category="motorista"')
+        self.assertNotContains(response, 'motoristas_pendentes')
+        self.assertContains(response, 'id="pending-search"')
+        self.assertContains(response, 'id="pending-list"')
+        self.assertContains(response, 'Salvar alterações e aprovar')
+
     def test_cadastro_de_aluno_exige_consentimento(self):
         self.client.force_login(self.responsavel_usuario)
 

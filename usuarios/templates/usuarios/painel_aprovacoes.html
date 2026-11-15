@@ -3,86 +3,115 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 py-8">
-    <div class="mb-4">
-        {% include '_botao_voltar.html' with voltar_url='home' %}
-    </div>
-    <div class="mb-8">
-        <h1 class="font-display text-3xl font-bold text-gray-900">Gestão de Cadastros</h1>
-        <p class="text-gray-500">Aprove novos responsáveis, alunos e motoristas no sistema.</p>
+    <div class="mb-4">{% include '_botao_voltar.html' with voltar_url='home' %}</div>
+    <h1 class="font-display text-3xl font-bold text-gray-900 text-center mb-2">Cadastros pendentes</h1>
+    <p class="mb-6 text-center text-gray-600">Revise, edite se necessário e aprove os cadastros.</p>
+
+    <div class="flex flex-wrap justify-center gap-2 mb-6" role="tablist" aria-label="Categorias de cadastros pendentes">
+        <button type="button" data-category="aluno" role="tab" aria-selected="true" class="pending-tab rounded-lg px-5 py-2 font-semibold bg-blue-700 text-white">Alunos <span class="ml-1 rounded-full bg-white/20 px-2 py-0.5 text-sm">{{ alunos_pendentes|length }}</span></button>
+        <button type="button" data-category="responsavel" role="tab" aria-selected="false" class="pending-tab rounded-lg px-5 py-2 font-semibold bg-white text-gray-700 border border-gray-300">Responsáveis <span class="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-sm">{{ responsaveis_pendentes|length }}</span></button>
     </div>
 
-    <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">🎓 Alunos Pendentes</h2>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-        {% for aluno in alunos_pendentes %}
-            <div class="bg-white p-5 rounded-xl shadow border border-gray-200 flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    {% if aluno.foto_perfil %}
-                        <img src="{{ aluno.foto_perfil.url }}" class="w-12 h-12 rounded-full object-cover">
-                    {% endif %}
-                    <div>
-                        <p class="font-bold text-gray-900">{{ aluno.nome }}</p>
-                        <p class="text-xs text-gray-500">Resp: {{ aluno.responsavel.usuario.first_name }}</p>
-                    </div>
-                </div>
-                <div class="flex flex-col gap-2 ml-4">
-                    <form method="POST" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}">{% csrf_token %}<button class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm">Aprovar</button></form>
-                    <form method="POST" action="{% url 'reprovar_cadastro' 'aluno' aluno.id %}" onsubmit="return confirm('Reprovar e remover este aluno?')">{% csrf_token %}<button class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-bold text-sm">Reprovar</button></form>
-                </div>
-            </div>
-        {% empty %}
-            <p class="text-gray-500 italic col-span-3">Nenhum aluno aguardando aprovação.</p>
-        {% endfor %}
+    <div class="relative mb-4 w-full">
+        <label for="pending-search" class="sr-only">Pesquisar cadastros pendentes</label>
+        <input id="pending-search" type="search" autocomplete="off" placeholder="Pesquisar por nome, e-mail, CPF ou ID..." class="w-full rounded-xl border border-gray-300 bg-white py-3 pl-4 pr-12 text-gray-900 shadow-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-600">
+        <button id="clear-pending-search" type="button" aria-label="Limpar pesquisa" class="hidden absolute inset-y-0 right-0 px-4 text-xl text-blue-600 hover:text-blue-800">&times;</button>
     </div>
 
-    <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">👨‍👩‍👧 Responsáveis Pendentes</h2>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-        {% for resp in responsaveis_pendentes %}
-            <div class="bg-white p-5 rounded-xl shadow border border-gray-200 flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    {% if resp.foto_perfil %}
-                        <img src="{{ resp.foto_perfil.url }}" alt="Foto de {{ resp.usuario.get_full_name }}" class="w-12 h-12 rounded-full object-cover">
-                    {% else %}
-                        {% with primeiro=resp.usuario.first_name|slice:":1" ultimo=resp.usuario.last_name|slice:":1" %}
-                            {% if primeiro and ultimo %}<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style="background-color: {{ resp.cor_avatar }}">{{ primeiro|upper }}{{ ultimo|upper }}</div>
-                            {% else %}<img src="{% static 'img/icone_pessoa.png' %}" alt="Ícone de perfil" class="h-12 w-12 rounded-full object-contain">{% endif %}
-                        {% endwith %}
-                    {% endif %}
-                    <div>
-                        <p class="font-bold text-gray-900">{{ resp.usuario.first_name }} {{ resp.usuario.last_name }}</p>
-                        <p class="text-xs text-gray-500">CPF: {{ resp.cpf }}</p>
+    <section class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow" aria-live="polite">
+        <div class="flex items-center justify-between border-b px-5 py-4">
+            <h2 id="pending-list-title" class="text-xl font-bold text-gray-800">Alunos pendentes</h2>
+            <span id="pending-total" class="text-sm text-gray-500"></span>
+        </div>
+        <div id="pending-empty" class="hidden p-8 text-center text-gray-600"></div>
+        <div id="pending-list" class="divide-y divide-gray-100">
+            {% for aluno in alunos_pendentes %}
+                <article data-pending-category="aluno" data-search="{{ aluno.id }} {{ aluno.nome }} {{ aluno.responsavel.usuario.get_full_name }} {{ aluno.responsavel.usuario.email }}" class="pending-card p-4 sm:px-6">
+                    <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <span class="shrink-0 font-mono text-sm font-semibold text-gray-500">#{{ aluno.id }}</span>
+                            {% if aluno.foto_perfil %}<img src="{{ aluno.foto_perfil.url }}" alt="Foto de {{ aluno.nome }}" class="h-14 w-14 shrink-0 rounded-full object-cover">{% else %}<img src="{% static 'img/icone_pessoa.png' %}" alt="" class="h-14 w-14 shrink-0 rounded-full object-contain">{% endif %}
+                            <div class="min-w-0"><p class="truncate font-bold text-gray-900">{{ aluno.nome }}</p><p class="truncate text-sm text-gray-500">{{ aluno.idade }} anos · Responsável: {{ aluno.responsavel.usuario.get_full_name }}</p></div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 self-end sm:self-auto">
+                            <details class="pending-edit-details">
+                                <summary class="cursor-pointer list-none rounded-lg border border-blue-200 px-4 py-2 text-center text-sm font-semibold text-blue-700 hover:bg-blue-50">Editar</summary>
+                                <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}" class="mt-3 w-full space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:absolute sm:right-6 sm:z-10 sm:w-96 sm:shadow-lg">
+                                    {% csrf_token %}<input type="hidden" name="editar" value="1">
+                                    <label class="block text-sm font-semibold text-gray-700">Nome do aluno<input name="nome" value="{{ aluno.nome }}" maxlength="100" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
+                                    <label class="block text-sm font-semibold text-gray-700">Idade<input name="idade" type="number" min="2" max="30" value="{{ aluno.idade }}" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
+                                    <button class="w-full rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">Salvar alterações e aprovar</button>
+                                </form>
+                            </details>
+                            <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}">{% csrf_token %}<button class="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">Aprovar</button></form>
+                            <form method="post" action="{% url 'reprovar_cadastro' 'aluno' aluno.id %}" onsubmit="return confirm('Reprovar e remover este aluno?')">{% csrf_token %}<button class="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Reprovar</button></form>
+                        </div>
                     </div>
-                </div>
-                <div class="flex flex-col gap-2 ml-4">
-                    <form method="POST" action="{% url 'aprovar_cadastro' 'responsavel' resp.id %}">{% csrf_token %}<button class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm">Aprovar</button></form>
-                    <form method="POST" action="{% url 'reprovar_cadastro' 'responsavel' resp.id %}" onsubmit="return confirm('Reprovar e remover este responsável?')">{% csrf_token %}<button class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-bold text-sm">Reprovar</button></form>
-                </div>
-            </div>
-        {% empty %}
-            <p class="text-gray-500 italic col-span-3">Nenhum responsável aguardando aprovação.</p>
-        {% endfor %}
-    </div>
-
-    <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">🚌 Motoristas Pendentes</h2>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {% for mot in motoristas_pendentes %}
-            <div class="bg-white p-5 rounded-xl shadow border border-gray-200 flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    {% if mot.foto_perfil %}
-                        <img src="{{ mot.foto_perfil.url }}" class="w-12 h-12 rounded-full object-cover">
-                    {% endif %}
-                    <div>
-                        <p class="font-bold text-gray-900">{{ mot.usuario.first_name }}</p>
-                        <p class="text-xs text-gray-500">CPF: {{ mot.cpf }}</p>
+                </article>
+            {% endfor %}
+            {% for responsavel in responsaveis_pendentes %}
+                <article data-pending-category="responsavel" data-search="{{ responsavel.id }} {{ responsavel.usuario.get_full_name }} {{ responsavel.usuario.email }} {{ responsavel.cpf }}" class="pending-card hidden p-4 sm:px-6">
+                    <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                        <div class="flex min-w-0 items-center gap-3"><span class="shrink-0 font-mono text-sm font-semibold text-gray-500">#{{ responsavel.id }}</span>
+                            {% if responsavel.foto_perfil %}<img src="{{ responsavel.foto_perfil.url }}" alt="Foto de {{ responsavel.usuario.get_full_name }}" class="h-14 w-14 shrink-0 rounded-full object-cover">{% else %}<img src="{% static 'img/icone_pessoa.png' %}" alt="" class="h-14 w-14 shrink-0 rounded-full object-contain">{% endif %}
+                            <div class="min-w-0"><p class="truncate font-bold text-gray-900">{{ responsavel.usuario.get_full_name }}</p><p class="truncate text-sm text-gray-500">{{ responsavel.usuario.email }} · CPF: {{ responsavel.cpf }}</p></div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 self-end sm:self-auto">
+                            <details class="pending-edit-details">
+                                <summary class="cursor-pointer list-none rounded-lg border border-blue-200 px-4 py-2 text-center text-sm font-semibold text-blue-700 hover:bg-blue-50">Editar</summary>
+                                <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}" class="mt-3 w-full space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:absolute sm:right-6 sm:z-10 sm:w-96 sm:shadow-lg">
+                                    {% csrf_token %}<input type="hidden" name="editar" value="1">
+                                    <label class="block text-sm font-semibold text-gray-700">Nome<input name="first_name" value="{{ responsavel.usuario.first_name }}" maxlength="150" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
+                                    <label class="block text-sm font-semibold text-gray-700">Sobrenome<input name="last_name" value="{{ responsavel.usuario.last_name }}" maxlength="150" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
+                                    <label class="block text-sm font-semibold text-gray-700">E-mail<input name="email" type="email" value="{{ responsavel.usuario.email }}" maxlength="254" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
+                                    <label class="block text-sm font-semibold text-gray-700">CPF<input name="cpf" inputmode="numeric" value="{{ responsavel.cpf }}" maxlength="14" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
+                                    <button class="w-full rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">Salvar alterações e aprovar</button>
+                                </form>
+                            </details>
+                            <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}">{% csrf_token %}<button class="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">Aprovar</button></form>
+                            <form method="post" action="{% url 'reprovar_cadastro' 'responsavel' responsavel.id %}" onsubmit="return confirm('Reprovar e remover este responsável?')">{% csrf_token %}<button class="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Reprovar</button></form>
+                        </div>
                     </div>
-                </div>
-                <div class="flex flex-col gap-2 ml-4">
-                    <form method="POST" action="{% url 'aprovar_cadastro' 'motorista' mot.id %}">{% csrf_token %}<button class="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded font-bold text-sm">Aprovar</button></form>
-                    <form method="POST" action="{% url 'reprovar_cadastro' 'motorista' mot.id %}" onsubmit="return confirm('Reprovar e remover este motorista?')">{% csrf_token %}<button class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded font-bold text-sm">Reprovar</button></form>
-                </div>
-            </div>
-        {% empty %}
-            <p class="text-gray-500 italic col-span-3">Nenhum motorista aguardando aprovação.</p>
-        {% endfor %}
-    </div>
+                </article>
+            {% endfor %}
+        </div>
+    </section>
 </div>
+
+<script>
+(() => {
+    const labels = {aluno: 'Alunos', responsavel: 'Responsáveis'};
+    let category = 'aluno';
+    const cards = [...document.querySelectorAll('.pending-card')];
+    const search = document.getElementById('pending-search');
+    const clearSearch = document.getElementById('clear-pending-search');
+    const empty = document.getElementById('pending-empty');
+    function updateList() {
+        const query = search.value.trim().toLocaleLowerCase('pt-BR');
+        let visible = 0;
+        cards.forEach(card => {
+            const match = card.dataset.pendingCategory === category && card.dataset.search.toLocaleLowerCase('pt-BR').includes(query);
+            card.classList.toggle('hidden', !match);
+            if (match) visible++;
+        });
+        document.getElementById('pending-list-title').textContent = `${labels[category]} pendentes`;
+        document.getElementById('pending-total').textContent = `${visible} cadastro${visible === 1 ? '' : 's'}`;
+        empty.classList.toggle('hidden', visible > 0);
+        empty.textContent = query ? 'Nenhum cadastro encontrado para essa pesquisa.' : `Nenhum cadastro de ${labels[category].toLowerCase()} aguardando aprovação.`;
+        clearSearch.classList.toggle('hidden', !query);
+    }
+    document.querySelectorAll('.pending-tab').forEach(button => button.addEventListener('click', () => {
+        category = button.dataset.category;
+        document.querySelectorAll('.pending-tab').forEach(tab => {
+            const selected = tab === button;
+            tab.setAttribute('aria-selected', String(selected));
+            tab.className = `pending-tab rounded-lg px-5 py-2 font-semibold ${selected ? 'bg-blue-700 text-white' : 'border border-gray-300 bg-white text-gray-700'}`;
+        });
+        updateList();
+    }));
+    search.addEventListener('input', updateList);
+    clearSearch.addEventListener('click', () => { search.value = ''; updateList(); search.focus(); });
+    updateList();
+})();
+</script>
 {% endblock %}

@@ -310,12 +310,10 @@ def painel_instituicao_aprovacoes(request):
 
     # Busca todo mundo que o is_aprovado é False
     responsaveis = Responsavel.objects.filter(usuario__is_aprovado=False, deleted_at__isnull=True)
-    motoristas = Motorista.objects.filter(usuario__is_aprovado=False, deleted_at__isnull=True)
     alunos = Aluno.objects.filter(is_aprovado=False, deleted_at__isnull=True)
 
     contexto = {
         'responsaveis_pendentes': responsaveis,
-        'motoristas_pendentes': motoristas,
         'alunos_pendentes': alunos,
     }
     return render(request, 'usuarios/painel_aprovacoes.html', contexto)
@@ -327,22 +325,62 @@ def aprovar_cadastro(request, tipo, obj_id):
     if not hasattr(request.user, 'instituicao'):
         return redirect('home')
 
-    if tipo == 'responsavel':
-        obj = get_object_or_404(Responsavel, id=obj_id)
-        obj.usuario.is_aprovado = True
-        obj.usuario.save()
-    elif tipo == 'motorista':
-        obj = get_object_or_404(Motorista, id=obj_id)
-        obj.usuario.is_aprovado = True
-        obj.usuario.save()
-    elif tipo == 'aluno':
-        obj = get_object_or_404(Aluno, id=obj_id)
-        obj.is_aprovado = True
-        obj.save()
-    else:
+    modelos = {'responsavel': Responsavel, 'motorista': Motorista, 'aluno': Aluno}
+    model = modelos.get(tipo)
+    if model is None:
         return redirect('painel_aprovacoes')
 
-    messages.success(request, f"Cadastro aprovado com sucesso!")
+    filtro_pendente = {'deleted_at__isnull': True}
+    if tipo == 'aluno':
+        filtro_pendente['is_aprovado'] = False
+    else:
+        filtro_pendente['usuario__is_aprovado'] = False
+    obj = get_object_or_404(model, pk=obj_id, **filtro_pendente)
+
+    if request.POST.get('editar') == '1':
+        if tipo == 'aluno':
+            nome = request.POST.get('nome', '').strip()
+            try:
+                idade = int(request.POST.get('idade', ''))
+            except (TypeError, ValueError):
+                idade = 0
+            if not 2 <= len(nome) <= 100 or not 2 <= idade <= 30:
+                messages.error(request, 'Informe um nome válido e idade entre 2 e 30 anos. O cadastro não foi aprovado.')
+                return redirect('painel_aprovacoes')
+            obj.nome, obj.idade, obj.is_aprovado = nome, idade, True
+            obj.save(update_fields=['nome', 'idade', 'is_aprovado'])
+        else:
+            nome = request.POST.get('first_name', '').strip()
+            sobrenome = request.POST.get('last_name', '').strip()
+            email = request.POST.get('email', '').strip().lower()
+            cpf = re.sub(r'\D', '', request.POST.get('cpf', ''))
+            try:
+                validate_email(email)
+            except ValidationError:
+                messages.error(request, 'Informe um e-mail válido. O cadastro não foi aprovado.')
+                return redirect('painel_aprovacoes')
+            if (not nome or not sobrenome or len(nome) > 150 or len(sobrenome) > 150
+                    or len(cpf) != 11
+                    or Usuario.objects.filter(email=email).exclude(pk=obj.usuario_id).exists()
+                    or model.objects.filter(cpf=cpf).exclude(pk=obj.pk).exists()):
+                messages.error(request, 'Confira nome, sobrenome, e-mail e CPF. O e-mail e o CPF devem ser únicos. O cadastro não foi aprovado.')
+                return redirect('painel_aprovacoes')
+            with transaction.atomic():
+                usuario = obj.usuario
+                usuario.first_name, usuario.last_name = nome, sobrenome
+                usuario.email = usuario.username = email
+                usuario.is_aprovado = True
+                usuario.save(update_fields=['first_name', 'last_name', 'email', 'username', 'is_aprovado'])
+                obj.cpf = cpf
+                obj.save(update_fields=['cpf'])
+    elif tipo in {'responsavel', 'motorista'}:
+        obj.usuario.is_aprovado = True
+        obj.usuario.save(update_fields=['is_aprovado'])
+    else:
+        obj.is_aprovado = True
+        obj.save(update_fields=['is_aprovado'])
+
+    messages.success(request, 'Cadastro aprovado com sucesso!')
     return redirect('painel_aprovacoes')
 
 @login_required(login_url='login')
