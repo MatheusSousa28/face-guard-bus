@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.http import HttpResponseNotAllowed, JsonResponse
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -17,7 +18,7 @@ import secrets
 from django.core.paginator import Paginator, EmptyPage
 from django.core.files.base import ContentFile
 from alunos.models import Aluno
-from transporte.models import Rota
+from transporte.models import Rota, Veiculo
 from transporte.services import processar_rotas_sem_gps
 from monitoramento.models import Evento
 from PIL import Image, UnidentifiedImageError
@@ -324,11 +325,15 @@ def aprovar_cadastro(request, tipo, obj_id):
         return HttpResponseNotAllowed(['POST'])
     if not hasattr(request.user, 'instituicao'):
         return redirect('home')
+    categoria = request.GET.get('categoria')
+    if categoria not in {'aluno', 'responsavel'}:
+        categoria = 'aluno' if tipo == 'aluno' else 'responsavel'
+    url_painel = f"{reverse('painel_aprovacoes')}?categoria={categoria}"
 
     modelos = {'responsavel': Responsavel, 'motorista': Motorista, 'aluno': Aluno}
     model = modelos.get(tipo)
     if model is None:
-        return redirect('painel_aprovacoes')
+        return redirect(url_painel)
 
     filtro_pendente = {'deleted_at__isnull': True}
     if tipo == 'aluno':
@@ -346,7 +351,7 @@ def aprovar_cadastro(request, tipo, obj_id):
                 idade = 0
             if not 2 <= len(nome) <= 100 or not 2 <= idade <= 30:
                 messages.error(request, 'Informe um nome válido e idade entre 2 e 30 anos. O cadastro não foi aprovado.')
-                return redirect('painel_aprovacoes')
+                return redirect(url_painel)
             obj.nome, obj.idade, obj.is_aprovado = nome, idade, True
             obj.save(update_fields=['nome', 'idade', 'is_aprovado'])
         else:
@@ -358,13 +363,13 @@ def aprovar_cadastro(request, tipo, obj_id):
                 validate_email(email)
             except ValidationError:
                 messages.error(request, 'Informe um e-mail válido. O cadastro não foi aprovado.')
-                return redirect('painel_aprovacoes')
+                return redirect(url_painel)
             if (not nome or not sobrenome or len(nome) > 150 or len(sobrenome) > 150
                     or len(cpf) != 11
                     or Usuario.objects.filter(email=email).exclude(pk=obj.usuario_id).exists()
                     or model.objects.filter(cpf=cpf).exclude(pk=obj.pk).exists()):
                 messages.error(request, 'Confira nome, sobrenome, e-mail e CPF. O e-mail e o CPF devem ser únicos. O cadastro não foi aprovado.')
-                return redirect('painel_aprovacoes')
+                return redirect(url_painel)
             with transaction.atomic():
                 usuario = obj.usuario
                 usuario.first_name, usuario.last_name = nome, sobrenome
@@ -381,7 +386,7 @@ def aprovar_cadastro(request, tipo, obj_id):
         obj.save(update_fields=['is_aprovado'])
 
     messages.success(request, 'Cadastro aprovado com sucesso!')
-    return redirect('painel_aprovacoes')
+    return redirect(url_painel)
 
 @login_required(login_url='login')
 def reprovar_cadastro(request, tipo, obj_id):
@@ -389,6 +394,10 @@ def reprovar_cadastro(request, tipo, obj_id):
         return HttpResponseNotAllowed(['POST'])
     if not hasattr(request.user, 'instituicao'):
         return redirect('home')
+    categoria = request.GET.get('categoria')
+    if categoria not in {'aluno', 'responsavel'}:
+        categoria = 'aluno' if tipo == 'aluno' else 'responsavel'
+    url_painel = f"{reverse('painel_aprovacoes')}?categoria={categoria}"
 
     if tipo == 'responsavel':
         obj = get_object_or_404(Responsavel, id=obj_id)
@@ -400,10 +409,10 @@ def reprovar_cadastro(request, tipo, obj_id):
         obj = get_object_or_404(Aluno, id=obj_id)
         obj.delete()
     else:
-        return redirect('painel_aprovacoes')
+        return redirect(url_painel)
 
     messages.error(request, f"Cadastro rejeitado e removido do sistema.")
-    return redirect('painel_aprovacoes')
+    return redirect(url_painel)
 
 @login_required(login_url='login')
 def painel_usuarios_ativos(request):
@@ -413,7 +422,7 @@ def painel_usuarios_ativos(request):
     return render(request, 'usuarios/painel_usuarios.html')
 
 
-def _usuario_json(tipo, obj, request=None):
+def _usuario_json(tipo, obj, request=None, incluir_veiculos=False):
     if tipo == 'aluno':
         foto = obj.foto_perfil
         dados = {'id': obj.pk, 'nome': obj.nome, 'idade': obj.idade,
@@ -440,6 +449,16 @@ def _usuario_json(tipo, obj, request=None):
                  'foto': foto.url if foto else '', 'aprovado': usuario.is_aprovado}
         if hasattr(obj, 'cor_avatar'):
             dados['cor_avatar'] = obj.cor_avatar
+        if tipo == 'motorista' and incluir_veiculos:
+            veiculos = obj.veiculos.order_by('modelo', 'placa')
+            dados['veiculos'] = [{
+                'id': veiculo.pk,
+                'modelo': veiculo.modelo,
+                'placa': veiculo.placa,
+                'cor': veiculo.cor,
+                'capacidade': veiculo.capacidade,
+                'foto': veiculo.foto.url if veiculo.foto else '',
+            } for veiculo in veiculos]
     dados['deleted_at'] = obj.deleted_at.isoformat() if obj.deleted_at else None
     return dados
 
@@ -493,7 +512,10 @@ def api_usuarios(request, tipo, obj_id=None):
                              'page': page.number, 'pages': paginator.num_pages,
                              'total': paginator.count})
     if request.method == 'GET' and obj_id is not None:
-        return JsonResponse(_usuario_json(tipo, get_object_or_404(qs, pk=obj_id), request))
+        return JsonResponse(_usuario_json(
+            tipo, get_object_or_404(qs, pk=obj_id), request,
+            incluir_veiculos=(tipo == 'motorista'),
+        ))
     if request.method not in {'POST', 'DELETE'}:
         return HttpResponseNotAllowed(['GET', 'POST', 'DELETE'])
 
@@ -602,11 +624,30 @@ def api_usuarios(request, tipo, obj_id=None):
                 if hasattr(item, 'cor_avatar') and cor_avatar in {cor for cor, _ in CORES_AVATAR}:
                     item.cor_avatar = cor_avatar
                 item.save()
+                if tipo == 'motorista' and data.get('atualizar_veiculos') == '1':
+                    item.veiculos.set(Veiculo.objects.filter(pk__in=data.getlist('veiculos')))
         return JsonResponse({'mensagem': 'Cadastro salvo com sucesso.', 'item': _usuario_json(tipo, item, request)}, status=201 if criando else 200)
     except Exception as exc:
         if str(exc) and exc.__class__.__name__ in {'IntegrityError', 'ValidationError'}:
             return JsonResponse({'erro': 'Não foi possível salvar. Verifique se e-mail e CPF são únicos.'}, status=400)
         return JsonResponse({'erro': 'Não foi possível salvar os dados. Tente novamente.'}, status=400)
+
+
+@login_required(login_url='login')
+def api_veiculos_disponiveis(request):
+    if not hasattr(request.user, 'instituicao'):
+        return JsonResponse({'erro': 'Acesso permitido apenas à instituição.'}, status=403)
+    if request.method != 'GET':
+        return HttpResponseNotAllowed(['GET'])
+    veiculos = Veiculo.objects.order_by('modelo', 'placa')
+    return JsonResponse({'results': [{
+        'id': veiculo.pk,
+        'modelo': veiculo.modelo,
+        'placa': veiculo.placa,
+        'cor': veiculo.cor,
+        'capacidade': veiculo.capacidade,
+        'foto': veiculo.foto.url if veiculo.foto else '',
+    } for veiculo in veiculos]})
 
 
 @login_required(login_url='login')

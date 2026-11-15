@@ -13,6 +13,7 @@ from django.urls import reverse
 from PIL import Image
 
 from alunos.models import Aluno
+from transporte.models import Veiculo
 from usuarios.models import Instituicao, Motorista, Responsavel, RegistroAuditoria
 
 
@@ -210,7 +211,7 @@ class FluxosCadastroTests(TestCase):
         self.assertFalse(Usuario.objects.get(pk=pendente.pk).is_aprovado)
 
         response_post = self.client.post(reverse('aprovar_cadastro', args=('responsavel', responsavel_pendente.id)))
-        self.assertRedirects(response_post, reverse('painel_aprovacoes'))
+        self.assertRedirects(response_post, f"{reverse('painel_aprovacoes')}?categoria=responsavel")
         self.assertTrue(Usuario.objects.get(pk=pendente.pk).is_aprovado)
 
     def test_instituicao_edita_responsavel_pendente_antes_de_aprovar(self):
@@ -221,12 +222,13 @@ class FluxosCadastroTests(TestCase):
         responsavel = Responsavel.objects.create(usuario=pendente, cpf='12345678941')
         self.client.force_login(self.instituicao_usuario)
 
-        response = self.client.post(reverse('aprovar_cadastro', args=('responsavel', responsavel.pk)), {
+        url = f"{reverse('aprovar_cadastro', args=('responsavel', responsavel.pk))}?categoria=responsavel"
+        response = self.client.post(url, {
             'editar': '1', 'first_name': 'Nome', 'last_name': 'Corrigido',
             'email': 'nome.corrigido@test.local', 'cpf': '12345678942',
         })
 
-        self.assertRedirects(response, reverse('painel_aprovacoes'))
+        self.assertRedirects(response, f"{reverse('painel_aprovacoes')}?categoria=responsavel")
         pendente.refresh_from_db()
         responsavel.refresh_from_db()
         self.assertTrue(pendente.is_aprovado)
@@ -242,11 +244,12 @@ class FluxosCadastroTests(TestCase):
         )
         self.client.force_login(self.instituicao_usuario)
 
-        response = self.client.post(reverse('aprovar_cadastro', args=('aluno', aluno.pk)), {
+        url = f"{reverse('aprovar_cadastro', args=('aluno', aluno.pk))}?categoria=aluno"
+        response = self.client.post(url, {
             'editar': '1', 'nome': 'Nome Corrigido', 'idade': '9',
         })
 
-        self.assertRedirects(response, reverse('painel_aprovacoes'))
+        self.assertRedirects(response, f"{reverse('painel_aprovacoes')}?categoria=aluno")
         aluno.refresh_from_db()
         self.assertTrue(aluno.is_aprovado)
         self.assertEqual(aluno.nome, 'Nome Corrigido')
@@ -259,13 +262,33 @@ class FluxosCadastroTests(TestCase):
         )
         self.client.force_login(self.instituicao_usuario)
 
-        response = self.client.post(reverse('aprovar_cadastro', args=('aluno', aluno.pk)), {
+        url = f"{reverse('aprovar_cadastro', args=('aluno', aluno.pk))}?categoria=responsavel"
+        response = self.client.post(url, {
             'editar': '1', 'nome': '', 'idade': '99',
         }, follow=True)
 
         aluno.refresh_from_db()
         self.assertFalse(aluno.is_aprovado)
+        self.assertRedirects(response, f"{reverse('painel_aprovacoes')}?categoria=responsavel")
         self.assertContains(response, 'O cadastro não foi aprovado')
+
+    def test_reprovacao_retorna_para_mesma_categoria_do_painel(self):
+        aluno = Aluno.objects.create(
+            nome='Aluno para reprovar', idade=7, responsavel=self.responsavel,
+            foto_perfil='fotos/aluno-reprovacao.png',
+        )
+        responsavel_usuario = Usuario.objects.create_user(
+            username='reprovar.resp@test.local', email='reprovar.resp@test.local',
+            password='SenhaForte123!', first_name='Responsável', last_name='Pendente',
+        )
+        responsavel = Responsavel.objects.create(usuario=responsavel_usuario, cpf='12345678945')
+        self.client.force_login(self.instituicao_usuario)
+
+        for categoria, perfil in (('aluno', aluno), ('responsavel', responsavel)):
+            url = f"{reverse('reprovar_cadastro', args=(categoria, perfil.pk))}?categoria={categoria}"
+            response = self.client.post(url)
+            self.assertRedirects(response, f"{reverse('painel_aprovacoes')}?categoria={categoria}")
+            self.assertFalse(type(perfil).objects.filter(pk=perfil.pk).exists())
 
     def test_painel_aprovacoes_usa_abas_pesquisa_e_lista_padronizada(self):
         self.client.force_login(self.instituicao_usuario)
@@ -386,6 +409,8 @@ class GerenciamentoUsuariosTests(TestCase):
         self.assertContains(response, 'data-category="instituicao"')
         self.assertContains(response, 'data-category="auditoria"')
         html = response.content.decode()
+        self.assertLess(html.index('data-category="aluno"'), html.index('data-category="responsavel"'))
+        self.assertLess(html.index('data-category="responsavel"'), html.index('data-category="motorista"'))
         password_form = re.search(r'<form id="password-form".*?</form>', html, re.DOTALL)
         self.assertIsNotNone(password_form)
         self.assertEqual(password_form.group(0).count('data-toggle-password'), 2)
@@ -396,6 +421,16 @@ class GerenciamentoUsuariosTests(TestCase):
         self.assertContains(response, 'id="toggle-deleted-users"')
         self.assertContains(response, 'role="switch" aria-checked="false"')
         self.assertContains(response, 'data-switch-knob')
+        self.assertContains(response, 'id="vehicle-selection-modal"')
+        self.assertContains(response, 'Marcar todos')
+        self.assertContains(response, 'Desmarcar todos')
+
+    def test_home_posiciona_frota_antes_das_pendencias(self):
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertLess(html.index('Frota de Veículos'), html.index('Cadastros Pendentes'))
 
     def test_cadastro_exibe_regras_de_senha_em_estados_vermelho_e_verde(self):
         response = self.client.get(reverse('cadastro'))
@@ -564,24 +599,46 @@ class GerenciamentoUsuariosTests(TestCase):
         self.assertEqual(busca_id.json()['total'], 1)
 
     def test_api_cria_edita_e_exclui_motorista(self):
+        veiculo_a = Veiculo.objects.create(modelo='Micro-ônibus A', capacidade=20, placa='AAA1234', cor='Azul')
+        veiculo_b = Veiculo.objects.create(modelo='Van B', capacidade=12, placa='BBB1234', cor='Branca')
         payload = {'first_name': 'João', 'last_name': 'Condutor', 'email': 'joao.api@example.test',
                    'cpf': '12345678909', 'senha': 'SenhaForte123!',
-                   'foto_perfil': self.imagem_png('perfil.png')}
+                   'foto_perfil': self.imagem_png('perfil.png'), 'atualizar_veiculos': '1',
+                   'veiculos': [str(veiculo_a.pk)]}
         created = self.client.post(self.api('motorista'), payload)
         self.assertEqual(created.status_code, 201, created.content)
         motorista = Motorista.objects.get(usuario__email='joao.api@example.test')
         self.assertTrue(motorista.usuario.check_password('SenhaForte123!'))
+        self.assertQuerySetEqual(motorista.veiculos.order_by('pk'), [veiculo_a], transform=lambda v: v)
+        detalhe = self.client.get(self.api('motorista', motorista.pk)).json()
+        self.assertEqual([v['id'] for v in detalhe['veiculos']], [veiculo_a.pk])
         updated = self.client.post(self.api('motorista', motorista.pk), {
             'first_name': 'João Atualizado', 'last_name': 'Condutor',
             'email': 'joao.api@example.test', 'cpf': '12345678909',
+            'atualizar_veiculos': '1', 'veiculos': [str(veiculo_b.pk)],
         })
         self.assertEqual(updated.status_code, 200, updated.content)
         motorista.usuario.refresh_from_db()
         self.assertEqual(motorista.usuario.first_name, 'João Atualizado')
+        self.assertQuerySetEqual(motorista.veiculos.order_by('pk'), [veiculo_b], transform=lambda v: v)
         deleted = self.client.delete(self.api('motorista', motorista.pk))
         self.assertEqual(deleted.status_code, 200)
         motorista.refresh_from_db()
         self.assertIsNotNone(motorista.deleted_at)
+
+    def test_api_lista_veiculos_com_foto_para_vinculo_do_motorista(self):
+        veiculo = Veiculo.objects.create(
+            modelo='Ônibus Escolar', capacidade=40, placa='CCC1234', cor='Amarela',
+            foto='fotos_veiculos/onibus.png',
+        )
+
+        response = self.client.get(reverse('api_veiculos_disponiveis'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['results'], [{
+            'id': veiculo.pk, 'modelo': 'Ônibus Escolar', 'placa': 'CCC1234',
+            'cor': 'Amarela', 'capacidade': 40, 'foto': veiculo.foto.url,
+        }])
 
     def test_api_exige_perfil_institucional(self):
         self.client.force_login(self.responsavel_usuario)

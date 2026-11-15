@@ -36,15 +36,15 @@
                         <div class="flex flex-wrap gap-2 self-end sm:self-auto">
                             <button type="button" data-open-edit class="rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">Editar</button>
                             <template data-edit-form>
-                                <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}" class="space-y-4">
+                                <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}?categoria=aluno" class="space-y-4">
                                     {% csrf_token %}<input type="hidden" name="editar" value="1">
                                     <label class="block text-sm font-semibold text-gray-700">Nome do aluno<input name="nome" value="{{ aluno.nome }}" maxlength="100" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
                                     <label class="block text-sm font-semibold text-gray-700">Idade<input name="idade" type="number" min="2" max="30" value="{{ aluno.idade }}" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
                                     <button class="w-full rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">Salvar alterações e aprovar</button>
                                 </form>
                             </template>
-                            <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}" data-confirm-title="Aprovar cadastro?" data-confirm-message="Deseja realmente aprovar o cadastro de {{ aluno.nome }}?" data-confirm-label="Sim, aprovar" data-confirm-style="approve">{% csrf_token %}<button class="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">Aprovar</button></form>
-                            <form method="post" action="{% url 'reprovar_cadastro' 'aluno' aluno.id %}" data-confirm-title="Reprovar cadastro?" data-confirm-message="Deseja realmente reprovar e remover o cadastro de {{ aluno.nome }}?" data-confirm-label="Sim, reprovar" data-confirm-style="reject">{% csrf_token %}<button class="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Reprovar</button></form>
+                            <form method="post" action="{% url 'reprovar_cadastro' 'aluno' aluno.id %}?categoria=aluno" data-confirm-title="Reprovar cadastro?" data-confirm-message="Deseja realmente reprovar e remover o cadastro de {{ aluno.nome }}?" data-confirm-label="Sim, reprovar" data-confirm-style="reject">{% csrf_token %}<button class="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700">Reprovar</button></form>
+                            <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}?categoria=aluno" data-confirm-title="Aprovar cadastro?" data-confirm-message="Deseja realmente aprovar o cadastro de {{ aluno.nome }}?" data-confirm-label="Sim, aprovar" data-confirm-style="approve">{% csrf_token %}<button class="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">Aprovar</button></form>
                         </div>
                     </div>
                 </article>
@@ -59,7 +59,7 @@
                         <div class="flex flex-wrap gap-2 self-end sm:self-auto">
                             <button type="button" data-open-edit class="rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">Editar</button>
                             <template data-edit-form>
-                                <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}" class="space-y-4">
+                                <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}?categoria=responsavel" class="space-y-4">
                                     {% csrf_token %}<input type="hidden" name="editar" value="1">
                                     <label class="block text-sm font-semibold text-gray-700">Nome<input name="first_name" value="{{ responsavel.usuario.first_name }}" maxlength="150" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
                                     <label class="block text-sm font-semibold text-gray-700">Sobrenome<input name="last_name" value="{{ responsavel.usuario.last_name }}" maxlength="150" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
@@ -68,8 +68,8 @@
                                     <button class="w-full rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">Salvar alterações e aprovar</button>
                                 </form>
                             </template>
-                            <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}" data-confirm-title="Aprovar cadastro?" data-confirm-message="Deseja realmente aprovar o cadastro de {{ responsavel.usuario.get_full_name }}?" data-confirm-label="Sim, aprovar" data-confirm-style="approve">{% csrf_token %}<button class="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">Aprovar</button></form>
-                            <form method="post" action="{% url 'reprovar_cadastro' 'responsavel' responsavel.id %}" data-confirm-title="Reprovar cadastro?" data-confirm-message="Deseja realmente reprovar e remover o cadastro de {{ responsavel.usuario.get_full_name }}?" data-confirm-label="Sim, reprovar" data-confirm-style="reject">{% csrf_token %}<button class="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Reprovar</button></form>
+                            <form method="post" action="{% url 'reprovar_cadastro' 'responsavel' responsavel.id %}?categoria=responsavel" data-confirm-title="Reprovar cadastro?" data-confirm-message="Deseja realmente reprovar e remover o cadastro de {{ responsavel.usuario.get_full_name }}?" data-confirm-label="Sim, reprovar" data-confirm-style="reject">{% csrf_token %}<button class="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700">Reprovar</button></form>
+                            <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}?categoria=responsavel" data-confirm-title="Aprovar cadastro?" data-confirm-message="Deseja realmente aprovar o cadastro de {{ responsavel.usuario.get_full_name }}?" data-confirm-label="Sim, aprovar" data-confirm-style="approve">{% csrf_token %}<button class="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">Aprovar</button></form>
                         </div>
                     </div>
                 </article>
@@ -102,7 +102,8 @@
 <script>
 (() => {
     const labels = {aluno: 'Alunos', responsavel: 'Responsáveis'};
-    let category = 'aluno';
+    const categoriaInicial = new URLSearchParams(window.location.search).get('categoria');
+    let category = ['aluno', 'responsavel'].includes(categoriaInicial) ? categoriaInicial : 'aluno';
     const cards = [...document.querySelectorAll('.pending-card')];
     const search = document.getElementById('pending-search');
     const clearSearch = document.getElementById('clear-pending-search');
@@ -127,9 +128,10 @@
         empty.textContent = query ? 'Nenhum cadastro encontrado para essa pesquisa.' : `Nenhum cadastro de ${labels[category].toLowerCase()} aguardando aprovação.`;
         clearSearch.classList.toggle('hidden', !query);
     }
-    document.querySelectorAll('.pending-tab').forEach(button => button.addEventListener('click', () => {
+    const tabs = [...document.querySelectorAll('.pending-tab')];
+    tabs.forEach(button => button.addEventListener('click', () => {
         category = button.dataset.category;
-        document.querySelectorAll('.pending-tab').forEach(tab => {
+        tabs.forEach(tab => {
             const selected = tab === button;
             tab.setAttribute('aria-selected', String(selected));
             tab.className = `pending-tab rounded-lg px-5 py-2 font-semibold ${selected ? 'bg-blue-700 text-white' : 'border border-gray-300 bg-white text-gray-700'}`;
@@ -169,7 +171,7 @@
         if (!confirmModal.classList.contains('hidden')) { pendingForm = null; closeModal(confirmModal); }
         else if (!editModal.classList.contains('hidden')) closeModal(editModal);
     });
-    updateList();
+    (tabs.find(tab => tab.dataset.category === category) || tabs[0])?.click();
 })();
 </script>
 {% endblock %}
