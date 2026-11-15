@@ -284,6 +284,11 @@ class FluxosCadastroTests(TestCase):
         self.assertContains(response, 'id="pending-search"')
         self.assertContains(response, 'id="pending-list"')
         self.assertContains(response, 'Salvar alterações e aprovar')
+        self.assertContains(response, 'id="pending-edit-modal"')
+        self.assertContains(response, 'id="pending-confirm-modal"')
+        self.assertContains(response, 'data-confirm-title="Aprovar cadastro?"')
+        self.assertContains(response, 'data-confirm-title="Reprovar cadastro?"')
+        self.assertNotContains(response, 'onsubmit="return confirm(')
 
     def test_cadastro_de_aluno_exige_consentimento(self):
         self.client.force_login(self.responsavel_usuario)

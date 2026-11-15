@@ -8,8 +8,8 @@
     <p class="mb-6 text-center text-gray-600">Revise, edite se necessário e aprove os cadastros.</p>
 
     <div class="flex flex-wrap justify-center gap-2 mb-6" role="tablist" aria-label="Categorias de cadastros pendentes">
-        <button type="button" data-category="aluno" role="tab" aria-selected="true" class="pending-tab rounded-lg px-5 py-2 font-semibold bg-blue-700 text-white">Alunos <span class="ml-1 rounded-full bg-white/20 px-2 py-0.5 text-sm">{{ alunos_pendentes|length }}</span></button>
-        <button type="button" data-category="responsavel" role="tab" aria-selected="false" class="pending-tab rounded-lg px-5 py-2 font-semibold bg-white text-gray-700 border border-gray-300">Responsáveis <span class="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-sm">{{ responsaveis_pendentes|length }}</span></button>
+        <button type="button" data-category="aluno" role="tab" aria-selected="true" class="pending-tab rounded-lg px-5 py-2 font-semibold bg-blue-700 text-white">Alunos <span data-tab-count class="ml-1 rounded-full bg-white/20 px-2 py-0.5 text-sm">{{ alunos_pendentes|length }}</span></button>
+        <button type="button" data-category="responsavel" role="tab" aria-selected="false" class="pending-tab rounded-lg px-5 py-2 font-semibold bg-white text-gray-700 border border-gray-300">Responsáveis <span data-tab-count class="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-sm">{{ responsaveis_pendentes|length }}</span></button>
     </div>
 
     <div class="relative mb-4 w-full">
@@ -34,17 +34,17 @@
                             <div class="min-w-0"><p class="truncate font-bold text-gray-900">{{ aluno.nome }}</p><p class="truncate text-sm text-gray-500">{{ aluno.idade }} anos · Responsável: {{ aluno.responsavel.usuario.get_full_name }}</p></div>
                         </div>
                         <div class="flex flex-wrap gap-2 self-end sm:self-auto">
-                            <details class="pending-edit-details">
-                                <summary class="cursor-pointer list-none rounded-lg border border-blue-200 px-4 py-2 text-center text-sm font-semibold text-blue-700 hover:bg-blue-50">Editar</summary>
-                                <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}" class="mt-3 w-full space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:absolute sm:right-6 sm:z-10 sm:w-96 sm:shadow-lg">
+                            <button type="button" data-open-edit class="rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">Editar</button>
+                            <template data-edit-form>
+                                <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}" class="space-y-4">
                                     {% csrf_token %}<input type="hidden" name="editar" value="1">
                                     <label class="block text-sm font-semibold text-gray-700">Nome do aluno<input name="nome" value="{{ aluno.nome }}" maxlength="100" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
                                     <label class="block text-sm font-semibold text-gray-700">Idade<input name="idade" type="number" min="2" max="30" value="{{ aluno.idade }}" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
                                     <button class="w-full rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">Salvar alterações e aprovar</button>
                                 </form>
-                            </details>
-                            <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}">{% csrf_token %}<button class="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">Aprovar</button></form>
-                            <form method="post" action="{% url 'reprovar_cadastro' 'aluno' aluno.id %}" onsubmit="return confirm('Reprovar e remover este aluno?')">{% csrf_token %}<button class="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Reprovar</button></form>
+                            </template>
+                            <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}" data-confirm-title="Aprovar cadastro?" data-confirm-message="Deseja realmente aprovar o cadastro de {{ aluno.nome }}?" data-confirm-label="Sim, aprovar" data-confirm-style="approve">{% csrf_token %}<button class="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">Aprovar</button></form>
+                            <form method="post" action="{% url 'reprovar_cadastro' 'aluno' aluno.id %}" data-confirm-title="Reprovar cadastro?" data-confirm-message="Deseja realmente reprovar e remover o cadastro de {{ aluno.nome }}?" data-confirm-label="Sim, reprovar" data-confirm-style="reject">{% csrf_token %}<button class="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Reprovar</button></form>
                         </div>
                     </div>
                 </article>
@@ -57,9 +57,9 @@
                             <div class="min-w-0"><p class="truncate font-bold text-gray-900">{{ responsavel.usuario.get_full_name }}</p><p class="truncate text-sm text-gray-500">{{ responsavel.usuario.email }} · CPF: {{ responsavel.cpf }}</p></div>
                         </div>
                         <div class="flex flex-wrap gap-2 self-end sm:self-auto">
-                            <details class="pending-edit-details">
-                                <summary class="cursor-pointer list-none rounded-lg border border-blue-200 px-4 py-2 text-center text-sm font-semibold text-blue-700 hover:bg-blue-50">Editar</summary>
-                                <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}" class="mt-3 w-full space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:absolute sm:right-6 sm:z-10 sm:w-96 sm:shadow-lg">
+                            <button type="button" data-open-edit class="rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">Editar</button>
+                            <template data-edit-form>
+                                <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}" class="space-y-4">
                                     {% csrf_token %}<input type="hidden" name="editar" value="1">
                                     <label class="block text-sm font-semibold text-gray-700">Nome<input name="first_name" value="{{ responsavel.usuario.first_name }}" maxlength="150" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
                                     <label class="block text-sm font-semibold text-gray-700">Sobrenome<input name="last_name" value="{{ responsavel.usuario.last_name }}" maxlength="150" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
@@ -67,15 +67,36 @@
                                     <label class="block text-sm font-semibold text-gray-700">CPF<input name="cpf" inputmode="numeric" value="{{ responsavel.cpf }}" maxlength="14" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
                                     <button class="w-full rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">Salvar alterações e aprovar</button>
                                 </form>
-                            </details>
-                            <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}">{% csrf_token %}<button class="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">Aprovar</button></form>
-                            <form method="post" action="{% url 'reprovar_cadastro' 'responsavel' responsavel.id %}" onsubmit="return confirm('Reprovar e remover este responsável?')">{% csrf_token %}<button class="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Reprovar</button></form>
+                            </template>
+                            <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}" data-confirm-title="Aprovar cadastro?" data-confirm-message="Deseja realmente aprovar o cadastro de {{ responsavel.usuario.get_full_name }}?" data-confirm-label="Sim, aprovar" data-confirm-style="approve">{% csrf_token %}<button class="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">Aprovar</button></form>
+                            <form method="post" action="{% url 'reprovar_cadastro' 'responsavel' responsavel.id %}" data-confirm-title="Reprovar cadastro?" data-confirm-message="Deseja realmente reprovar e remover o cadastro de {{ responsavel.usuario.get_full_name }}?" data-confirm-label="Sim, reprovar" data-confirm-style="reject">{% csrf_token %}<button class="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Reprovar</button></form>
                         </div>
                     </div>
                 </article>
             {% endfor %}
         </div>
     </section>
+</div>
+
+<div id="pending-edit-modal" class="fixed inset-0 z-[90] hidden items-center justify-center overflow-y-auto bg-gray-900/60 p-4" role="dialog" aria-modal="true" aria-labelledby="pending-edit-title">
+    <div class="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+        <div class="mb-5 flex items-start justify-between gap-4">
+            <h2 id="pending-edit-title" class="text-xl font-bold text-gray-900">Editar cadastro pendente</h2>
+            <button type="button" data-close-edit aria-label="Fechar" class="text-3xl leading-none text-gray-500 hover:text-gray-900">&times;</button>
+        </div>
+        <div id="pending-edit-content"></div>
+    </div>
+</div>
+
+<div id="pending-confirm-modal" class="fixed inset-0 z-[95] hidden items-center justify-center bg-gray-900/60 p-4" role="dialog" aria-modal="true" aria-labelledby="pending-confirm-title" aria-describedby="pending-confirm-message">
+    <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <h2 id="pending-confirm-title" class="text-xl font-bold text-gray-900"></h2>
+        <p id="pending-confirm-message" class="mt-3 text-gray-600"></p>
+        <div class="mt-6 flex justify-end gap-3">
+            <button type="button" id="pending-confirm-cancel" class="rounded-lg bg-gray-100 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-200">Cancelar</button>
+            <button type="button" id="pending-confirm-submit" class="rounded-lg px-4 py-2 font-bold text-white"></button>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -86,6 +107,12 @@
     const search = document.getElementById('pending-search');
     const clearSearch = document.getElementById('clear-pending-search');
     const empty = document.getElementById('pending-empty');
+    const editModal = document.getElementById('pending-edit-modal');
+    const editContent = document.getElementById('pending-edit-content');
+    const confirmModal = document.getElementById('pending-confirm-modal');
+    let pendingForm = null;
+    const openModal = modal => { modal.classList.remove('hidden'); modal.classList.add('flex'); };
+    const closeModal = modal => { modal.classList.add('hidden'); modal.classList.remove('flex'); };
     function updateList() {
         const query = search.value.trim().toLocaleLowerCase('pt-BR');
         let visible = 0;
@@ -106,11 +133,42 @@
             const selected = tab === button;
             tab.setAttribute('aria-selected', String(selected));
             tab.className = `pending-tab rounded-lg px-5 py-2 font-semibold ${selected ? 'bg-blue-700 text-white' : 'border border-gray-300 bg-white text-gray-700'}`;
+            const count = tab.querySelector('[data-tab-count]');
+            count.classList.toggle('bg-white/20', selected);
+            count.classList.toggle('bg-gray-100', !selected);
         });
         updateList();
     }));
     search.addEventListener('input', updateList);
     clearSearch.addEventListener('click', () => { search.value = ''; updateList(); search.focus(); });
+    document.querySelectorAll('[data-open-edit]').forEach(button => button.addEventListener('click', () => {
+        const template = button.parentElement.querySelector('[data-edit-form]');
+        editContent.replaceChildren(template.content.cloneNode(true));
+        openModal(editModal);
+        editContent.querySelector('input:not([type="hidden"])')?.focus();
+    }));
+    editModal.addEventListener('click', event => { if (event.target === editModal) closeModal(editModal); });
+    document.querySelectorAll('[data-close-edit]').forEach(button => button.addEventListener('click', () => closeModal(editModal)));
+    document.querySelectorAll('form[data-confirm-title]').forEach(form => form.addEventListener('submit', event => {
+        event.preventDefault();
+        pendingForm = form;
+        document.getElementById('pending-confirm-title').textContent = form.dataset.confirmTitle;
+        document.getElementById('pending-confirm-message').textContent = form.dataset.confirmMessage;
+        const submit = document.getElementById('pending-confirm-submit');
+        submit.textContent = form.dataset.confirmLabel;
+        submit.className = `rounded-lg px-4 py-2 font-bold text-white ${form.dataset.confirmStyle === 'reject' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`;
+        openModal(confirmModal);
+    }));
+    confirmModal.addEventListener('click', event => { if (event.target === confirmModal) closeModal(confirmModal); });
+    document.getElementById('pending-confirm-cancel').addEventListener('click', () => { pendingForm = null; closeModal(confirmModal); });
+    document.getElementById('pending-confirm-submit').addEventListener('click', () => {
+        if (pendingForm) pendingForm.submit();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        if (!confirmModal.classList.contains('hidden')) { pendingForm = null; closeModal(confirmModal); }
+        else if (!editModal.classList.contains('hidden')) closeModal(editModal);
+    });
     updateList();
 })();
 </script>
