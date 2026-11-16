@@ -36,7 +36,24 @@
         {% endfor %}
     </div>
 </div>
+<div id="delete-vehicle-modal" class="fixed inset-0 z-[90] hidden items-center justify-center bg-gray-900/60 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-vehicle-title" aria-describedby="delete-vehicle-description">
+    <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <h2 id="delete-vehicle-title" class="text-xl font-bold text-gray-900">Confirmar exclusão</h2>
+        <p id="delete-vehicle-description" class="mt-2 text-gray-700">Você está prestes a excluir <strong id="delete-vehicle-name"></strong>.</p>
+        <p class="mt-4 text-sm text-gray-600">Digite o número <strong id="delete-vehicle-code" class="text-lg text-red-700"></strong> para confirmar.</p>
+        <input id="delete-vehicle-input" type="text" maxlength="10" inputmode="numeric" autocomplete="off" class="mt-2 w-full rounded-lg border px-3 py-2" aria-label="Número de confirmação">
+        <p id="delete-vehicle-error" class="mt-2 hidden text-sm text-red-700" role="alert"></p>
+        <div class="mt-6 flex justify-end gap-3"><button type="button" id="cancel-delete-vehicle" class="rounded-lg bg-gray-100 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-200">Cancelar</button><button type="button" id="confirm-delete-vehicle" disabled class="rounded-lg bg-red-600 px-4 py-2 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Excluir veículo</button></div>
+    </div>
+</div>
 <script>
-document.querySelectorAll('[data-delete-vehicle]').forEach(form=>form.addEventListener('submit',event=>{event.preventDefault();const n=prompt(`Para excluir ${form.dataset.name}, digite o número ${form.dataset.number}:`);if(n===form.dataset.number){const input=document.createElement('input');input.type='hidden';input.name='confirmacao_numero';input.value=n;form.append(input);form.submit()}else if(n!==null)alert('Número incorreto. O veículo não foi excluído.')}));
+const deleteVehicleModal=document.getElementById('delete-vehicle-modal'),deleteVehicleInput=document.getElementById('delete-vehicle-input');let deleteVehicleForm=null,deleteVehicleCode='';
+document.querySelectorAll('[data-delete-vehicle]').forEach(form=>form.addEventListener('submit',event=>{event.preventDefault();deleteVehicleForm=form;deleteVehicleCode=form.dataset.number;document.getElementById('delete-vehicle-name').textContent=form.dataset.name;document.getElementById('delete-vehicle-code').textContent=deleteVehicleCode;deleteVehicleInput.value='';document.getElementById('delete-vehicle-error').classList.add('hidden');document.getElementById('confirm-delete-vehicle').disabled=true;deleteVehicleModal.classList.remove('hidden');deleteVehicleModal.classList.add('flex');deleteVehicleInput.focus()}));
+deleteVehicleInput.addEventListener('input',()=>document.getElementById('confirm-delete-vehicle').disabled=deleteVehicleInput.value!==deleteVehicleCode);
+function closeDeleteVehicleModal(){deleteVehicleModal.classList.add('hidden');deleteVehicleModal.classList.remove('flex');deleteVehicleForm=null}
+document.getElementById('cancel-delete-vehicle').addEventListener('click',closeDeleteVehicleModal);
+deleteVehicleModal.addEventListener('click',event=>{if(event.target===deleteVehicleModal)closeDeleteVehicleModal()});
+document.getElementById('confirm-delete-vehicle').addEventListener('click',event=>{if(!deleteVehicleForm||deleteVehicleInput.value!==deleteVehicleCode)return;const button=event.currentTarget;button.disabled=true;button.setAttribute('aria-busy','true');button.textContent='Excluindo…';const hidden=document.createElement('input');hidden.type='hidden';hidden.name='confirmacao_numero';hidden.value=deleteVehicleCode;deleteVehicleForm.append(hidden);deleteVehicleForm.submit()});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!deleteVehicleModal.classList.contains('hidden'))closeDeleteVehicleModal()});
 </script>
 {% endblock %}

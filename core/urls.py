@@ -16,6 +16,7 @@ urlpatterns = [
     path('cadastro/', usuarios_views.cadastro_responsavel, name='cadastro'),
     
     path('alunos/cadastrar/', alunos_views.cadastro_aluno, name='cadastro_aluno'),
+    path('alunos/<int:aluno_id>/editar/', alunos_views.editar_aluno_responsavel, name='editar_aluno_responsavel'),
 
     path('transporte/', include('transporte.urls')),
     path('usuarios/', include('usuarios.urls')),

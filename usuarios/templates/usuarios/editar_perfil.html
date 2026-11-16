@@ -16,7 +16,7 @@
                 {% elif user.first_name and user.last_name %}
                     {{ user.first_name|slice:":1"|upper }}{{ user.last_name|slice:":1"|upper }}
                 {% elif user.first_name %}{{ user.first_name|slice:":1"|upper }}
-                {% else %}<img src="{% static 'img/icone_pessoa.png' %}" alt="Ícone de perfil" class="h-12 w-12 object-contain">{% endif %}
+                {% else %}<img src="{% static 'img/icone_pessoa.png' %}" alt="Ícone de perfil" class="h-12 w-12 object-contain brightness-0 invert">{% endif %}
             </div>
             <div class="flex flex-wrap justify-center gap-2">
                 <label for="profile-photo" class="cursor-pointer rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">Alterar foto</label>
@@ -77,7 +77,8 @@
         if (profilePhotoInput.files[0] || profilePreview.dataset.hasPhoto === 'true') return;
         const initials = `${profileFirstName.value.trim().slice(0, 1)}${profileLastName.value.trim().slice(0, 1)}`.toLocaleUpperCase('pt-BR');
         profilePreview.style.backgroundColor = profileAvatarColor.value;
-        profilePreview.textContent = initials;
+        if (initials) profilePreview.textContent = initials;
+        else profilePreview.innerHTML = '<img src="{% static 'img/icone_pessoa.png' %}" alt="Ícone de perfil" class="h-12 w-12 object-contain brightness-0 invert">';
     };
     profileAvatarColors.forEach(button => {
         const selected = button.dataset.color === profileAvatarColor.value;

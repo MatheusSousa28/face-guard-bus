@@ -18,7 +18,7 @@
     </div>
     <div class="relative w-full mb-4">
         <label for="user-search" class="sr-only">Pesquisar usuários</label>
-        <input id="user-search" type="text" autocomplete="off" placeholder="Pesquisar por nome, e-mail, CPF ou ID..."
+        <input id="user-search" type="text" maxlength="100" autocomplete="off" placeholder="Pesquisar por nome, e-mail, CPF ou ID..."
                class="w-full rounded-xl border border-gray-300 bg-white py-3 pl-4 pr-12 text-gray-900 shadow-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-600">
         <button id="clear-search" type="button" aria-label="Limpar pesquisa" title="Limpar pesquisa"
                 class="hidden absolute inset-y-0 right-0 px-4 text-xl text-blue-600 hover:text-blue-800">&times;</button>
@@ -90,7 +90,7 @@
 </div>
 
 <div id="password-modal" class="hidden fixed inset-0 z-[65] bg-gray-900/60 p-4 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="password-title">
-    <form id="password-form" class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+    <form id="password-form" data-async-submit="true" class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
         <div class="flex items-start justify-between gap-4"><div><h2 id="password-title" class="text-xl font-bold text-gray-900">Redefinir senha</h2><p id="password-user-name" class="text-sm text-gray-600 mt-1"></p></div><button type="button" id="close-password-modal" aria-label="Fechar" class="text-2xl text-gray-500">&times;</button></div>
         <label class="block text-sm font-semibold text-gray-700">Nova senha
             <span class="relative mt-1 block"><input name="senha" type="password" required minlength="8" maxlength="128" autocomplete="new-password" class="w-full rounded-lg border px-3 py-2 pr-12"><button type="button" data-toggle-password aria-label="Mostrar senha" title="Mostrar senha" class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-800">
@@ -117,7 +117,7 @@
         <p class="text-gray-700">Tem certeza de que deseja excluir este usuário?</p>
         <p id="delete-user-name" class="font-semibold text-gray-900 mt-2"></p>
         <p class="mt-4 text-sm text-gray-600">Digite exatamente este número para confirmar: <strong id="delete-code" class="text-lg text-red-700"></strong></p>
-        <input id="delete-input" type="text" inputmode="numeric" autocomplete="off" class="mt-2 w-full border rounded-lg px-3 py-2" aria-label="Número de confirmação">
+        <input id="delete-input" type="text" maxlength="4" inputmode="numeric" autocomplete="off" class="mt-2 w-full border rounded-lg px-3 py-2" aria-label="Número de confirmação">
         <p id="delete-error" class="hidden text-sm text-red-600 mt-2"></p>
         <div class="flex justify-end gap-3 mt-6">
             <button id="cancel-delete" type="button" class="rounded-lg bg-gray-200 px-4 py-2 font-semibold">Cancelar</button>
@@ -190,7 +190,7 @@
             const avatarColor = /^#[0-9a-f]{6}$/i.test(user.cor_avatar || '') ? user.cor_avatar : '#1d4ed8';
             const fallback = initials
                 ? `<div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full font-bold text-white" style="background-color:${avatarColor}">${escapeHtml(initials)}</div>`
-                : `<img src="${avatarPlaceholder}" alt="Ícone de perfil" class="h-14 w-14 rounded-full object-contain">`;
+                : `<img src="${avatarPlaceholder}" alt="Ícone de perfil" class="h-14 w-14 rounded-full bg-blue-700 object-contain brightness-0 invert">`;
             const avatar = showDeleted
                 ? user.foto ? `<img src="${escapeHtml(user.foto)}" alt="Foto de ${escapeHtml(user.nome)}" class="h-14 w-14 rounded-full object-cover">` : fallback
                 : user.foto
@@ -378,7 +378,7 @@
             ? `<img id="profile-photo-image" src="${escapeHtml(user.foto)}" alt="Foto de ${escapeHtml(user.nome || 'usuário')}" class="h-full w-full object-cover">`
             : initials
                 ? `<span id="profile-photo-initials" class="flex h-full w-full items-center justify-center text-3xl font-bold text-white">${escapeHtml(initials)}</span>`
-                : `<img id="profile-photo-placeholder" src="${avatarPlaceholder}" alt="Ícone padrão de perfil" class="h-12 w-12 object-contain">`;
+                : `<img id="profile-photo-placeholder" src="${avatarPlaceholder}" alt="Ícone padrão de perfil" class="h-12 w-12 object-contain brightness-0 invert">`;
         const colorOptions = supportsAvatarColor ? `<fieldset id="profile-avatar-color-options" class="${hasPhoto ? 'hidden ' : ''}text-center">
                 <legend class="mb-2 text-sm font-semibold text-gray-700">Cor de fundo das iniciais</legend>
                 <input type="hidden" name="cor_avatar" value="${avatarColor}">
@@ -421,7 +421,7 @@
         preview.style.backgroundColor = color;
         preview.innerHTML = initials
             ? `<span class="flex h-full w-full items-center justify-center text-3xl font-bold text-white">${escapeHtml(initials)}</span>`
-            : `<img src="${avatarPlaceholder}" alt="Ícone padrão de perfil" class="h-12 w-12 object-contain">`;
+            : `<img src="${avatarPlaceholder}" alt="Ícone padrão de perfil" class="h-12 w-12 object-contain brightness-0 invert">`;
     }
     function setupAvatarColorButtons() {
         const selectedColor = modalContent.querySelector('[name="cor_avatar"]')?.value;
@@ -454,7 +454,8 @@
 
     function formMarkup(user={}, isNew=false) {
         const readOnly = !editing && !isNew ? 'readonly' : '';
-        const field = (label, name, value, type='text', required=true) => `<label class="block text-sm font-semibold text-gray-700">${label}<input name="${name}" type="${type}" value="${escapeHtml(value)}" ${required ? 'required' : ''} ${readOnly} class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 ${readOnly ? 'bg-gray-50' : 'focus:ring-2 focus:ring-blue-500'}"></label>`;
+        const maxLength = {nome:100, first_name:150, last_name:150, email:254, cpf:14, senha:128};
+        const field = (label, name, value, type='text', required=true) => `<label class="block text-sm font-semibold text-gray-700">${label}<input name="${name}" type="${type}" value="${escapeHtml(value)}" ${maxLength[name] ? `maxlength="${maxLength[name]}"` : ''} ${type==='number' && name==='idade' ? 'min="2" max="30"' : ''} ${required ? 'required' : ''} ${readOnly} class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 ${readOnly ? 'bg-gray-50' : 'focus:ring-2 focus:ring-blue-500'}"></label>`;
         let fields;
         if (category === 'aluno') {
             fields = `${profilePhotoMarkup(user, isNew)}<div class="grid sm:grid-cols-2 gap-4">${field('Nome do aluno','nome',user.nome)}${field('Idade','idade',user.idade,'number')}</div>
@@ -474,7 +475,7 @@
             fields = `${profilePhotoMarkup(user, isNew)}<div class="grid sm:grid-cols-2 gap-4">${field('Nome','first_name',user.first_name)}${field('Sobrenome','last_name',user.last_name)}</div>${field('E-mail','email',user.email,'email')}${field('CPF','cpf',user.cpf)}
                 ${isNew ? `${field('Senha inicial','senha','','password')}<p class="text-xs text-gray-500">Mínimo de 8 caracteres, com maiúscula, minúscula, número e símbolo.</p>` : ''}`;
         }
-        return `<form id="user-form" class="space-y-4" enctype="multipart/form-data">${fields}
+        return `<form id="user-form" data-async-submit="true" class="space-y-4" enctype="multipart/form-data">${fields}
             <p id="form-error" class="hidden text-sm text-red-700" role="alert"></p>
             <div class="flex justify-end gap-3 pt-3"><button type="button" data-close-user-modal class="rounded-lg bg-gray-200 px-4 py-2 font-semibold">${editing || isNew ? 'Cancelar' : 'Fechar'}</button>${editing || isNew ? `<button type="submit" class="rounded-lg bg-blue-600 px-5 py-2 font-bold text-white hover:bg-blue-700">${isNew ? 'Cadastrar' : 'Salvar'}</button>` : ''}</div></form>`;
     }
@@ -825,13 +826,17 @@
         event.preventDefault();
         const errorBox = event.target.querySelector('#form-error');
         const formData = new FormData(event.target);
+        if (category === 'aluno' && !formData.get('foto_perfil')?.size && !currentUser?.foto) {
+            errorBox.textContent = 'A foto do aluno é obrigatória para identificação. Adicione uma foto antes de salvar.'; errorBox.classList.remove('hidden'); return;
+        }
         if (creating && !formData.get('foto_perfil')?.size) {
             errorBox.textContent = 'Adicione uma foto de perfil antes de cadastrar.'; errorBox.classList.remove('hidden'); return;
         }
         if (creating && category === 'aluno' && !formData.get('foto_base64')) {
             errorBox.textContent = 'Ative a câmera e capture os dados faciais do aluno.'; errorBox.classList.remove('hidden'); return;
         }
-        const submit = event.target.querySelector('[type="submit"]'); submit.disabled = true;
+        const submit = event.target.querySelector('[type="submit"]'); submit.disabled = true; submit.textContent = 'Salvando…';
+        const originalSubmitLabel = creating ? 'Cadastrar' : 'Salvar';
         const wasCreating = creating;
         try {
             const result = await request(api(category, currentUser?.id), {method: 'POST', body: formData});
@@ -839,7 +844,7 @@
             if (wasCreating) pages[category] = 1;
             listCache.clear(); pendingLists.clear(); await loadList();
             if (window.Swal) Swal.fire({toast:true,position:'bottom-end',icon:'success',title:result.mensagem,showConfirmButton:false,timer:2500});
-        } catch (error) { errorBox.textContent = error.message; errorBox.classList.remove('hidden'); submit.disabled = false; }
+        } catch (error) { errorBox.textContent = error.message; errorBox.classList.remove('hidden'); submit.disabled = false; submit.textContent = originalSubmitLabel; }
     });
     document.getElementById('close-photo-viewer').addEventListener('click', closePhotoViewer);
     photoViewer.addEventListener('click', event => { if (event.target === photoViewer) closePhotoViewer(); });
@@ -886,12 +891,13 @@
         }
         if (senha !== confirmar) { error.textContent = 'As senhas não coincidem.'; error.classList.remove('hidden'); return; }
         submit.disabled = true;
+        submit.textContent = 'Redefinindo…';
         try {
             const data = await request(passwordApi(passwordTarget.type, passwordTarget.id), {method:'POST', body:new FormData(form)});
             closePasswordModal();
             if (window.Swal) Swal.fire({toast:true,position:'bottom-end',icon:'success',title:data.mensagem,showConfirmButton:false,timer:2500});
         } catch (err) { error.textContent = err.message; error.classList.remove('hidden'); }
-        finally { updateResetPasswordSubmit(); }
+        finally { submit.textContent = 'Redefinir senha'; updateResetPasswordSubmit(); }
     });
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
@@ -915,8 +921,9 @@
     document.getElementById('cancel-delete').addEventListener('click', () => document.getElementById('delete-modal').classList.add('hidden'));
     document.getElementById('confirm-delete').addEventListener('click', async event => {
         event.currentTarget.disabled = true;
+        event.currentTarget.textContent = 'Excluindo…';
         try { const result = await request(api(category, deleteTarget), {method:'DELETE'}); document.getElementById('delete-modal').classList.add('hidden'); listCache.clear(); pendingLists.clear(); await loadList(); if (window.Swal) Swal.fire({toast:true,position:'bottom-end',icon:'success',title:result.mensagem,showConfirmButton:false,timer:2500}); }
-        catch (error) { const box = document.getElementById('delete-error'); box.textContent = error.message; box.classList.remove('hidden'); event.currentTarget.disabled = document.getElementById('delete-input').value !== deleteCode; }
+        catch (error) { const box = document.getElementById('delete-error'); box.textContent = error.message; box.classList.remove('hidden'); event.currentTarget.disabled = document.getElementById('delete-input').value !== deleteCode; event.currentTarget.textContent = 'Excluir usuário'; }
     });
     loadList();
 })();

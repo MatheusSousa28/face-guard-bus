@@ -34,14 +34,21 @@
             status.textContent = 'Este navegador não disponibiliza acesso à câmera.';
             return;
         }
+        buttonCamera.disabled = true;
+        buttonCamera.setAttribute('aria-busy', 'true');
+        buttonCamera.textContent = 'Ativando câmera…';
         try {
             stream = await navigator.mediaDevices.getUserMedia({video: true});
             video.srcObject = stream;
             buttonCapture.disabled = false;
             buttonCamera.textContent = 'Câmera ativada';
             buttonCamera.disabled = true;
+            buttonCamera.removeAttribute('aria-busy');
             status.textContent = 'Câmera pronta. Posicione o rosto e capture o evento.';
         } catch (error) {
+            buttonCamera.disabled = false;
+            buttonCamera.removeAttribute('aria-busy');
+            buttonCamera.textContent = 'Ativar câmera';
             status.textContent = 'Não foi possível acessar a câmera. Verifique a permissão do navegador.';
         }
     });
@@ -50,6 +57,8 @@
         if (processing || !video.videoWidth) return;
         processing = true;
         buttonCapture.disabled = true;
+        buttonCapture.setAttribute('aria-busy', 'true');
+        buttonCapture.textContent = 'Enviando captura…';
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -80,6 +89,8 @@
         } finally {
             processing = false;
             buttonCapture.disabled = false;
+            buttonCapture.removeAttribute('aria-busy');
+            buttonCapture.textContent = 'Capturar embarque/desembarque';
         }
     });
 

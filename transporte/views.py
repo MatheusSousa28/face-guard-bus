@@ -558,6 +558,7 @@ def gerenciar_veiculo(request, id=None):
         placa = request.POST.get('placa', '').strip().upper()
         cor = request.POST.get('cor', '').strip()
         foto = request.FILES.get('foto')
+        remover_foto = request.POST.get('remover_foto') == '1'
         motoristas_ids = request.POST.getlist('motoristas') # Pega a lista de IDs dos checkboxes
         alunos_ids = request.POST.getlist('alunos')
         if alunos_ids:
@@ -652,6 +653,11 @@ def gerenciar_veiculo(request, id=None):
                 if foto:
                     veiculo.foto = foto
                     veiculo.save(update_fields=['foto'])
+                elif remover_foto and veiculo.foto:
+                    foto_antiga = veiculo.foto
+                    veiculo.foto = None
+                    veiculo.save(update_fields=['foto'])
+                    foto_antiga.delete(save=False)
 
                 veiculo.motoristas_autorizados.set(motoristas.filter(id__in=motoristas_ids))
                 veiculo.alunos_autorizados.set(Aluno.objects.filter(

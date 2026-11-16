@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="mx-auto max-w-2xl px-4 py-8">
+    <div class="mb-4">{% include '_botao_voltar.html' with voltar_url='home' %}</div>
+    <form method="post" enctype="multipart/form-data" class="space-y-5 rounded-2xl bg-white p-6 shadow">
+        {% csrf_token %}
+        <h1 class="text-2xl font-bold text-gray-900">Editar aluno</h1>
+        <p class="text-sm text-gray-600">A foto é obrigatória para identificação. Se já existe uma foto, ela será mantida caso não envie outra.</p>
+        <div class="flex flex-col items-center gap-3">
+            <img id="student-photo-preview" src="{% if aluno.foto_perfil %}{{ aluno.foto_perfil.url }}{% endif %}" alt="Foto de {{ aluno.nome }}" class="{% if not aluno.foto_perfil %}hidden {% endif %}h-28 w-28 rounded-full object-cover">
+            <label class="w-full text-sm font-semibold text-gray-700">{% if aluno.foto_perfil %}Alterar foto{% else %}Adicionar foto obrigatória{% endif %}
+                <input id="student-photo-input" type="file" name="foto_perfil" accept="image/jpeg,image/png,image/webp" {% if not aluno.foto_perfil %}required{% endif %} class="mt-1 w-full rounded-lg border p-2">
+            </label>
+        </div>
+        <label class="block text-sm font-semibold text-gray-700">Nome<input name="nome" value="{{ request.POST.nome|default:aluno.nome }}" maxlength="100" minlength="2" required class="mt-1 w-full rounded-lg border p-2"><small class="text-gray-500">Até 100 caracteres · <span data-count>0</span>/100</small></label>
+        <label class="block text-sm font-semibold text-gray-700">Idade<input name="idade" type="number" min="2" max="30" value="{{ request.POST.idade|default:aluno.idade }}" required class="mt-1 w-full rounded-lg border p-2"></label>
+        <div class="flex justify-end gap-3 border-t pt-4"><a href="{% url 'home' %}" class="rounded-lg bg-gray-100 px-5 py-2 font-semibold">Cancelar</a><button type="submit" class="rounded-lg bg-blue-600 px-5 py-2 font-bold text-white">Salvar alterações</button></div>
+    </form>
+</div>
+<script>
+const nameInput=document.querySelector('[name="nome"]'),counter=document.querySelector('[data-count]');const updateCount=()=>counter.textContent=nameInput.value.length;nameInput.addEventListener('input',updateCount);updateCount();
+document.getElementById('student-photo-input').addEventListener('change',event=>{const file=event.target.files[0];if(!file)return;const preview=document.getElementById('student-photo-preview');preview.src=URL.createObjectURL(file);preview.classList.remove('hidden')});
+</script>
+{% endblock %}

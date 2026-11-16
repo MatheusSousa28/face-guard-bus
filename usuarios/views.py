@@ -256,8 +256,8 @@ def cadastro_responsavel(request):
             messages.error(request, 'As senhas não coincidem.')
             return render(request, 'usuarios/cadastro.html')
 
-        if not _senha_valida(senha):
-            messages.error(request, 'A senha deve ter no mínimo 8 caracteres, letras maiúsculas e minúsculas, número e símbolo.')
+        if not _senha_valida(senha) or len(senha) > 128:
+            messages.error(request, 'A senha deve ter de 8 a 128 caracteres, com letras maiúsculas e minúsculas, número e símbolo.')
             return render(request, 'usuarios/cadastro.html')
 
         try:
@@ -607,6 +607,8 @@ def api_usuarios(request, tipo, obj_id=None):
                     item.nome, item.idade = nome_aluno, idade
                 if foto:
                     item.foto_perfil = foto
+                elif not criando and not item.foto_perfil:
+                    return JsonResponse({'erro': 'A foto do aluno é obrigatória para identificação. Envie uma foto antes de salvar.'}, status=400)
                 item.save()
                 if data.get('atualizar_veiculos') == '1':
                     veiculos_selecionados = Veiculo.objects.filter(pk__in=data.getlist('veiculos'))
@@ -798,8 +800,8 @@ def cadastrar_motorista(request):
             erros.append('Este e-mail já está cadastrado.')
         if Motorista.objects.filter(cpf=cpf).exists():
             erros.append('Este CPF já está cadastrado.')
-        if not _senha_valida(senha):
-            erros.append('A senha deve ter ao menos 8 caracteres, letras maiúsculas e minúsculas, número e símbolo.')
+        if not _senha_valida(senha) or len(senha) > 128:
+            erros.append('A senha deve ter de 8 a 128 caracteres, com letras maiúsculas e minúsculas, número e símbolo.')
         if foto and not _imagem_valida(foto):
             erros.append('Envie uma foto JPEG, PNG ou WebP válida com até 5 MB.')
 

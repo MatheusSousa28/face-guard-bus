@@ -1,6 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 import base64
 import json
 import io
@@ -8,6 +8,7 @@ import face_recognition
 from django.core.files.base import ContentFile
 from alunos.models import Aluno
 import uuid
+from PIL import Image, UnidentifiedImageError
 
 
 def codificar_foto_aluno(arquivo):
@@ -113,3 +114,48 @@ def cadastro_aluno(request):
             return redirect('cadastro_aluno')
 
     return render(request, 'alunos/cadastro_aluno.html')
+
+
+@login_required(login_url='login')
+def editar_aluno_responsavel(request, aluno_id):
+    if not hasattr(request.user, 'responsavel'):
+        messages.error(request, 'Apenas responsáveis podem editar os dados dos próprios alunos.')
+        return redirect('home')
+    aluno = get_object_or_404(
+        Aluno, pk=aluno_id, responsavel=request.user.responsavel, deleted_at__isnull=True,
+    )
+    if request.method == 'POST':
+        nome = request.POST.get('nome', '').strip()
+        try:
+            idade = int(request.POST.get('idade', ''))
+        except (TypeError, ValueError):
+            idade = 0
+        foto = request.FILES.get('foto_perfil')
+        if not 2 <= len(nome) <= 100 or not 2 <= idade <= 30:
+            messages.error(request, 'Informe nome (2 a 100 caracteres) e idade entre 2 e 30 anos.')
+        elif not foto and not aluno.foto_perfil:
+            messages.error(request, 'A foto do aluno é obrigatória para identificação. Envie uma foto antes de salvar.')
+        elif foto and not _foto_aluno_valida(foto):
+            messages.error(request, 'Envie uma foto JPEG, PNG ou WebP válida, de até 5 MB.')
+        else:
+            aluno.nome, aluno.idade = nome, idade
+            if foto:
+                aluno.foto_perfil = foto
+            aluno.save(update_fields=['nome', 'idade', 'foto_perfil'])
+            messages.success(request, 'Dados do aluno atualizados com sucesso.')
+            return redirect('home')
+    return render(request, 'alunos/editar_aluno.html', {'aluno': aluno})
+
+
+def _foto_aluno_valida(arquivo, limite=5 * 1024 * 1024):
+    if arquivo.size > limite:
+        return False
+    try:
+        arquivo.seek(0)
+        imagem = Image.open(arquivo)
+        imagem.verify()
+        arquivo.seek(0)
+        return imagem.format in {'JPEG', 'PNG', 'WEBP'}
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        arquivo.seek(0)
+        return False
