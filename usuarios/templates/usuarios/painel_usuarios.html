@@ -72,7 +72,7 @@
 <div id="vehicle-selection-modal" class="hidden fixed inset-0 z-[75] bg-gray-900/60 p-4 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="vehicle-selection-title">
     <div class="my-auto flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div class="flex items-start justify-between gap-4 border-b px-6 py-4">
-            <div><h2 id="vehicle-selection-title" class="text-xl font-bold text-gray-900">Veículos vinculados</h2><p class="mt-1 text-sm text-gray-500">Selecione os veículos que este motorista poderá utilizar.</p></div>
+            <div><h2 id="vehicle-selection-title" class="text-xl font-bold text-gray-900">Veículos vinculados</h2><p id="vehicle-selection-description" class="mt-1 text-sm text-gray-500">Selecione os veículos vinculados.</p></div>
             <button type="button" id="close-vehicle-selection" aria-label="Fechar" class="text-3xl leading-none text-gray-500 hover:text-gray-900">&times;</button>
         </div>
         <div class="flex flex-wrap items-center justify-between gap-3 border-b bg-gray-50 px-6 py-3">
@@ -460,7 +460,8 @@
             fields = `${profilePhotoMarkup(user, isNew)}<div class="grid sm:grid-cols-2 gap-4">${field('Nome do aluno','nome',user.nome)}${field('Idade','idade',user.idade,'number')}</div>
                 ${isNew ? `<label class="block text-sm font-semibold text-gray-700">Responsável<select name="responsavel_id" required class="mt-1 w-full rounded-lg border px-3 py-2"><option value="">Carregando responsáveis…</option></select></label>
                 ${faceCaptureMarkup()}
-                <label class="flex gap-2 text-sm text-gray-700"><input type="checkbox" name="termo_consentimento" required> Confirmo que há consentimento para coleta e armazenamento dos dados faciais para segurança escolar.</label>` : `<p class="text-sm text-gray-600">Responsável: ${escapeHtml(user.responsavel)} · ${escapeHtml(user.email)}</p>`}`;
+                <label class="flex gap-2 text-sm text-gray-700"><input type="checkbox" name="termo_consentimento" required> Confirmo que há consentimento para coleta e armazenamento dos dados faciais para segurança escolar.</label>` : `<p class="text-sm text-gray-600">Responsável: ${escapeHtml(user.responsavel)} · ${escapeHtml(user.email)}</p>`}
+                <input type="hidden" name="atualizar_veiculos" value="1"><section class="rounded-xl border border-gray-200 bg-gray-50 p-4"><div class="flex items-center justify-between gap-3"><div><h3 class="font-semibold text-gray-800">Veículos vinculados</h3><p id="motorista-vehicle-count" class="mt-1 text-sm text-gray-600">0 ônibus vinculados</p></div><button id="open-vehicle-selector" type="button" ${editing || isNew ? '' : 'disabled'} class="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50">Selecionar veículos</button></div></section>`;
         } else if (category === 'instituicao') {
             fields = `${profilePhotoMarkup(user, isNew)}<div class="grid sm:grid-cols-2 gap-4">${field('Nome','first_name',user.first_name)}${field('Sobrenome','last_name',user.last_name)}</div>${field('E-mail','email',user.email)}
                 ${isNew ? `${field('Senha inicial','senha','','password')}<p class="text-xs text-gray-500">Mínimo de 8 caracteres, com maiúscula, minúscula, número e símbolo.</p>` : ''}`;
@@ -483,10 +484,12 @@
         openModal(isNew ? `Cadastrar ${singular[category]}` : editing ? `Editar ${singular[category]}` : `Visualizar ${singular[category]}`);
         modalContent.innerHTML = formMarkup(user, isNew);
         setupAvatarColorButtons();
-        if (category === 'motorista') {
+        if (category === 'motorista' || category === 'aluno') {
             try {
                 const result = await request('/usuarios/painel/usuarios/api/veiculos/');
                 vehicleOptions = result.results;
+                document.getElementById('vehicle-selection-description').textContent = category === 'aluno' ? 'Escolha os veículos autorizados para o aluno (respeitando as vagas disponíveis).' : 'Selecione os veículos que este motorista poderá utilizar.';
+                document.getElementById('vehicle-selection-title').textContent = category === 'aluno' ? 'Veículos do aluno' : 'Veículos do motorista';
                 renderVehicleOptions();
                 updateVehicleCount();
             } catch (error) {

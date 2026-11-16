@@ -56,6 +56,16 @@ def _imagem_perfil_edicao_valida(arquivo, limite_bytes=2 * 1024 * 1024):
         arquivo.seek(0)
         return False
 
+
+def _vincular_aluno_veiculos(aluno, ids):
+    veiculos = Veiculo.objects.filter(pk__in=ids)
+    for veiculo in veiculos:
+        ocupacao = veiculo.alunos_autorizados.filter(deleted_at__isnull=True).exclude(pk=aluno.pk).count()
+        if ocupacao >= veiculo.capacidade:
+            return veiculo
+    aluno.veiculos.set(veiculos)
+    return None
+
 def login_view(request):
     #se o usuário clicou no botão entrar então ele enviou um formulário
     if request.method == 'POST':
@@ -316,6 +326,7 @@ def painel_instituicao_aprovacoes(request):
     contexto = {
         'responsaveis_pendentes': responsaveis,
         'alunos_pendentes': alunos,
+        'veiculos_disponiveis': Veiculo.objects.order_by('modelo', 'placa'),
     }
     return render(request, 'usuarios/painel_aprovacoes.html', contexto)
 
@@ -352,6 +363,10 @@ def aprovar_cadastro(request, tipo, obj_id):
             if not 2 <= len(nome) <= 100 or not 2 <= idade <= 30:
                 messages.error(request, 'Informe um nome válido e idade entre 2 e 30 anos. O cadastro não foi aprovado.')
                 return redirect(url_painel)
+            veiculo_cheio = _vincular_aluno_veiculos(obj, request.POST.getlist('veiculos'))
+            if veiculo_cheio:
+                messages.error(request, f'O veículo {veiculo_cheio.modelo} ({veiculo_cheio.placa}) está sem vagas. O cadastro não foi aprovado.')
+                return redirect(url_painel)
             obj.nome, obj.idade, obj.is_aprovado = nome, idade, True
             obj.save(update_fields=['nome', 'idade', 'is_aprovado'])
         else:
@@ -384,6 +399,12 @@ def aprovar_cadastro(request, tipo, obj_id):
     else:
         obj.is_aprovado = True
         obj.save(update_fields=['is_aprovado'])
+        veiculo_cheio = _vincular_aluno_veiculos(obj, request.POST.getlist('veiculos'))
+        if veiculo_cheio:
+            messages.error(request, f'O veículo {veiculo_cheio.modelo} ({veiculo_cheio.placa}) está sem vagas. O cadastro não foi aprovado.')
+            obj.is_aprovado = False
+            obj.save(update_fields=['is_aprovado'])
+            return redirect(url_painel)
 
     messages.success(request, 'Cadastro aprovado com sucesso!')
     return redirect(url_painel)
@@ -430,7 +451,9 @@ def _usuario_json(tipo, obj, request=None, incluir_veiculos=False):
                  'responsavel_id': obj.responsavel_id,
                  'email': obj.responsavel.usuario.email,
                  'foto': foto.url if foto else '', 'aprovado': obj.is_aprovado,
-                 'termo_consentimento': obj.termo_consentimento}
+                  'termo_consentimento': obj.termo_consentimento}
+        if incluir_veiculos:
+            dados['veiculos'] = [{'id': vehicle.pk} for vehicle in obj.veiculos.order_by('modelo', 'placa')]
     elif tipo == 'instituicao':
         usuario = obj.usuario
         foto = obj.foto_perfil
@@ -514,7 +537,7 @@ def api_usuarios(request, tipo, obj_id=None):
     if request.method == 'GET' and obj_id is not None:
         return JsonResponse(_usuario_json(
             tipo, get_object_or_404(qs, pk=obj_id), request,
-            incluir_veiculos=(tipo == 'motorista'),
+            incluir_veiculos=(tipo in {'motorista', 'aluno'}),
         ))
     if request.method not in {'POST', 'DELETE'}:
         return HttpResponseNotAllowed(['GET', 'POST', 'DELETE'])
@@ -585,6 +608,14 @@ def api_usuarios(request, tipo, obj_id=None):
                 if foto:
                     item.foto_perfil = foto
                 item.save()
+                if data.get('atualizar_veiculos') == '1':
+                    veiculos_selecionados = Veiculo.objects.filter(pk__in=data.getlist('veiculos'))
+                    for veiculo in veiculos_selecionados:
+                        atuais = veiculo.alunos_autorizados.filter(deleted_at__isnull=True).exclude(pk=item.pk if item.pk else None).count()
+                        if atuais >= veiculo.capacidade:
+                            transaction.set_rollback(True)
+                            return JsonResponse({'erro': f'O veículo {veiculo.modelo} ({veiculo.placa}) já atingiu a capacidade.'}, status=400)
+                    item.veiculos.set(veiculos_selecionados)
             else:
                 email = data.get('email', '').strip().lower()
                 if not nome or not sobrenome or len(nome) > 150 or len(sobrenome) > 150:
@@ -752,6 +783,7 @@ def cadastrar_motorista(request):
         cpf = re.sub(r'\D', '', request.POST.get('cpf', ''))
         senha = request.POST.get('senha', '')
         foto = request.FILES.get('foto_perfil')
+        cor_avatar = request.POST.get('cor_avatar', '#334155')
 
         erros = []
         if not nome or len(nome) > 150 or not sobrenome or len(sobrenome) > 150:
@@ -768,13 +800,13 @@ def cadastrar_motorista(request):
             erros.append('Este CPF já está cadastrado.')
         if not _senha_valida(senha):
             erros.append('A senha deve ter ao menos 8 caracteres, letras maiúsculas e minúsculas, número e símbolo.')
-        if not _imagem_valida(foto):
+        if foto and not _imagem_valida(foto):
             erros.append('Envie uma foto JPEG, PNG ou WebP válida com até 5 MB.')
 
         if erros:
             for erro in erros:
                 messages.error(request, erro)
-            return render(request, 'usuarios/cadastrar_motorista.html')
+            return render(request, 'usuarios/cadastrar_motorista.html', {'avatar_colors': CORES_AVATAR})
 
         try:
             with transaction.atomic():
@@ -786,7 +818,9 @@ def cadastrar_motorista(request):
                     last_name=sobrenome,
                     is_aprovado=True,
                 )
-                Motorista.objects.create(usuario=usuario, cpf=cpf, foto_perfil=foto)
+                if cor_avatar not in {cor for cor, _ in CORES_AVATAR}:
+                    cor_avatar = '#334155'
+                Motorista.objects.create(usuario=usuario, cpf=cpf, foto_perfil=foto, cor_avatar=cor_avatar)
         except Exception:
             messages.error(request, 'Não foi possível cadastrar o motorista. Verifique os dados e tente novamente.')
             return render(request, 'usuarios/cadastrar_motorista.html')
@@ -794,7 +828,7 @@ def cadastrar_motorista(request):
         messages.success(request, 'Motorista cadastrado e aprovado. Agora você pode vinculá-lo a um ou mais veículos.')
         return redirect('painel_usuarios')
 
-    return render(request, 'usuarios/cadastrar_motorista.html')
+    return render(request, 'usuarios/cadastrar_motorista.html', {'avatar_colors': CORES_AVATAR})
 
 @login_required(login_url='login')
 def deletar_usuario(request, tipo, obj_id):

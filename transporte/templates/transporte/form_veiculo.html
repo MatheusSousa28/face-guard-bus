@@ -1,78 +1,50 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 py-8">
-    <div class="mb-4">
-        {% include '_botao_voltar.html' with voltar_url='painel_veiculos' %}
-    </div>
+    <div class="mb-4">{% include '_botao_voltar.html' with voltar_url='painel_veiculos' %}</div>
     <h2 class="mb-6 text-2xl font-bold text-gray-900">{% if veiculo %}Editar Veículo{% else %}Cadastrar Novo Veículo{% endif %}</h2>
-
     <form method="POST" enctype="multipart/form-data" class="bg-white p-6 rounded-xl shadow-md space-y-6">
         {% csrf_token %}
-        <div class="grid grid-cols-2 gap-4">
-            <div>
-                <label class="block text-sm font-bold text-gray-700">Modelo (Ex: Sprinter, Marcopolo)</label>
-                <input type="text" name="modelo" value="{{ veiculo.modelo|default:'' }}" required class="w-full mt-1 border border-gray-300 rounded p-2">
+        <section class="flex flex-col items-center gap-3">
+            <div class="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-2 border-blue-100" id="vehicle-avatar" style="background-color:{{ veiculo.cor_avatar|default:'#1d4ed8' }}">
+                {% if veiculo.foto %}<img src="{{ veiculo.foto.url }}" class="h-full w-full object-cover" alt="Foto do veículo">
+                {% else %}<img src="{% static 'img/icone_onibus.png' %}" class="h-16 w-16 object-contain brightness-0 invert" alt="Ícone de ônibus">{% endif %}
             </div>
-            <div>
-                <label class="block text-sm font-bold text-gray-700">Placa</label>
-                <input type="text" name="placa" value="{{ veiculo.placa|default:'' }}" required class="w-full mt-1 border border-gray-300 rounded p-2 uppercase">
-            </div>
-            <div>
-                <label class="block text-sm font-bold text-gray-700">Cor</label>
-                <input type="text" name="cor" value="{{ veiculo.cor|default:'' }}" required class="w-full mt-1 border border-gray-300 rounded p-2">
-            </div>
-            <div>
-                <label class="block text-sm font-bold text-gray-700">Capacidade de Alunos</label>
-                <input type="number" name="capacidade" value="{{ veiculo.capacidade|default:'' }}" required class="w-full mt-1 border border-gray-300 rounded p-2">
-            </div>
-            <div class="col-span-2">
-                <label class="block text-sm font-bold text-gray-700">Foto do Veículo (Opcional)</label>
-                <input type="file" name="foto" accept="image/*" class="w-full mt-1 border border-gray-300 rounded p-2">
-            </div>
+            <label class="text-sm font-bold text-gray-700">Foto do veículo (opcional)<input type="file" name="foto" accept="image/*" class="mt-1 block w-full rounded border p-2"></label>
+            <fieldset class="text-center"><legend class="mb-2 text-sm font-semibold">Cor do ícone quando sem foto</legend><input type="hidden" name="cor_avatar" id="vehicle-color" value="{{ veiculo.cor_avatar|default:'#1d4ed8' }}"><div class="flex gap-3">
+                {% for color,label in avatar_colors %}<button type="button" data-color="{{ color }}" title="{{ label }}" aria-label="{{ label }}" class="h-8 w-8 rounded-full border-2 border-white ring-1 ring-gray-300" style="background-color:{{ color }}"></button>{% endfor %}
+            </div></fieldset>
+        </section>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="text-sm font-bold text-gray-700">Modelo<input name="modelo" maxlength="100" required value="{{ veiculo.modelo|default:'' }}" class="char-count mt-1 w-full rounded border p-2"><small class="text-gray-500">Até 100 caracteres · <span>0</span>/100</small></label>
+            <label class="text-sm font-bold text-gray-700">Placa<input name="placa" maxlength="10" required value="{{ veiculo.placa|default:'' }}" class="char-count mt-1 w-full rounded border p-2 uppercase"><small class="text-gray-500">Até 10 caracteres · <span>0</span>/10</small></label>
+            <label class="text-sm font-bold text-gray-700">Cor do veículo<input name="cor" maxlength="30" required value="{{ veiculo.cor|default:'' }}" class="char-count mt-1 w-full rounded border p-2"><small class="text-gray-500">Até 30 caracteres · <span>0</span>/30</small></label>
+            <label class="text-sm font-bold text-gray-700">Capacidade de alunos<input type="number" name="capacidade" min="1" max="100" required value="{{ veiculo.capacidade|default:'' }}" class="mt-1 w-full rounded border p-2"><small class="text-gray-500">De 1 a 100 alunos</small></label>
         </div>
-
-        <div class="border-t pt-4 mt-6">
-            <h3 class="font-bold text-lg text-gray-800 mb-3">Vincular Motoristas Autorizados</h3>
-            <p class="text-sm text-gray-500 mb-4">Selecione quais motoristas têm permissão para iniciar rotas com este veículo.</p>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {% for motorista in motoristas %}
-                <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition">
-                    <input type="checkbox" name="motoristas" value="{{ motorista.id }}" class="w-5 h-5 text-blue-600 rounded"
-                        {% if veiculo and motorista in veiculo.motoristas_autorizados.all %}checked{% endif %}>
-                    <div class="ml-3 flex items-center">
-                        {% if motorista.foto_perfil %}
-                            <img src="{{ motorista.foto_perfil.url }}" class="w-8 h-8 rounded-full object-cover mr-2">
-                        {% endif %}
-                        <span class="font-medium text-gray-700">{{ motorista.usuario.first_name }} (CPF: {{ motorista.cpf }})</span>
-                    </div>
-                </label>
-                {% empty %}
-                    <p class="text-sm text-red-500">Nenhum motorista aprovado no sistema ainda.</p>
-                {% endfor %}
-            </div>
-        </div>
-
-        <div class="border-t pt-4 mt-6">
-            <h3 class="font-bold text-lg text-gray-800 mb-1">Alunos autorizados neste veículo</h3>
-            <p class="text-sm text-gray-500 mb-4">Selecione em lote os alunos que podem usar este veículo. Um aluno pode ser associado a vários veículos.</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto">
-                {% for aluno in alunos %}
-                <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                    <input type="checkbox" name="alunos" value="{{ aluno.id }}" class="w-5 h-5 text-blue-600 rounded"
-                        {% if veiculo and aluno in veiculo.alunos_autorizados.all %}checked{% endif %}>
-                    <span class="ml-3 font-medium text-gray-700">{{ aluno.nome }} — responsável: {{ aluno.responsavel.usuario.first_name }}</span>
-                </label>
-                {% empty %}
-                    <p class="text-sm text-gray-500">Não há alunos aprovados para vincular.</p>
-                {% endfor %}
-            </div>
-        </div>
-
-        <div class="flex justify-end pt-4">
-            <a href="{% url 'painel_veiculos' %}" class="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg font-bold mr-4 hover:bg-gray-300">Cancelar</a>
-            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700">Salvar Veículo</button>
-        </div>
+        <section class="border-t pt-4"><h3 class="mb-1 text-lg font-bold">Motoristas autorizados</h3><p class="mb-4 text-sm text-gray-500">Selecione os motoristas que podem iniciar rotas com este veículo.</p><div class="mb-3"><input type="search" data-filter="motorista" placeholder="Buscar motorista…" class="w-full rounded border p-2"></div><div class="grid max-h-72 grid-cols-1 gap-3 overflow-y-auto md:grid-cols-2">
+            {% for motorista in motoristas %}<label data-search-item="{{ motorista.usuario.get_full_name|lower }} {{ motorista.cpf }}" class="flex items-center gap-3 rounded-lg border p-3 hover:bg-gray-50"><input type="checkbox" name="motoristas" value="{{ motorista.id }}" {% if veiculo and motorista in veiculo.motoristas_autorizados.all %}checked{% endif %}><div class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white" style="background-color:{{ motorista.cor_avatar }}">{% if motorista.foto_perfil %}<img src="{{ motorista.foto_perfil.url }}" class="h-full w-full rounded-full object-cover" alt="">{% else %}{{ motorista.usuario.first_name|slice:':1'|upper }}{{ motorista.usuario.last_name|slice:':1'|upper }}{% endif %}</div><span>{{ motorista.usuario.get_full_name }} · CPF {{ motorista.cpf }}</span></label>{% empty %}<p>Nenhum motorista aprovado.</p>{% endfor %}
+        </div></section>
+        <section class="border-t pt-4"><h3 class="mb-1 text-lg font-bold">Alunos autorizados neste veículo</h3><p class="mb-3 text-sm text-gray-500">Pesquise e carregue os resultados conforme necessário. A lista não baixa todos os alunos de uma vez.</p>
+            <div class="mb-3 flex flex-wrap gap-2"><input id="student-search" type="search" placeholder="Buscar aluno ou responsável…" class="min-w-0 flex-1 rounded border p-2"><span class="self-center text-sm text-gray-600"><span id="student-count">0</span> selecionados · capacidade <span id="student-capacity">{{ veiculo.capacidade|default:'—' }}</span></span></div>
+            <div class="mb-3"><h4 class="text-sm font-bold text-gray-700">Selecionados</h4><div id="selected-students" class="mt-1 flex max-h-24 flex-wrap gap-2 overflow-y-auto"></div></div>
+            <div id="student-results" class="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto rounded border p-2 md:grid-cols-2" aria-live="polite"></div><p id="student-loading" class="mt-2 hidden text-center text-sm text-gray-500">Carregando alunos…</p><p id="student-empty" class="mt-2 hidden text-center text-sm text-gray-500">Nenhum aluno encontrado.</p>
+        </section>
+        <div class="flex justify-end border-t pt-4"><a href="{% url 'painel_veiculos' %}" class="mr-4 rounded-lg bg-gray-200 px-6 py-2 font-bold">Cancelar</a><button class="rounded-lg bg-blue-600 px-6 py-2 font-bold text-white">Salvar Veículo</button></div>
     </form>
 </div>
+{{ alunos_selecionados|json_script:'selected-students-data' }}
+<script>
+document.querySelectorAll('.char-count').forEach(input=>{const count=input.parentElement.querySelector('small span');const update=()=>count.textContent=input.value.length;input.addEventListener('input',update);update()});
+const selectedStudents=new Map(JSON.parse(document.getElementById('selected-students-data').textContent).map(student=>[String(student.id),student]));
+const results=document.getElementById('student-results'), selectedBox=document.getElementById('selected-students'), studentSearch=document.getElementById('student-search');
+const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+let studentPage=1,hasMoreStudents=true,studentQuery='',studentLoading=false,searchDelay;
+function renderSelected(){document.getElementById('student-count').textContent=selectedStudents.size;selectedBox.innerHTML=[...selectedStudents.values()].map(s=>`<button type="button" data-remove-student="${s.id}" class="rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-800">${s.nome} ×</button>`).join('')||'<span class="text-xs text-gray-500">Nenhum aluno selecionado.</span>';}
+function addStudent(student){const id=String(student.id),limit=Number(document.querySelector('[name="capacidade"]').value);if(!selectedStudents.has(id)&&limit>0&&selectedStudents.size>=limit){alert(`A capacidade deste veículo é de ${limit} alunos.`);return false}if(!selectedStudents.has(id))selectedStudents.set(id,student);renderSelected();return true;}
+async function loadStudents(reset=false){if(studentLoading||(!hasMoreStudents&&!reset))return;if(reset){studentPage=1;hasMoreStudents=true;results.innerHTML=''}studentLoading=true;document.getElementById('student-loading').classList.remove('hidden');document.getElementById('student-empty').classList.add('hidden');try{const response=await fetch(`{% url 'api_alunos_para_veiculo' %}?q=${encodeURIComponent(studentQuery)}&page=${studentPage}`);const data=await response.json();if(!response.ok)throw new Error(data.erro||'Falha ao buscar alunos');for(const student of data.results){const id=String(student.id),checked=selectedStudents.has(id),label=document.createElement('label');label.className='flex items-center gap-2 rounded border p-2 text-sm hover:bg-gray-50';label.innerHTML=`<input type="checkbox" value="${id}" ${checked?'checked':''}><span><b>${escapeHtml(student.nome)}</b><small class="block text-gray-500">Responsável: ${escapeHtml(student.responsavel)}</small></span>`;const box=label.querySelector('input');box.addEventListener('change',()=>{if(box.checked&&!addStudent(student)){box.checked=false}else if(!box.checked){selectedStudents.delete(id);renderSelected()}});results.append(label)}hasMoreStudents=data.has_more;studentPage++;document.getElementById('student-empty').classList.toggle('hidden',results.children.length!==0)}catch(error){results.innerHTML=`<p class="col-span-full text-sm text-red-700">${escapeHtml(error.message)}</p>`}finally{studentLoading=false;document.getElementById('student-loading').classList.add('hidden')}}
+studentSearch.addEventListener('input',()=>{clearTimeout(searchDelay);searchDelay=setTimeout(()=>{studentQuery=studentSearch.value.trim();loadStudents(true)},250)});results.addEventListener('scroll',()=>{if(results.scrollTop+results.clientHeight>=results.scrollHeight-40)loadStudents()});selectedBox.addEventListener('click',event=>{const button=event.target.closest('[data-remove-student]');if(!button)return;selectedStudents.delete(button.dataset.removeStudent);renderSelected();results.querySelectorAll('input[type="checkbox"]').forEach(c=>{if(c.value===button.dataset.removeStudent)c.checked=false})});
+document.querySelector('form').addEventListener('submit',()=>{document.querySelectorAll('[data-student-hidden]').forEach(node=>node.remove());for(const id of selectedStudents.keys()){const input=document.createElement('input');input.type='hidden';input.name='alunos';input.value=id;input.dataset.studentHidden='1';document.querySelector('form').append(input)}});renderSelected();loadStudents();
+document.querySelectorAll('[data-color]').forEach(b=>b.addEventListener('click',()=>{document.getElementById('vehicle-color').value=b.dataset.color;document.getElementById('vehicle-avatar').style.backgroundColor=b.dataset.color}));
+</script>
 {% endblock %}

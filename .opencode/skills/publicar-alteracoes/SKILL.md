@@ -65,6 +65,7 @@ Não faça perguntas separadas para selecionar arquivos, obter mensagem e confir
 ### 4. Preparar e validar o commit
 
 - Antes de staged, conferir novamente o estado do index. Se houver conteúdo staged não aprovado, parar e pedir orientação; não o desmarcar.
+- Antes de adicionar imagens ou outros arquivos binários destinados ao Hugging Face, configurar o rastreamento Xet/LFS (por exemplo, `git lfs track "static/img/referencias/*.jpg"`) e incluir o `.gitattributes` resultante no manifesto. Verificar que os arquivos aparecem em `git lfs ls-files` e que o `git diff --cached` contém ponteiros LFS, não o conteúdo binário bruto. Faça isso antes do primeiro commit que introduz esses arquivos.
 - Adicionar arquivos aprovados um por um/por caminho explícito, sem glob amplo e sem `git add -A`.
 - Inspecionar `git diff --cached --name-status` e `git diff --cached` para confirmar que o conteúdo staged corresponde exatamente ao manifesto aprovado, sem segredos.
 - Se aparecer arquivo extra, diff inesperado, conflito ou alteração concorrente, parar antes do commit e pedir nova aprovação.
@@ -74,6 +75,7 @@ Não faça perguntas separadas para selecionar arquivos, obter mensagem e confir
 ### 5. Publicar nos dois destinos
 
 - Fazer push do mesmo commit para o remoto GitHub e o remoto Hugging Face, para as branches aprovadas. O push ao Hugging Face usa a autenticação local do token; nunca revelar o token.
+- Para arquivos binários, confirme previamente que o Git LFS/Xet está instalado e configurado para o remoto Hugging Face. Se um push for rejeitado por binários, não repita o push nem migre o histórico automaticamente: informe o destino que aceitou, explique que a conversão retroativa pode reescrever commits já publicados e solicite autorização explícita antes de qualquer reescrita/force push. Para publicações futuras, rastreie os padrões binários no Xet/LFS antes de criar o commit para evitar essa situação.
 - Não usar force push sem a permissão do usuário. Se houver rejeição por histórico divergente, conflito, falha de autenticação ou branch incorreta, parar; não rebasear, mesclar, sobrescrever ou mudar branch sem consentimento. Se o usuário permiir, faça o force, desde que você deixe explicito o motivo.
 - Se um destino aceitar e o outro falhar, informar claramente o estado parcial e o hash do commit. Não afirmar sucesso total; não apagar/reverter o destino já atualizado. Perguntar antes de qualquer tentativa que altere o estado.
 - Após cada push, verificar saída/status e, se disponível sem credenciais, confirmar referência/commit remoto. Relatar cada destino separadamente.

@@ -37,3 +37,4 @@ static/img/logo_azul.png filter=lfs diff=lfs merge=lfs -text
 static/img/logo_branco.png filter=lfs diff=lfs merge=lfs -text
 static/img/favicon.png filter=lfs diff=lfs merge=lfs -text
 static/img/*.png filter=lfs diff=lfs merge=lfs -text
+static/img/referencias/*.jpg filter=lfs diff=lfs merge=lfs -text

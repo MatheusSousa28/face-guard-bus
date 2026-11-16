@@ -1,12 +1,14 @@
 from django.db import models
 from usuarios.models import Motorista
 from alunos.models import Aluno
+from usuarios.models import CORES_AVATAR
 
 class Veiculo(models.Model):
     modelo = models.CharField(max_length=100)
     capacidade = models.IntegerField()
     placa = models.CharField(max_length=10, unique=True)
     cor = models.CharField(max_length=30)
+    cor_avatar = models.CharField(max_length=7, choices=CORES_AVATAR, default='#1d4ed8')
     foto = models.ImageField(upload_to='fotos_veiculos/', null=True, blank=True)
         
     # Muitos-para-Muitos: Cria a tabela intermediária automaticamente
@@ -15,6 +17,11 @@ class Veiculo(models.Model):
 
     def __str__(self):
         return f"{self.modelo} ({self.placa})"
+
+
+class ConfiguracaoFrota(models.Model):
+    chave = models.CharField(max_length=80, primary_key=True)
+    aplicado = models.BooleanField(default=False)
 
 class Rota(models.Model):
     veiculo = models.ForeignKey(Veiculo, on_delete=models.SET_NULL, null=True, blank=True)

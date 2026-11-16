@@ -10,7 +10,7 @@ from .services import (
     obter_estado_gps,
     processar_rotas_sem_gps,
 )
-from usuarios.models import Motorista
+from usuarios.models import Motorista, CORES_AVATAR
 from usuarios.monitoramento import obter_contexto_monitoramento
 from alunos.models import Aluno
 from django.contrib import messages
@@ -508,6 +508,35 @@ def painel_veiculos(request):
     veiculos = Veiculo.objects.all()
     return render(request, 'transporte/painel_veiculos.html', {'veiculos': veiculos})
 
+
+@login_required(login_url='login')
+def api_alunos_para_veiculo(request):
+    if not hasattr(request.user, 'instituicao'):
+        return JsonResponse({'erro': 'Acesso permitido apenas à instituição.'}, status=403)
+    if request.method != 'GET':
+        return HttpResponseNotAllowed(['GET'])
+    termo = request.GET.get('q', '').strip()[:100]
+    qs = Aluno.objects.filter(is_aprovado=True, deleted_at__isnull=True).select_related(
+        'responsavel__usuario'
+    ).order_by('nome', 'pk')
+    if termo:
+        from django.db.models import Q
+        qs = qs.filter(Q(nome__icontains=termo)
+                       | Q(responsavel__usuario__first_name__icontains=termo)
+                       | Q(responsavel__usuario__last_name__icontains=termo))
+    try:
+        page_num = max(1, int(request.GET.get('page', '1')))
+    except (TypeError, ValueError):
+        page_num = 1
+    start = (page_num - 1) * 25
+    items = list(qs[start:start + 26])
+    return JsonResponse({
+        'results': [{'id': a.pk, 'nome': a.nome,
+                     'responsavel': a.responsavel.usuario.get_full_name()}
+                    for a in items[:25]],
+        'has_more': len(items) > 25,
+    })
+
 @login_required(login_url='login')
 def gerenciar_veiculo(request, id=None):
     if not hasattr(request.user, 'instituicao'):
@@ -515,7 +544,13 @@ def gerenciar_veiculo(request, id=None):
     
     veiculo = get_object_or_404(Veiculo, id=id) if id else None
     motoristas = Motorista.objects.filter(usuario__is_aprovado=True, usuario__is_active=True, deleted_at__isnull=True)
-    alunos = Aluno.objects.filter(is_aprovado=True, deleted_at__isnull=True).select_related('responsavel__usuario')
+    alunos_selecionados = ([{
+        'id': aluno.pk, 'nome': aluno.nome,
+        'responsavel': aluno.responsavel.usuario.get_full_name(),
+    } for aluno in veiculo.alunos_autorizados.filter(
+        is_aprovado=True, deleted_at__isnull=True
+    ).select_related('responsavel__usuario')] if veiculo else [])
+    avatar_colors = CORES_AVATAR
 
     if request.method == 'POST':
         modelo = request.POST.get('modelo', '').strip()
@@ -525,25 +560,42 @@ def gerenciar_veiculo(request, id=None):
         foto = request.FILES.get('foto')
         motoristas_ids = request.POST.getlist('motoristas') # Pega a lista de IDs dos checkboxes
         alunos_ids = request.POST.getlist('alunos')
+        if alunos_ids:
+            alunos_selecionados = [{
+                'id': aluno.pk, 'nome': aluno.nome,
+                'responsavel': aluno.responsavel.usuario.get_full_name(),
+            } for aluno in Aluno.objects.filter(
+                pk__in=alunos_ids, is_aprovado=True, deleted_at__isnull=True,
+            ).select_related('responsavel__usuario')]
 
         if not all((modelo, capacidade, placa, cor)):
             messages.error(request, 'Preencha todos os campos obrigatórios do veículo.')
             return render(request, 'transporte/form_veiculo.html', {
-                'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+                'veiculo': veiculo, 'motoristas': motoristas, 'alunos_selecionados': alunos_selecionados,
+                'avatar_colors': avatar_colors,
             })
         if len(modelo) > 100 or len(cor) > 30 or len(placa) > 10:
             messages.error(request, 'Modelo, cor ou placa excede o limite de caracteres permitido.')
             return render(request, 'transporte/form_veiculo.html', {
-                'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+                'veiculo': veiculo, 'motoristas': motoristas, 'alunos_selecionados': alunos_selecionados,
+                'avatar_colors': avatar_colors,
             })
         try:
             capacidade = int(capacidade)
-            if capacidade < 1:
+            if not 1 <= capacidade <= 100:
                 raise ValueError
         except (TypeError, ValueError):
-            messages.error(request, 'A capacidade deve ser um número maior que zero.')
+            messages.error(request, 'A capacidade deve estar entre 1 e 100 alunos.')
             return render(request, 'transporte/form_veiculo.html', {
-                'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+                'veiculo': veiculo, 'motoristas': motoristas, 'alunos_selecionados': alunos_selecionados,
+                'avatar_colors': avatar_colors,
+            })
+
+        if len(alunos_ids) > capacidade:
+            messages.error(request, f'A quantidade de alunos vinculados não pode exceder a capacidade de {capacidade}.')
+            return render(request, 'transporte/form_veiculo.html', {
+                'veiculo': veiculo, 'motoristas': motoristas, 'alunos_selecionados': alunos_selecionados,
+                'avatar_colors': avatar_colors,
             })
 
         placa_em_uso = Veiculo.objects.filter(placa=placa)
@@ -552,14 +604,16 @@ def gerenciar_veiculo(request, id=None):
         if placa_em_uso.exists():
             messages.error(request, 'Já existe um veículo cadastrado com esta placa.')
             return render(request, 'transporte/form_veiculo.html', {
-                'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+                'veiculo': veiculo, 'motoristas': motoristas, 'alunos_selecionados': alunos_selecionados,
+                'avatar_colors': avatar_colors,
             })
 
         if foto:
             if foto.size > 5 * 1024 * 1024:
                 messages.error(request, 'A foto deve ter até 5 MB.')
                 return render(request, 'transporte/form_veiculo.html', {
-                    'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+                    'veiculo': veiculo, 'motoristas': motoristas, 'alunos_selecionados': alunos_selecionados,
+                    'avatar_colors': avatar_colors,
                 })
             imagem_valida = True
             try:
@@ -574,18 +628,25 @@ def gerenciar_veiculo(request, id=None):
             if not imagem_valida:
                 messages.error(request, 'A foto deve ser JPEG, PNG ou WebP válida e ter até 5 MB.')
                 return render(request, 'transporte/form_veiculo.html', {
-                    'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+                    'veiculo': veiculo, 'motoristas': motoristas, 'alunos_selecionados': alunos_selecionados,
+                    'avatar_colors': avatar_colors,
                 })
 
         try:
             with transaction.atomic():
                 if not veiculo:
-                    veiculo = Veiculo.objects.create(modelo=modelo, capacidade=capacidade, placa=placa, cor=cor)
+                    cor_avatar = request.POST.get('cor_avatar')
+                    if cor_avatar not in {cor for cor, _ in CORES_AVATAR}:
+                        cor_avatar = CORES_AVATAR[0][0]
+                    veiculo = Veiculo.objects.create(modelo=modelo, capacidade=capacidade, placa=placa, cor=cor, cor_avatar=cor_avatar)
                 else:
                     veiculo.modelo = modelo
                     veiculo.capacidade = capacidade
                     veiculo.placa = placa
                     veiculo.cor = cor
+                    cor_avatar = request.POST.get('cor_avatar')
+                    if cor_avatar in {cor for cor, _ in CORES_AVATAR}:
+                        veiculo.cor_avatar = cor_avatar
                     veiculo.save()
 
                 if foto:
@@ -593,18 +654,21 @@ def gerenciar_veiculo(request, id=None):
                     veiculo.save(update_fields=['foto'])
 
                 veiculo.motoristas_autorizados.set(motoristas.filter(id__in=motoristas_ids))
-                veiculo.alunos_autorizados.set(alunos.filter(id__in=alunos_ids))
+                veiculo.alunos_autorizados.set(Aluno.objects.filter(
+                    id__in=alunos_ids, is_aprovado=True, deleted_at__isnull=True,
+                ))
         except Exception:
             messages.error(request, 'Não foi possível salvar o veículo. Verifique os dados e tente novamente.')
             return render(request, 'transporte/form_veiculo.html', {
-                'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos,
+                'veiculo': veiculo, 'motoristas': motoristas, 'alunos_selecionados': alunos_selecionados,
+                'avatar_colors': avatar_colors,
             })
 
         messages.success(request, 'Veículo e vínculos salvos com sucesso.')
 
         return redirect('painel_veiculos')
 
-    return render(request, 'transporte/form_veiculo.html', {'veiculo': veiculo, 'motoristas': motoristas, 'alunos': alunos})
+    return render(request, 'transporte/form_veiculo.html', {'veiculo': veiculo, 'motoristas': motoristas, 'alunos_selecionados': alunos_selecionados, 'avatar_colors': avatar_colors})
 
 @login_required(login_url='login')
 def deletar_veiculo(request, id):
@@ -613,6 +677,10 @@ def deletar_veiculo(request, id):
     if not hasattr(request.user, 'instituicao'):
         return redirect('home')
     veiculo = get_object_or_404(Veiculo, id=id)
+    confirmacao = request.POST.get('confirmacao_numero', '')
+    if confirmacao != str(veiculo.pk):
+        messages.error(request, 'Número de confirmação incorreto. O veículo não foi excluído.')
+        return redirect('painel_veiculos')
     if Rota.objects.filter(veiculo=veiculo).exists():
         messages.error(request, 'Não é possível excluir um veículo associado ao histórico de rotas.')
         return redirect('painel_veiculos')
