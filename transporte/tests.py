@@ -390,6 +390,22 @@ class TransporteFluxosTests(TestCase):
             {self.aluno.id, segundo_aluno.id},
         )
 
+    def test_veiculo_rejeita_alunos_acima_da_capacidade(self):
+        segundo_aluno = Aluno.objects.create(
+            nome='Segundo Aluno', idade=8, responsavel=self.responsavel,
+            dados_faciais='[]', foto_perfil='perfil_alunos/segundo.jpg', is_aprovado=True,
+        )
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.post(reverse('novo_veiculo'), {
+            'modelo': 'Van pequena', 'capacidade': '1', 'placa': 'CAP1234', 'cor': 'Branca',
+            'alunos': [str(self.aluno.id), str(segundo_aluno.id)],
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'não pode exceder a capacidade de 1')
+        self.assertFalse(Veiculo.objects.filter(placa='CAP1234').exists())
+
     def test_veiculo_nao_associa_alunos_ou_motoristas_nao_aprovados(self):
         motorista_pendente_usuario = Usuario.objects.create_user(
             username='pendente-motorista@example.test', email='pendente-motorista@example.test',
