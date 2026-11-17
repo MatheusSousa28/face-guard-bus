@@ -15,9 +15,9 @@
     </header>
 
     <section aria-label="Resumo dos seus alunos" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div class="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"><p class="text-sm font-semibold text-blue-800">Alunos vinculados</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ total_alunos }}</p></div>
-        <div class="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm"><p class="text-sm font-semibold text-amber-800">Cadastros aguardando aprovação</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ alunos_pendentes }}</p><p class="mt-1 text-sm text-gray-500">A aprovação é feita pela instituição.</p></div>
-        <div class="rounded-2xl border border-green-100 bg-white p-5 shadow-sm"><p class="text-sm font-semibold text-green-800">A bordo em rota ativa</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ alunos_a_bordo }}</p><p class="mt-1 text-sm text-gray-500">Com embarque registrado em uma rota ativa.</p></div>
+        <div class="rounded-2xl border border-blue-100 border-b-4 border-b-blue-600 bg-white p-5 shadow-sm"><p class="text-sm font-semibold text-blue-800">Alunos vinculados</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ total_alunos }}</p></div>
+        <div class="rounded-2xl border border-amber-100 border-b-4 border-b-amber-500 bg-white p-5 shadow-sm"><p class="text-sm font-semibold text-amber-800">Cadastros aguardando aprovação</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ alunos_pendentes }}</p><p class="mt-1 text-sm text-gray-500">A aprovação é feita pela instituição.</p></div>
+        <div class="rounded-2xl border border-green-100 border-b-4 border-b-emerald-500 bg-white p-5 shadow-sm"><p class="text-sm font-semibold text-green-800">A bordo em rota ativa</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ alunos_a_bordo }}</p><p class="mt-1 text-sm text-gray-500">Com embarque registrado em uma rota ativa.</p></div>
     </section>
 
     <section aria-labelledby="children-title">
@@ -25,7 +25,7 @@
         {% if alunos %}
         <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
             {% for aluno in alunos %}
-            <article class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+            <article class="rounded-2xl border border-gray-200 {% if aluno.is_aprovado %}border-b-4 border-b-emerald-500{% else %}border-b-4 border-b-amber-500{% endif %} bg-white p-5 shadow-sm transition hover:shadow-md">
                 <div class="flex items-start gap-4">
                     {% if aluno.foto_perfil %}
                         <img src="{{ aluno.foto_perfil.url }}" alt="Foto de {{ aluno.nome }}" loading="lazy" decoding="async" class="h-16 w-16 shrink-0 rounded-full border border-gray-200 object-cover">
