@@ -1,65 +1,82 @@
 {% extends 'base.html' %}
-
+{% load static %}
 {% block content %}
-<div class="max-w-6xl mx-auto px-4 py-8">
-    <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+<div class="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+    <header class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-            <h1 class="font-display text-3xl font-bold text-gray-900">Olá, {{ user.first_name }}</h1>
-            <p class="text-gray-500">Gerencie o monitoramento de seus filhos no transporte escolar.</p>
+            <p class="text-sm font-semibold uppercase tracking-wide text-blue-700">Área da família</p>
+            <h1 class="mt-1 font-display text-3xl font-bold text-gray-900">Olá, {{ user.first_name }}</h1>
+            <p class="mt-2 text-gray-600">Acompanhe os cadastros e os registros de transporte dos seus alunos.</p>
         </div>
-        
-        <a href="{% url 'cadastro_aluno' %}" class="inline-flex items-center justify-center px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition duration-200">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-            Novo Aluno
-        </a>
-    </div>
+        <div class="flex flex-wrap gap-3">
+            <a href="{% url 'mapa_unificado' %}" class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-white px-4 py-3 font-semibold text-blue-800 transition hover:bg-blue-50">Abrir mapa</a>
+            <a href="{% url 'cadastro_aluno' %}" class="inline-flex items-center justify-center rounded-xl bg-blue-700 px-5 py-3 font-bold text-white shadow-sm transition hover:bg-blue-800">+ Cadastrar aluno</a>
+        </div>
+    </header>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {% for aluno in alunos %}
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition">
-                <div class="flex items-center space-x-4 mb-4">
+    <section aria-label="Resumo dos seus alunos" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div class="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"><p class="text-sm font-semibold text-blue-800">Alunos vinculados</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ total_alunos }}</p></div>
+        <div class="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm"><p class="text-sm font-semibold text-amber-800">Cadastros aguardando aprovação</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ alunos_pendentes }}</p><p class="mt-1 text-sm text-gray-500">A aprovação é feita pela instituição.</p></div>
+        <div class="rounded-2xl border border-green-100 bg-white p-5 shadow-sm"><p class="text-sm font-semibold text-green-800">A bordo em rota ativa</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ alunos_a_bordo }}</p><p class="mt-1 text-sm text-gray-500">Com embarque registrado em uma rota ativa.</p></div>
+    </section>
+
+    <section aria-labelledby="children-title">
+        <div class="mb-4"><h2 id="children-title" class="font-display text-2xl font-bold text-gray-900">Seus alunos</h2><p class="mt-1 text-sm text-gray-500">Dados e eventos limitados aos alunos vinculados ao seu perfil.</p></div>
+        {% if alunos %}
+        <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {% for aluno in alunos %}
+            <article class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+                <div class="flex items-start gap-4">
                     {% if aluno.foto_perfil %}
-                        <img src="{{ aluno.foto_perfil.url }}"  class="h-16 w-16 rounded-full object-cover border-2 border-blue-50">
+                        <img src="{{ aluno.foto_perfil.url }}" alt="Foto de {{ aluno.nome }}" loading="lazy" decoding="async" class="h-16 w-16 shrink-0 rounded-full border border-gray-200 object-cover">
                     {% else %}
-                        <div class="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 font-bold text-xl">
-                            {{ aluno.nome|slice:":1" }}
-                        </div>
+                        <div aria-hidden="true" class="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-700 text-xl font-bold text-white">{{ aluno.nome|slice:':1'|upper }}</div>
                     {% endif %}
-                    
-                    <div>
-                        <h3 class="font-display font-bold text-gray-900 leading-tight">{{ aluno.nome }}</h3>
-                        <p class="text-sm text-gray-500">{{ aluno.idade }} anos</p>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h3 class="font-display text-lg font-bold text-gray-900">{{ aluno.nome }}</h3>
+                            {% if aluno.is_aprovado %}<span class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-bold text-green-800">Cadastro aprovado</span>{% else %}<span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900">Aguardando aprovação</span>{% endif %}
+                        </div>
+                        <p class="mt-1 text-sm text-gray-500">{{ aluno.idade }} anos</p>
                     </div>
                 </div>
 
-                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl mb-4">
-                    <span class="text-xs font-semibold text-gray-500 uppercase">Status de aprovação:</span>
-                    {% if aluno.is_aprovado %}
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">
-                            Aprovado
-                        </span>
+                <div class="mt-5 rounded-xl bg-gray-50 p-4">
+                    <p class="text-xs font-bold uppercase tracking-wide text-gray-500">Situação do transporte</p>
+                    {% if aluno.evento_ativo_tipo == 'embarque' %}
+                        <p class="mt-1 font-semibold text-green-800">Embarque registrado em rota ativa</p>
+                        <p class="text-sm text-gray-600">{{ aluno.evento_ativo_data|date:'d/m/Y H:i' }}</p>
+                    {% elif aluno.evento_ativo_tipo == 'desembarque' %}
+                        <p class="mt-1 font-semibold text-blue-800">Desembarque registrado na rota ativa</p>
+                        <p class="text-sm text-gray-600">{{ aluno.evento_ativo_data|date:'d/m/Y H:i' }}</p>
+                    {% elif aluno.ultimo_evento_tipo %}
+                        <p class="mt-1 font-semibold text-gray-800">Último registro: {% if aluno.ultimo_evento_tipo == 'embarque' %}Embarque{% else %}Desembarque{% endif %}</p>
+                        <p class="text-sm text-gray-600">{{ aluno.ultimo_evento_data|date:'d/m/Y H:i' }}</p>
                     {% else %}
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700">
-                            Pendente
-                        </span>
+                        <p class="mt-1 text-sm text-gray-600">Ainda não há registros de embarque ou desembarque.</p>
                     {% endif %}
                 </div>
 
-                <div class="grid grid-cols-2 gap-2">
-                    <a href="{% url 'editar_aluno_responsavel' aluno.id %}" class="block w-full rounded-lg border border-amber-100 py-2 text-center text-sm font-semibold text-amber-700 transition hover:bg-amber-50">Editar dados</a>
-                    <a href="{% url 'mapa_unificado' %}" class="block w-full rounded-lg border border-blue-100 py-2 text-center text-sm font-semibold text-blue-600 transition hover:bg-blue-50">Ver localização</a>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <a href="{% url 'editar_aluno_responsavel' aluno.id %}" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">Editar dados</a>
+                    {% if aluno.ultimo_evento_rota %}<a href="{% url 'mapa_unificado' %}?rota={{ aluno.ultimo_evento_rota }}" class="rounded-lg bg-blue-700 px-3 py-2 text-sm font-bold text-white transition hover:bg-blue-800">Ver rota</a>{% else %}<a href="{% url 'mapa_unificado' %}" class="rounded-lg bg-blue-700 px-3 py-2 text-sm font-bold text-white transition hover:bg-blue-800">Abrir mapa</a>{% endif %}
                 </div>
-            </div>
-        {% empty %}
-            <div class="col-span-full py-20 text-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-3xl">
-                <div class="text-5xl mb-4">🚌</div>
-                <h3 class="text-lg font-bold text-gray-900">Nenhum aluno encontrado</h3>
-                <p class="text-gray-500 max-w-xs mx-auto mb-6">Cadastre seus filhos para começar a monitorar o trajeto escolar em tempo real.</p>
-                <a href="{% url 'cadastro_aluno' %}" class="text-blue-600 font-bold hover:underline">Começar cadastro agora</a>
-            </div>
-        {% endfor %}
-    </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50 px-6 py-12 text-center">
+            <div aria-hidden="true" class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white text-3xl">🚌</div>
+            <h3 class="mt-4 font-display text-xl font-bold text-gray-900">Nenhum aluno vinculado ainda</h3>
+            <p class="mx-auto mt-2 max-w-md text-gray-600">Cadastre um aluno para acompanhar a aprovação e os registros de transporte por aqui.</p>
+            <a href="{% url 'cadastro_aluno' %}" class="mt-5 inline-flex rounded-lg bg-blue-700 px-5 py-3 font-bold text-white hover:bg-blue-800">Cadastrar primeiro aluno</a>
+        </div>
+        {% endif %}
+    </section>
+
+    <nav aria-label="Atalhos" class="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-slate-900 p-5 text-white sm:p-6">
+        <div><h2 class="font-display text-lg font-bold">Precisa de mais informações?</h2><p class="mt-1 text-sm text-slate-300">Abra o mapa para consultar as rotas disponíveis para seus alunos.</p></div>
+        <a href="{% url 'mapa_unificado' %}" class="rounded-lg bg-white px-4 py-2.5 font-bold text-slate-900 transition hover:bg-blue-50">Acompanhar no mapa →</a>
+    </nav>
 </div>
 {% endblock %}

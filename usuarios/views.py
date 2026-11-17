@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.http import HttpResponseNotAllowed, JsonResponse
+from django.views.decorators.cache import never_cache
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -21,6 +22,11 @@ from alunos.models import Aluno
 from transporte.models import Rota, Veiculo
 from transporte.services import processar_rotas_sem_gps
 from monitoramento.models import Evento
+from .dashboard import (
+    contexto_dashboard_instituicao,
+    contexto_dashboard_responsavel,
+    tendencia_eventos_dashboard,
+)
 from PIL import Image, UnidentifiedImageError
 
 
@@ -196,7 +202,7 @@ def painel_home(request):
     usuario = request.user
     
     if hasattr(usuario, 'instituicao') or usuario.is_superuser:
-        return render(request, 'usuarios/home_instituicao.html')
+        return render(request, 'usuarios/home_instituicao.html', contexto_dashboard_instituicao())
 
     elif hasattr(usuario, 'motorista'):
         motorista = usuario.motorista
@@ -222,15 +228,32 @@ def painel_home(request):
         return render(request, 'usuarios/home_motorista.html', contexto)
 
     elif hasattr(usuario, 'responsavel'):
-        meus_alunos = Aluno.objects.filter(responsavel=usuario.responsavel, deleted_at__isnull=True)
-        
-        contexto = {
-            'alunos': meus_alunos
-        }
-        return render(request, 'usuarios/home_responsavel.html', contexto)
+        return render(
+            request,
+            'usuarios/home_responsavel.html',
+            contexto_dashboard_responsavel(usuario.responsavel),
+        )
 
     # Caso o usuário não tenha perfil (erro de cadastro)
     return render(request, 'usuarios/home_generica.html')
+
+
+@login_required(login_url='login')
+@never_cache
+def api_dashboard_tendencia(request):
+    if not (hasattr(request.user, 'instituicao') or request.user.is_superuser):
+        return JsonResponse({'erro': 'Acesso permitido apenas à instituição.'}, status=403)
+    dias = tendencia_eventos_dashboard()
+    totais = [item['embarques'] + item['desembarques'] for item in dias]
+    return JsonResponse({
+        'dias': [{
+            'dia': item['dia'].strftime('%Y-%m-%d'),
+            'rotulo': item['dia'].strftime('%d/%m'),
+            'embarques': item['embarques'],
+            'desembarques': item['desembarques'],
+        } for item in dias],
+        'tem_dados': any(totais),
+    })
 
 def cadastro_responsavel(request):
     if request.method == 'POST':

@@ -13,7 +13,8 @@ from django.urls import reverse
 from PIL import Image
 
 from alunos.models import Aluno
-from transporte.models import Veiculo
+from monitoramento.models import Evento
+from transporte.models import Rota, Veiculo
 from usuarios.models import Instituicao, Motorista, Responsavel, RegistroAuditoria
 
 
@@ -425,12 +426,91 @@ class GerenciamentoUsuariosTests(TestCase):
         self.assertContains(response, 'Marcar todos')
         self.assertContains(response, 'Desmarcar todos')
 
-    def test_home_posiciona_frota_antes_das_pendencias(self):
+    def test_dashboard_institucional_mostra_frota_e_pendencias(self):
         response = self.client.get(reverse('home'))
 
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        self.assertLess(html.index('Frota de Veículos'), html.index('Cadastros Pendentes'))
+        self.assertLess(html.index('Cadastros aguardando aprovação'), html.index('Veículos cadastrados'))
+        self.assertContains(response, 'Visão geral da operação')
+        self.assertContains(response, 'Rotas em andamento')
+        self.assertContains(response, 'data-endpoint=')
+
+    def test_dashboard_responsavel_exibe_apenas_os_proprios_alunos(self):
+        outro_usuario = Usuario.objects.create_user(
+            username='outra-familia@example.test', email='outra-familia@example.test',
+            password='SenhaForte123!', first_name='Outra', last_name='Família', is_aprovado=True,
+        )
+        outro_responsavel = Responsavel.objects.create(usuario=outro_usuario, cpf='12345678912')
+        meu_aluno = Aluno.objects.create(
+            nome='Aluno da Família', idade=8, responsavel=self.responsavel,
+            foto_perfil='alunos/meu.png', dados_faciais='[]', is_aprovado=True,
+        )
+        Aluno.objects.create(
+            nome='Aluno de Outra Família', idade=9, responsavel=outro_responsavel,
+            foto_perfil='alunos/outro.png', dados_faciais='[]', is_aprovado=True,
+        )
+        self.client.force_login(self.responsavel_usuario)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, meu_aluno.nome)
+        self.assertNotContains(response, 'Aluno de Outra Família')
+        self.assertEqual(response.context['total_alunos'], 1)
+
+    def test_dashboard_responsavel_apresenta_estado_vazio_e_link_de_cadastro(self):
+        self.client.force_login(self.responsavel_usuario)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Nenhum aluno vinculado ainda')
+        self.assertContains(response, reverse('cadastro_aluno'))
+
+    def test_endpoint_de_tendencia_e_restrito_a_instituicao(self):
+        self.client.force_login(self.responsavel_usuario)
+
+        response = self.client.get(reverse('api_dashboard_tendencia'))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_dashboard_institucional_calcula_rotas_ativas_e_alunos_a_bordo(self):
+        aluno = Aluno.objects.create(
+            nome='Aluno em rota', idade=8, responsavel=self.responsavel,
+            foto_perfil='alunos/rota.png', dados_faciais='[]', is_aprovado=True,
+        )
+        veiculo = Veiculo.objects.create(
+            modelo='Van do painel', capacidade=10, placa='DASH123', cor='Branca',
+        )
+        rota = Rota.objects.create(veiculo=veiculo, ativa=True)
+        Evento.objects.create(rota=rota, aluno=aluno, tipo='embarque', autorizado=True)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['rotas_ativas'], 1)
+        self.assertEqual(response.context['alunos_a_bordo'], 1)
+        self.assertEqual(response.context['rotas_sem_sinal'], 1)
+
+    def test_api_tendencia_retorna_dias_reais_e_formato_estavel(self):
+        aluno = Aluno.objects.create(
+            nome='Aluno com evento', idade=8, responsavel=self.responsavel,
+            foto_perfil='alunos/evento.png', dados_faciais='[]', is_aprovado=True,
+        )
+        veiculo = Veiculo.objects.create(
+            modelo='Van dos eventos', capacidade=10, placa='EVT1234', cor='Azul',
+        )
+        rota = Rota.objects.create(veiculo=veiculo)
+        Evento.objects.create(rota=rota, aluno=aluno, tipo='embarque', autorizado=True)
+
+        response = self.client.get(reverse('api_dashboard_tendencia'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['tem_dados'])
+        dia_atual = response.json()['dias'][-1]
+        self.assertEqual(dia_atual['embarques'], 1)
+        self.assertEqual(dia_atual['desembarques'], 0)
 
     def test_cadastro_exibe_regras_de_senha_em_estados_vermelho_e_verde(self):
         response = self.client.get(reverse('cadastro'))

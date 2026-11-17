@@ -1,138 +1,216 @@
 {% extends 'base.html' %}
-
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 py-8">
-    <div class="bg-white p-8 rounded-lg shadow">
-        
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="font-display text-2xl font-bold text-gray-800">Painel de Controle Escolar</h2>
+<div class="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+    <header class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <p class="text-sm font-semibold uppercase tracking-wide text-blue-700">Painel institucional</p>
+            <h1 class="mt-1 font-display text-3xl font-bold text-gray-900">Visão geral da operação</h1>
+            <p class="mt-2 max-w-2xl text-gray-600">Acompanhe a frota, as atividades em andamento e os itens que precisam de atenção.</p>
         </div>
+        <a href="{% url 'mapa_unificado' %}" class="inline-flex items-center justify-center rounded-xl bg-blue-700 px-5 py-3 font-bold text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">
+            Abrir monitoramento <span class="ml-2" aria-hidden="true">→</span>
+        </a>
+    </header>
 
-        <div class="bg-blue-50 border-l-4 border-blue-700 p-4 mb-8 rounded-r-md">
-            <h3 class="font-display font-bold text-blue-700 text-lg mb-1">Acesso Administrativo (Instituição)</h3>
-            <p class="text-gray-700">Bem-vindo(a)! Aqui você poderá gerenciar aprovações de pais, frota escolar e usuários ativos.</p>
+    {% if interrupcoes_pendentes %}
+    <a href="{% url 'mapa_unificado' %}" class="flex flex-col gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900 transition hover:bg-red-100 sm:flex-row sm:items-center sm:justify-between" aria-label="Ver {{ interrupcoes_pendentes }} interrupções que precisam de revisão">
+        <span><strong>{{ interrupcoes_pendentes }} rota{{ interrupcoes_pendentes|pluralize:"s" }} interrompida{{ interrupcoes_pendentes|pluralize:"s" }}</strong> aguardando revisão.</span>
+        <span class="font-bold">Revisar no monitoramento →</span>
+    </a>
+    {% endif %}
+
+    <section aria-labelledby="operacao-title">
+        <div class="mb-4 flex items-end justify-between gap-4">
+            <div><h2 id="operacao-title" class="font-display text-xl font-bold text-gray-900">Indicadores operacionais</h2><p class="mt-1 text-sm text-gray-500">Situação atual registrada no sistema.</p></div>
         </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            
-            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition flex flex-col justify-between">
-                <div>
-                    <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 4m0 13V4m0 0L9 7" />
-                        </svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-gray-900 mb-2">Monitoramento</h3>
-                    <p class="text-gray-500 text-sm mb-6">Consulte as rotas, os trajetos e os eventos dos alunos.</p>
-                </div>
-                <a href="{% url 'mapa_unificado' %}" class="inline-flex justify-center w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-200">
-                    Monitoramento
-                </a>
-            </div>
-
-            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition flex flex-col justify-between">
-                <div>
-                    <div class="w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                        </svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-gray-900 mb-2">Frota de Veículos</h3>
-                    <p class="text-gray-500 text-sm mb-6">Cadastre novos ônibus/vans, atualize placas e vincule motoristas aos veículos.</p>
-                </div>
-                <a href="{% url 'painel_veiculos' %}" class="inline-flex justify-center w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-200">
-                    Gerenciar Frota
-                </a>
-            </div>
-
-            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition flex flex-col justify-between">
-                <div>
-                    <div class="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-lg flex items-center justify-center mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                        </svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-gray-900 mb-2">Cadastros Pendentes</h3>
-                    <p class="text-gray-500 text-sm mb-6">Analise e aprove contas recém-criadas de novos pais e alunos.</p>
-                </div>
-                <a href="{% url 'painel_aprovacoes' %}" class="inline-flex justify-center w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2.5 px-4 rounded-lg transition duration-200">
-                    Analisar Pendências
-                </a>
-            </div>
-
-            <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow-md transition flex flex-col justify-between">
-                <div>
-                    <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-gray-900 mb-2">Usuários Ativos</h3>
-                    <p class="text-gray-500 text-sm mb-6">Visualize e remova contas de alunos e colaboradores que já estão em operação.</p>
-                </div>
-                <a href="{% url 'painel_usuarios' %}" class="inline-flex justify-center w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-200">
-                    Gerenciar Usuários
-                </a>
-            </div>
-        </div>
-
-        <hr class="my-8">
-        
-        <h3 class="text-xl font-bold text-gray-800 mb-4">Ferramentas de Desenvolvedor</h3>
-        <div class="grid grid-cols-1 md:grid-cols-3">
-            
-            <div onclick="abrirModalAdmin()" class="bg-red-50 border border-red-200 rounded-xl shadow-sm p-6 hover:shadow-md hover:bg-red-100 transition cursor-pointer flex flex-col justify-between">
-                <div>
-                    <div class="w-12 h-12 bg-red-200 text-red-700 rounded-lg flex items-center justify-center mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-red-900 mb-2">Painel Django (Admin)</h3>
-                    <p class="text-red-700 text-sm mb-6">Acesso bruto ao banco de dados. Permite apagar registros históricos e alterar o núcleo do sistema.</p>
-                </div>
-                <button class="inline-flex justify-center w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2.5 px-4 rounded-lg transition duration-200">
-                    Acessar Banco de Dados
-                </button>
-            </div>
-        </div>
-
-    </div>
-</div>
-
-<div id="modalAdmin" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75 backdrop-blur-sm transition-opacity">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center transform scale-100 transition-transform">
-        
-        <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-6">
-            <svg class="h-10 w-10 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-        </div>
-        
-        <h2 class="text-2xl font-bold text-gray-900 mb-4">Atenção! Zona de Risco</h2>
-        <p class="text-gray-600 mb-8 leading-relaxed">
-            Você está prestes a entrar no painel raiz do sistema. Ações realizadas no Admin <b>não podem ser desfeitas</b> e podem comprometer o histórico de rotas e biometrias. Deseja mesmo continuar?
-        </p>
-        
-        <div class="flex justify-center gap-4 w-full">
-            <button onclick="fecharModalAdmin()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-bold hover:bg-gray-300 transition">
-                Cancelar
-            </button>
-            <a href="{% url 'admin:index' %}" class="flex-1 bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700 transition block">
-                Sim, Entrar
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <a href="{% url 'painel_aprovacoes' %}" class="group rounded-2xl border border-amber-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-600">
+                <p class="text-sm font-semibold text-amber-800">Cadastros aguardando aprovação</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ alunos_pendentes|add:responsaveis_pendentes }}</p>
+                <p class="mt-2 text-sm text-gray-500">{{ alunos_pendentes }} aluno{{ alunos_pendentes|pluralize:"s" }} · {{ responsaveis_pendentes }} {% if responsaveis_pendentes == 1 %}responsável{% else %}responsáveis{% endif %}</p><span class="mt-4 inline-block text-sm font-bold text-amber-800 group-hover:underline">Analisar cadastros →</span>
+            </a>
+            <a href="{% url 'mapa_unificado' %}" class="group rounded-2xl border border-blue-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700">
+                <p class="text-sm font-semibold text-blue-800">Rotas em andamento</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ rotas_ativas }}</p>
+                <p class="mt-2 text-sm text-gray-500">{{ rotas_com_gps }} com GPS recente · {{ rotas_sem_sinal }} sem sinal</p><span class="mt-4 inline-block text-sm font-bold text-blue-800 group-hover:underline">Acompanhar frota →</span>
+            </a>
+            <a href="{% url 'mapa_unificado' %}" class="group rounded-2xl border border-green-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-700">
+                <p class="text-sm font-semibold text-green-800">Alunos a bordo</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ alunos_a_bordo }}</p>
+                <p class="mt-2 text-sm text-gray-500">Embarques registrados em rotas ativas.</p><span class="mt-4 inline-block text-sm font-bold text-green-800 group-hover:underline">Ver rotas →</span>
+            </a>
+            <a href="{% url 'painel_veiculos' %}" class="group rounded-2xl border border-indigo-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-700">
+                <p class="text-sm font-semibold text-indigo-800">Veículos cadastrados</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ total_veiculos }}</p>
+                <p class="mt-2 text-sm text-gray-500">Frota disponível para gerenciamento.</p><span class="mt-4 inline-block text-sm font-bold text-indigo-800 group-hover:underline">Gerenciar frota →</span>
+            </a>
+            <a href="{% url 'painel_usuarios' %}" class="group rounded-2xl border border-purple-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-700">
+                <p class="text-sm font-semibold text-purple-800">Alunos e motoristas</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ total_alunos|add:total_motoristas }}</p>
+                <p class="mt-2 text-sm text-gray-500">{{ total_alunos }} aluno{{ total_alunos|pluralize:"s" }} · {{ total_motoristas }} motorista{{ total_motoristas|pluralize:"s" }}</p><span class="mt-4 inline-block text-sm font-bold text-purple-800 group-hover:underline">Gerenciar usuários →</span>
+            </a>
+            <a href="{% url 'mapa_unificado' %}" class="group rounded-2xl border border-red-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700">
+                <p class="text-sm font-semibold text-red-800">Interrupções para revisão</p><p class="mt-2 text-3xl font-bold text-gray-900">{{ interrupcoes_pendentes }}</p>
+                <p class="mt-2 text-sm text-gray-500">Rotas interrompidas que ainda precisam de verificação.</p><span class="mt-4 inline-block text-sm font-bold text-red-800 group-hover:underline">Ver interrupções →</span>
             </a>
         </div>
+    </section>
+
+    <section class="grid grid-cols-1 gap-6 xl:grid-cols-5">
+        <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm xl:col-span-3">
+            <div class="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 class="font-display text-xl font-bold text-gray-900">Rotas em andamento</h2><p class="mt-1 text-sm text-gray-500">Até cinco rotas ativas e o estado do último GPS.</p></div><a href="{% url 'mapa_unificado' %}" class="text-sm font-bold text-blue-700 hover:underline">Abrir mapa →</a></div>
+            <div class="divide-y divide-gray-100">
+                {% for rota in rotas_ativas_lista %}
+                <a href="{% url 'mapa_unificado' %}?rota={{ rota.id }}" class="flex flex-col gap-2 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                    <span><strong class="block text-gray-900">{{ rota.veiculo.placa }} · {{ rota.veiculo.modelo }}</strong><span class="mt-1 block text-sm text-gray-500">Motorista: {{ rota.motorista.usuario.get_full_name|default:'Não informado' }}</span><span class="block text-xs text-gray-500">{% if rota.ultima_localizacao_dashboard %}Último GPS: {{ rota.ultima_localizacao_dashboard|date:'d/m/Y H:i' }}{% else %}A rota ainda não recebeu coordenadas GPS.{% endif %}</span></span>
+                    {% if rota.gps_atualizado_dashboard %}<span class="inline-flex w-fit rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-800">GPS recente</span>{% else %}<span class="inline-flex w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900">Sem sinal</span>{% endif %}
+                </a>
+                {% empty %}<div class="rounded-xl bg-gray-50 p-5 text-sm text-gray-600">Nenhuma rota está em andamento. Consulte o histórico ou acesse o monitoramento para acompanhar novas viagens.<a href="{% url 'mapa_unificado' %}" class="ml-1 font-bold text-blue-700 hover:underline">Abrir monitoramento →</a></div>{% endfor %}
+            </div>
+        </div>
+
+        <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm xl:col-span-2">
+            <div class="mb-4"><h2 class="font-display text-xl font-bold text-gray-900">Alertas recentes</h2><p class="mt-1 text-sm text-gray-500">Últimos registros de face desconhecida.</p></div>
+            <div class="space-y-3">
+                {% for alerta in alertas_recentes %}
+                <a href="{% url 'mapa_unificado' %}?rota={{ alerta.rota_id }}" class="block rounded-xl border border-amber-100 bg-amber-50 p-3 transition hover:bg-amber-100">
+                    <span class="block font-semibold text-amber-950">Face não identificada</span><span class="mt-1 block text-sm text-gray-700">{{ alerta.rota.veiculo.placa|default:'Veículo indisponível' }} · {{ alerta.data_hora|date:'d/m/Y H:i' }}</span>
+                </a>
+                {% empty %}<p class="rounded-xl bg-gray-50 p-4 text-sm text-gray-600">Nenhum alerta de face desconhecida registrado.</p>{% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <section id="dashboard-trend" data-endpoint="{% url 'api_dashboard_tendencia' %}" class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm" aria-labelledby="trend-title">
+        <div class="mb-4"><h2 id="trend-title" class="font-display text-xl font-bold text-gray-900">Embarques e desembarques</h2><p class="mt-1 text-sm text-gray-500">Registros dos últimos sete dias. O gráfico é carregado quando esta seção se aproxima da tela.</p></div>
+        <div id="trend-loading" class="grid grid-cols-7 gap-3" role="status" aria-label="Carregando atividade dos últimos sete dias" aria-busy="true">
+            {% for _ in '1234567' %}<div class="animate-pulse motion-reduce:animate-none"><div class="flex h-32 items-end justify-center gap-1"><span class="h-12 w-3 rounded-t bg-gray-200"></span><span class="h-20 w-3 rounded-t bg-gray-100"></span></div><div class="mx-auto mt-2 h-3 w-8 rounded bg-gray-200"></div></div>{% endfor %}
+        </div>
+        <p id="trend-empty" class="hidden rounded-xl bg-gray-50 p-4 text-sm text-gray-600">Ainda não há embarques ou desembarques registrados neste período.</p>
+        <div id="trend-chart" class="hidden" aria-live="polite"></div>
+        <div id="trend-error" class="hidden rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert"><span>Não foi possível carregar a atividade agora.</span> <button id="trend-retry" type="button" class="ml-2 font-bold underline">Tentar novamente</button></div>
+    </section>
+
+    <nav aria-label="Atalhos de gerenciamento" class="rounded-2xl bg-slate-900 p-5 text-white sm:p-6">
+        <h2 class="font-display text-xl font-bold">Acesso rápido</h2><p class="mt-1 text-sm text-slate-300">Atalhos para as tarefas administrativas mais usadas.</p>
+        <div class="mt-4 flex flex-wrap gap-3">
+            <a href="{% url 'painel_aprovacoes' %}" class="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20">Aprovar cadastros</a>
+            <a href="{% url 'painel_veiculos' %}" class="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20">Gerenciar frota</a>
+            <a href="{% url 'painel_usuarios' %}" class="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20">Gerenciar usuários</a>
+            <a href="{% url 'cadastrar_motorista' %}" class="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20">Cadastrar motorista</a>
+        </div>
+    </nav>
+
+    <details class="rounded-xl border border-gray-200 bg-white p-4">
+        <summary class="cursor-pointer font-semibold text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700">Ferramentas administrativas avançadas</summary>
+        <div class="mt-3 flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-sm text-red-900">O painel Django permite alterar registros diretamente. Use somente quando necessário.</p>
+            <button type="button" onclick="abrirModalAdmin()" class="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white hover:bg-red-800">Acessar painel Django</button>
+        </div>
+    </details>
+</div>
+
+<div id="modalAdmin" class="fixed inset-0 z-[90] hidden items-center justify-center bg-gray-900/75 p-4" role="dialog" aria-modal="true" aria-labelledby="modalAdminTitle">
+    <div class="w-full max-w-md rounded-2xl bg-white p-7 text-center shadow-2xl">
+        <h2 id="modalAdminTitle" class="text-2xl font-bold text-gray-900">Atenção: área administrativa</h2>
+        <p class="my-5 leading-relaxed text-gray-600">Alterações no painel Django podem afetar dados operacionais e históricos. Deseja continuar?</p>
+        <div class="flex justify-center gap-3"><button type="button" onclick="fecharModalAdmin()" class="flex-1 rounded-lg bg-gray-200 px-4 py-3 font-bold text-gray-800 hover:bg-gray-300">Cancelar</button><a href="{% url 'admin:index' %}" class="flex-1 rounded-lg bg-red-700 px-4 py-3 font-bold text-white hover:bg-red-800">Continuar</a></div>
     </div>
 </div>
 
 <script>
-    function abrirModalAdmin() {
-        document.getElementById('modalAdmin').classList.remove('hidden');
+(() => {
+    const section = document.getElementById('dashboard-trend');
+    const loading = document.getElementById('trend-loading');
+    const empty = document.getElementById('trend-empty');
+    const chart = document.getElementById('trend-chart');
+    const error = document.getElementById('trend-error');
+    let requested = false;
+
+    function showError() {
+        loading.classList.add('hidden');
+        loading.setAttribute('aria-busy', 'false');
+        chart.classList.add('hidden');
+        empty.classList.add('hidden');
+        error.classList.remove('hidden');
     }
-    
-    function fecharModalAdmin() {
-        document.getElementById('modalAdmin').classList.add('hidden');
+
+    async function loadTrend() {
+        if (requested) return;
+        requested = true;
+        loading.classList.remove('hidden');
+        loading.setAttribute('aria-busy', 'true');
+        error.classList.add('hidden');
+        try {
+            const response = await fetch(section.dataset.endpoint, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+            if (!response.ok) throw new Error('request failed');
+            const data = await response.json();
+            loading.classList.add('hidden');
+            loading.setAttribute('aria-busy', 'false');
+            if (!data.tem_dados) {
+                empty.classList.remove('hidden');
+                return;
+            }
+
+            const maxValue = Math.max(1, ...data.dias.flatMap(day => [day.embarques, day.desembarques]));
+            const list = document.createElement('div');
+            list.className = 'grid grid-cols-7 gap-2 sm:gap-4';
+            list.setAttribute('role', 'list');
+            data.dias.forEach(day => {
+                const item = document.createElement('div');
+                item.className = 'min-w-0 text-center';
+                item.setAttribute('role', 'listitem');
+                item.setAttribute('aria-label', `${day.rotulo}: ${day.embarques} embarques, ${day.desembarques} desembarques`);
+                const bars = document.createElement('div');
+                bars.className = 'flex h-36 items-end justify-center gap-1 border-b border-gray-200';
+                [['embarques', day.embarques, 'bg-emerald-500'], ['desembarques', day.desembarques, 'bg-blue-600']].forEach(([label, value, color]) => {
+                    const bar = document.createElement('span');
+                    const height = value ? Math.max(8, Math.round((value / maxValue) * 100)) : 2;
+                    bar.className = `w-3 rounded-t sm:w-5 ${color}`;
+                    bar.style.height = `${height}%`;
+                    bar.title = `${value} ${label}`;
+                    bars.appendChild(bar);
+                });
+                const date = document.createElement('p');
+                date.className = 'mt-2 text-xs text-gray-600';
+                date.textContent = day.rotulo;
+                item.append(bars, date);
+                list.appendChild(item);
+            });
+            chart.appendChild(list);
+            const legend = document.createElement('p');
+            legend.className = 'mt-3 flex flex-wrap gap-4 text-xs text-gray-600';
+            legend.innerHTML = '<span><i class="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500"></i>Embarques</span><span><i class="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-blue-600"></i>Desembarques</span>';
+            chart.appendChild(legend);
+            chart.classList.remove('hidden');
+        } catch (_) {
+            requested = false;
+            showError();
+        }
     }
+
+    document.getElementById('trend-retry').addEventListener('click', loadTrend);
+    if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver(entries => {
+            if (entries.some(entry => entry.isIntersecting)) {
+                observer.disconnect();
+                loadTrend();
+            }
+        }, {rootMargin: '160px'});
+        observer.observe(section);
+    } else {
+        loadTrend();
+    }
+})();
+
+function abrirModalAdmin() {
+    const modal = document.getElementById('modalAdmin');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    modal.querySelector('button').focus();
+}
+function fecharModalAdmin() {
+    const modal = document.getElementById('modalAdmin');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') fecharModalAdmin();
+});
 </script>
 {% endblock %}

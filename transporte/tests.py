@@ -158,14 +158,14 @@ class TransporteFluxosTests(TestCase):
         self.assertContains(response, 'GPS atualizado')
         self.assertEqual(response.context['total_alunos_abordo'], 1)
 
-    def test_home_da_instituicao_mantem_acesso_ao_monitoramento_sem_resumo(self):
+    def test_home_da_instituicao_exibe_dashboard_e_acesso_ao_monitoramento(self):
         self.client.force_login(self.instituicao_usuario)
 
         response = self.client.get(reverse('home'))
         html = response.content.decode()
 
-        self.assertLess(html.index('Acesso Administrativo (Instituição)'), html.index('href="/transporte/mapa-unificado/"'))
-        self.assertContains(response, 'Monitoramento')
+        self.assertLess(html.index('Visão geral da operação'), html.index('href="/transporte/mapa-unificado/"'))
+        self.assertContains(response, 'Abrir monitoramento')
         self.assertNotContains(response, 'Resumo do monitoramento')
         self.assertNotContains(response, 'Rotas com GPS atualizado')
 
