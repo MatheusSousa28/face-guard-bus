@@ -103,8 +103,37 @@ document.addEventListener('DOMContentLoaded', () => {
     let tab = 'ativas', selected = null, page = 1, pages = 1, refreshTimer, requestCounter = 0, collapsed = false, routeCards = [], mapRequestCounter = 0;
     const selectedByTab={ativas:null,historico:null}, searchByTab={ativas:'',historico:''}, statusByTab={ativas:'',historico:''};
     const routeColor = id => colors[(Number(id)-1)%colors.length];
+    const imageCache = new Map();
+    const fallbackImage = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+    function cacheImage(url) {
+        if (!url) return Promise.resolve('');
+        if (!imageCache.has(url)) {
+            imageCache.set(url, fetch(url, {credentials:'same-origin'})
+                .then(response => {
+                    if (!response.ok) throw new Error('Image unavailable');
+                    return response.blob();
+                })
+                .then(blob => URL.createObjectURL(blob))
+                .catch(() => url));
+        }
+        return imageCache.get(url);
+    }
+    function hydrateCachedImages(root=document) {
+        root.querySelectorAll('img[data-cache-image]').forEach(image => {
+            const url=image.dataset.cacheImage;
+            if (!url || image.dataset.cacheHydrated) return;
+            image.dataset.cacheHydrated='true';
+            cacheImage(url).then(cached => {
+                if (image.isConnected) image.src=cached;
+            });
+        });
+    }
+    new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(node => {
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        hydrateCachedImages(node.matches?.('img[data-cache-image]') ? node.parentNode : node);
+    }))).observe(document.body,{childList:true,subtree:true});
     const avatar = (url, name, size='h-10 w-10') => url
-        ? `<img src="${safe(url)}" alt="${safe(name)}" class="${size} shrink-0 rounded-full border-2 border-white object-cover shadow-sm" loading="lazy">`
+        ? `<img src="${fallbackImage}" data-cache-image="${safe(url)}" alt="${safe(name)}" class="${size} shrink-0 rounded-full border-2 border-white object-cover shadow-sm" loading="lazy">`
         : `<span class="${size} flex shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600">${safe(String(name||'?').trim().split(/\s+/).map(n=>n[0]).slice(0,2).join('').toUpperCase())}</span>`;
     function setTabLoading(show, message='Estamos atualizando as informações da frota.') {
         $('mensagem-carregamento-aba').textContent = message;
@@ -125,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if ($('data-inicio').value) p.set('data_inicio', $('data-inicio').value);
             if ($('data-fim').value) p.set('data_fim', $('data-fim').value);
         }
+        hydrateCachedImages($('lista-rotas'));
         return p;
     };
     const duration = seconds => {
@@ -261,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function renderDetails(data) {
         if (!data.rota) return;
-        const r = data.rota, color = routeColor(r.id);
+        const r = data.rota, color = routeColor(r.id), listKey=key=>`rota-${r.id}-${key}`;
         updateLegend(color);
         layerRoutes.clearLayers();
         const coords = data.trajeto.map(p=>[p.latitude,p.longitude]);
@@ -278,8 +308,8 @@ document.addEventListener('DOMContentLoaded', () => {
         $('detalhes-rota').innerHTML = `<div class="flex flex-wrap items-center justify-between gap-4"><div class="flex min-w-0 items-center gap-3">${avatar(r.veiculo_foto,r.placa,'h-16 w-16 rounded-2xl')}<div><p class="text-xs font-bold uppercase tracking-wide text-blue-700">Rota #${r.id}</p><h2 class="font-display text-xl font-bold text-gray-900">${safe(r.placa)}</h2><p class="text-xs text-gray-500">${safe(r.veiculo)}</p></div></div><span class="rounded-full px-3 py-1.5 text-xs font-bold ${r.interrompida?'bg-rose-100 text-rose-800':r.ativa?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-700'}">${r.interrompida?'Interrompida':r.ativa?'Em andamento':'Concluída'}</span></div>
         <div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3">${avatar(r.motorista_foto,r.motorista,'h-12 w-12')}<div><p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Motorista</p><p class="font-semibold text-slate-900">${safe(r.motorista)}</p></div><div class="ml-auto grid grid-cols-2 gap-x-5 gap-y-1 text-xs sm:grid-cols-3"><span>🟢 ${safe(r.inicio||'Início n/d')}</span><span>⏱ ${duration(r.duracao_segundos)}</span><span>📡 ${safe(r.gps_status)}</span><span>🏁 ${safe(r.fim||'Em andamento')}</span></div></div>
         <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">${[['⬆️','Embarques',r.embarques,'#10b981'],['⬇️','Desembarques',r.desembarques,'#0ea5e9'],['👥','A bordo',board.length,'#059669'],['🧒','Alunos na rota',r.total_alunos,'#7c3aed']].map(([icon,label,value,accent])=>`<article class="rounded-xl border border-gray-100 border-b-4 bg-white p-3 shadow-sm" style="border-bottom-color:${accent}"><div class="flex items-center justify-between"><span class="text-xs text-gray-500">${label}</span><span>${icon}</span></div><p class="mt-1 text-xl font-bold">${value}</p></article>`).join('')}</div>
-        <div class="mt-5 grid gap-5 lg:grid-cols-2"><section class="rounded-xl border p-4"><h3 class="mb-3 flex items-center gap-2 font-bold">🟢 A bordo agora <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">${board.length}</span></h3>${studentList(board)}</section><section class="rounded-xl border p-4"><h3 class="mb-3 flex items-center gap-2 font-bold">🧒 Passaram pela rota <span class="rounded-full bg-violet-100 px-2 py-0.5 text-xs text-violet-800">${history.length}</span></h3>${studentList(history)}</section></div>
-        <section class="mt-5 rounded-xl border p-4"><h3 class="mb-3 font-bold">🕘 Eventos da rota <span class="text-xs font-normal text-gray-500">${data.eventos.length}</span></h3><ol class="max-h-56 space-y-2 overflow-y-auto">${data.eventos.length?data.eventos.map(ev=>`<li class="flex items-center gap-3 rounded-lg bg-slate-50 p-2 text-sm">${avatar(ev.foto,ev.aluno,'h-9 w-9')}<span class="min-w-0 flex-1 truncate">${ev.tipo==='Embarque'?'⬆️':'⬇️'} ${safe(ev.aluno)}</span><time class="shrink-0 text-xs text-gray-500">${safe(ev.hora)}</time></li>`).join(''):'<li class="text-sm text-gray-500">Nenhum evento registrado.</li>'}</ol></section>
+        <div class="mt-5 grid gap-5 lg:grid-cols-2"><section class="rounded-xl border p-4"><h3 class="mb-3 flex items-center gap-2 font-bold">🟢 A bordo agora <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">${board.length}</span></h3>${paginatedList(board,listKey('board'),studentList)}</section><section class="rounded-xl border p-4"><h3 class="mb-3 flex items-center gap-2 font-bold">🧒 Passaram pela rota <span class="rounded-full bg-violet-100 px-2 py-0.5 text-xs text-violet-800">${history.length}</span></h3>${paginatedList(history,listKey('history'),studentList)}</section></div>
+        <section class="mt-5 rounded-xl border p-4"><h3 class="mb-3 font-bold">🕘 Eventos da rota <span class="text-xs font-normal text-gray-500">${data.eventos.length}</span></h3>${paginatedList(data.eventos,listKey('events'),eventList)}</section>
         ${r.ocorrencias?`<p class="mt-3 rounded bg-amber-50 p-3 text-sm text-amber-900">${r.ocorrencias} ocorrência(s) de face desconhecida registradas.</p>`:''}`;
         $('mensagem-mapa').textContent = coords.length ? 'Trajeto e eventos da rota selecionada.' : 'Trajeto indisponível: não há coordenadas para esta rota.';
         $('lista-rotas').querySelectorAll('[data-rota]').forEach(b=>{
@@ -291,10 +321,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const alert = $('alertas-rota');
         if(alert){alert.classList.toggle('hidden',!data.alertas.length);alert.innerHTML=data.alertas.length?`<strong>Alertas de face desconhecida</strong><ul class="mt-2 list-disc pl-5">${data.alertas.map(a=>`<li>Captura às ${safe(a.hora)}</li>`).join('')}</ul>`:'';}
     }
-    function studentList(students) {
-        if(!students.length)return '<p class="rounded bg-gray-50 p-3 text-sm text-gray-500">Nenhum aluno registrado.</p>';
-        return `<ul class="max-h-64 space-y-2 overflow-y-auto">${students.map(s=>`<li class="flex items-center gap-3 rounded-xl border border-gray-100 p-2.5 text-sm">${avatar(s.foto,s.nome,'h-11 w-11')}<span class="min-w-0 flex-1"><strong class="block truncate text-gray-900">${safe(s.nome)}</strong><span class="mt-0.5 block text-[11px] text-gray-500">⬆️ ${safe(s.hora_embarque||'n/d')}${s.hora_desembarque?` · ⬇️ ${safe(s.hora_desembarque)}`:''}</span></span><span class="rounded-full px-2 py-1 text-[10px] font-bold ${s.a_bordo?'bg-green-100 text-green-800':'bg-gray-100 text-gray-700'}">${s.a_bordo?'A bordo':'Desceu'}</span></li>`).join('')}</ul>`;
+    const detailPages = new Map();
+    function paginatedList(items, key, renderer) {
+        if (!items.length) return '<p class="rounded bg-gray-50 p-3 text-sm text-gray-500">Nenhum registro.</p>';
+        const pageSize=5, totalPages=Math.ceil(items.length/pageSize), page=Math.min(detailPages.get(key)||1,totalPages);
+        detailPages.set(key,page);
+        const start=(page-1)*pageSize, controls=totalPages>1
+            ? `<div class="mt-3 flex items-center justify-between border-t pt-3"><button type="button" data-list-page="${key}" data-page="${page-1}" ${page===1?'disabled':''} class="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-40">← Anterior</button><span class="text-xs text-gray-500">Página ${page} de ${totalPages} · ${items.length} registros</span><button type="button" data-list-page="${key}" data-page="${page+1}" ${page===totalPages?'disabled':''} class="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-40">Próxima →</button></div>`
+            : '';
+        return `${renderer(items.slice(start,start+pageSize))}${controls}`;
     }
+    function studentList(students) {
+        return `<ul class="space-y-2">${students.map(s=>`<li class="flex items-center gap-3 rounded-xl border border-gray-100 p-2.5 text-sm">${avatar(s.foto,s.nome,'h-11 w-11')}<span class="min-w-0 flex-1"><strong class="block truncate text-gray-900">${safe(s.nome)}</strong><span class="mt-0.5 block text-[11px] text-gray-500">⬆️ ${safe(s.hora_embarque||'n/d')}${s.hora_desembarque?` · ⬇️ ${safe(s.hora_desembarque)}`:''}</span></span><span class="rounded-full px-2 py-1 text-[10px] font-bold ${s.a_bordo?'bg-green-100 text-green-800':'bg-gray-100 text-gray-700'}">${s.a_bordo?'A bordo':'Desceu'}</span></li>`).join('')}</ul>`;
+    }
+    function eventList(events) {
+        return `<ol class="space-y-2">${events.map(ev=>`<li class="flex items-center gap-3 rounded-lg bg-slate-50 p-2 text-sm">${avatar(ev.foto,ev.aluno,'h-9 w-9')}<span class="min-w-0 flex-1 truncate">${ev.tipo==='Embarque'?'⬆️':'⬇️'} ${safe(ev.aluno)}</span><time class="shrink-0 text-xs text-gray-500">${safe(ev.hora)}</time></li>`).join('')}</ol>`;
+    }
+    document.addEventListener('click', event=>{
+        const button=event.target.closest('[data-list-page]');
+        if (!button || button.disabled) return;
+        detailPages.set(button.dataset.listPage,Number(button.dataset.page));
+        if (selected) fetchData();
+    });
     function selectRoute(id) {
         selected = String(id);
         selectedByTab[tab]=selected;
