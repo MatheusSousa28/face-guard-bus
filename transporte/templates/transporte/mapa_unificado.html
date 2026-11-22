@@ -100,10 +100,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const $ = id => document.getElementById(id);
     const safe = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const colors = ['#2563eb','#7c3aed','#059669','#db2777','#d97706','#0891b2','#4f46e5','#65a30d'];
-    let tab = 'ativas', selected = null, page = 1, pages = 1, refreshTimer, requestCounter = 0, collapsed = false, routeCards = [], mapRequestCounter = 0;
+    let tab = 'ativas', selected = null, page = 1, pages = 1, renderedActivePage = null, refreshTimer, requestCounter = 0, collapsed = false, routeCards = [], mapRequestCounter = 0;
     const selectedByTab={ativas:null,historico:null}, searchByTab={ativas:'',historico:''}, statusByTab={ativas:'',historico:''};
     const routeColor = id => colors[(Number(id)-1)%colors.length];
     const imageCache = new Map();
+    const cachedImageSources = new Map();
     const fallbackImage = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
     function cacheImage(url) {
         if (!url) return Promise.resolve('');
@@ -113,7 +114,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!response.ok) throw new Error('Image unavailable');
                     return response.blob();
                 })
-                .then(blob => URL.createObjectURL(blob))
+                .then(blob => {
+                    const objectUrl=URL.createObjectURL(blob);
+                    cachedImageSources.set(url,objectUrl);
+                    return objectUrl;
+                })
                 .catch(() => url));
         }
         return imageCache.get(url);
@@ -132,8 +137,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (node.nodeType !== Node.ELEMENT_NODE) return;
         hydrateCachedImages(node.matches?.('img[data-cache-image]') ? node.parentNode : node);
     }))).observe(document.body,{childList:true,subtree:true});
+    hydrateCachedImages(document);
     const avatar = (url, name, size='h-10 w-10') => url
-        ? `<img src="${fallbackImage}" data-cache-image="${safe(url)}" alt="${safe(name)}" class="${size} shrink-0 rounded-full border-2 border-white object-cover shadow-sm" loading="lazy">`
+        ? `<img src="${safe(cachedImageSources.get(url)||fallbackImage)}" ${cachedImageSources.has(url)?'':'data-cache-image="'+safe(url)+'"'} alt="${safe(name)}" class="${size} shrink-0 rounded-full border-2 border-white object-cover shadow-sm" loading="lazy">`
         : `<span class="${size} flex shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600">${safe(String(name||'?').trim().split(/\s+/).map(n=>n[0]).slice(0,2).join('').toUpperCase())}</span>`;
     function setTabLoading(show, message='Estamos atualizando as informações da frota.') {
         $('mensagem-carregamento-aba').textContent = message;
@@ -154,7 +160,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if ($('data-inicio').value) p.set('data_inicio', $('data-inicio').value);
             if ($('data-fim').value) p.set('data_fim', $('data-fim').value);
         }
-        hydrateCachedImages($('lista-rotas'));
         return p;
     };
     const duration = seconds => {
@@ -163,42 +168,72 @@ document.addEventListener('DOMContentLoaded', () => {
         return h ? `${h}h ${m}min` : `${m}min`;
     };
     function showStats(cards, payload) {
-        const counts = cards.reduce((a, r) => {
+        const metricRoutes = tab === 'ativas' ? cards.filter(r => r.ativa) : cards;
+        const counts = metricRoutes.reduce((a, r) => {
             if (r.interrompida) a.interrupted++;
-            else if (r.ativa) a.running++;
-            if (r.ativa && r.gps_status !== 'atualizado') a.noSignal++;
+            else if (r.ativa) {
+                a.running++;
+                if (r.gps_status !== 'atualizado') a.noSignal++;
+            }
             return a;
         }, {running:0,noSignal:0,interrupted:0});
         const stats = tab === 'ativas' ? [
             ['🚌','Rotas em andamento',counts.running,'#2563eb'],
-            ['📍','Ônibus em circulação',payload.posicoes_ativas.filter(p => cards.some(r => String(r.id) === String(p.rota_id))).length,'#4f46e5'],
+            ['📍','Ônibus em circulação',payload.posicoes_ativas.filter(p => metricRoutes.some(r => String(r.id) === String(p.rota_id))).length,'#4f46e5'],
             ['👥','Alunos embarcados',payload.resumo?.alunos_abordo ?? '—','#059669'],
             ['⬆️','Embarques realizados',payload.resumo?.embarques ?? '—','#10b981'],
             ['⬇️','Desembarques realizados',payload.resumo?.desembarques ?? '—','#0ea5e9'],
             ['⚠️','Interrompidas / sem sinal',counts.interrupted + counts.noSignal,'#e11d48']
         ] : [
-            ['🧭','Rotas no resultado',payload.total,'#2563eb'],
+            ['🧭','Rotas exibidas',payload.total,'#2563eb'],
             ['✅','Concluídas',payload.resumo?.concluidas ?? '—','#059669'],
             ['⚠️','Interrompidas',payload.resumo?.interrompidas ?? '—','#e11d48'],
-            ['🚫','Canceladas','N/D','#7c3aed'],
-            ['⬆️','Embarques no filtro',payload.resumo?.embarques ?? '—','#10b981'],
-            ['⬇️','Desembarques no filtro',payload.resumo?.desembarques ?? '—','#0ea5e9']
+            ['⬆️','Embarques',payload.resumo?.embarques ?? '—','#10b981'],
+            ['⬇️','Desembarques',payload.resumo?.desembarques ?? '—','#0ea5e9']
         ];
         $('indicadores').innerHTML = stats.map(([icon,name,value,color]) =>
             `<article class="group rounded-2xl border border-gray-200 border-b-4 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style="border-bottom-color:${color}"><div class="flex items-center justify-between gap-2"><p class="text-xs font-semibold text-gray-600">${name}</p><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-lg" aria-hidden="true">${icon}</span></div><p class="mt-2 text-2xl font-bold text-gray-900">${value}</p></article>`
         ).join('');
     }
     function renderCards(cards, append=false) {
+        const previousCards=routeCards;
         routeCards = append ? routeCards.concat(cards) : cards;
+        const sameActiveCards=tab==='ativas' && !append && renderedActivePage===page
+            && previousCards.length===routeCards.length
+            && previousCards.every((old,index)=>{
+                const current=routeCards[index];
+                return String(old.id)===String(current.id)
+                    && old.veiculo_foto===current.veiculo_foto
+                    && old.motorista_foto===current.motorista_foto
+                    && old.placa===current.placa
+                    && old.motorista===current.motorista
+                    && old.inicio===current.inicio;
+            });
+        if (sameActiveCards) {
+            routeCards.forEach(route=>{
+                const badge=$('rota-card-'+route.id)?.querySelector('[data-route-status]');
+                if (!badge) return;
+                const status=route.interrompida?'Interrompida':route.gps_status==='atualizado'?'Em andamento':'Sem sinal';
+                badge.textContent=status;
+                badge.className=`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${route.interrompida?'bg-rose-100 text-rose-800':'bg-emerald-100 text-emerald-800'}`;
+            });
+            const start=routeCards.length?(page-1)*5+1:0, end=Math.min(page*5,routeCards.length);
+            $('contagem-rotas').textContent=`Exibindo ${start}–${end} de ${routeCards.length} rotas ativas`;
+            $('rotulo-pagina').textContent=`Página ${page} de ${Math.max(1,pages)}`;
+            return;
+        }
         if (!append) $('lista-rotas').innerHTML = '';
         if (!routeCards.length) $('lista-rotas').innerHTML = '<p class="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">Nenhuma rota encontrada com esses filtros.</p>';
-        routeCards.forEach(r => {
+        const visibleCards = tab === 'ativas'
+            ? routeCards.slice((page-1)*5,page*5)
+            : routeCards;
+        visibleCards.forEach(r => {
             if (append && $('rota-card-' + r.id)) return;
             const status = r.interrompida ? 'Interrompida' : r.ativa ? (r.gps_status === 'atualizado' ? 'Em andamento' : 'Sem sinal') : 'Concluída';
             const color = routeColor(r.id);
             const selectedCard = String(selected)===String(r.id);
             $('lista-rotas').insertAdjacentHTML('beforeend', `<button id="rota-card-${r.id}" type="button" data-rota="${r.id}" style="border-color:${selectedCard?color:''};--route-color:${color}" class="group w-full rounded-xl border-2 ${selectedCard?'bg-blue-50 shadow-sm':'border-gray-100 bg-white'} p-3 text-left transition hover:border-[var(--route-color)] hover:shadow-sm">
-                <span class="flex items-center gap-3">${avatar(r.veiculo_foto, r.placa, 'h-12 w-12 rounded-xl')}<span class="min-w-0 flex-1"><span class="flex items-center justify-between gap-2"><strong class="truncate text-sm text-gray-900">Rota #${r.id} · ${safe(r.placa)}</strong><span class="shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${r.interrompida?'bg-rose-100 text-rose-800':r.ativa?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-700'}">${status}</span></span>
+                <span class="flex items-center gap-3">${avatar(r.veiculo_foto, r.placa, 'h-12 w-12 rounded-xl')}<span class="min-w-0 flex-1"><span class="flex items-center justify-between gap-2"><strong class="truncate text-sm text-gray-900">Rota #${r.id} · ${safe(r.placa)}</strong><span data-route-status class="shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${r.interrompida?'bg-rose-100 text-rose-800':r.ativa?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-700'}">${status}</span></span>
                 <span class="mt-1 flex items-center gap-1.5 text-xs text-gray-500">${avatar(r.motorista_foto,r.motorista,'h-5 w-5')}<span class="truncate">${safe(r.motorista)}</span></span><span class="mt-1 block text-[11px] text-gray-400">◷ ${safe(r.inicio)}</span></span></span></button>`);
         });
         $('lista-rotas').querySelectorAll('[data-rota]').forEach(b => b.onclick = () => selectRoute(b.dataset.rota));
@@ -206,7 +241,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const shown = routeCards.length;
             $('contagem-rotas').textContent = `Exibindo ${shown} rotas de ${window.totalRotasHistorico || 0}`;
             $('rotulo-pagina').textContent = `Página ${page} de ${Math.max(1,pages)}`;
+        } else {
+            const start=routeCards.length?(page-1)*5+1:0, end=Math.min(page*5,routeCards.length);
+            $('contagem-rotas').textContent=`Exibindo ${start}–${end} de ${routeCards.length} rotas ativas`;
+            $('rotulo-pagina').textContent=`Página ${page} de ${Math.max(1,pages)}`;
         }
+        if (tab==='ativas') renderedActivePage=page;
     }
     function fetchData({append=false}={}) {
         const req = ++requestCounter;
@@ -216,9 +256,9 @@ document.addEventListener('DOMContentLoaded', () => {
         $('estado-lista').textContent = 'Carregando rotas…';
         return fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r => {if(!r.ok) throw new Error('Não foi possível carregar os dados da frota.'); return r.json();}).then(data => {
             if (req !== requestCounter) return;
-            pages = data.paginas || 1;
+            pages = tab === 'ativas' ? Math.max(1,Math.ceil(data.rotas.length/5)) : (data.paginas || 1);
             window.totalRotasHistorico = data.total || 0;
-            $('paginacao-historico').classList.toggle('hidden', tab !== 'historico');
+            $('paginacao-historico').classList.toggle('hidden', tab === 'historico' ? pages <= 1 && (data.total||0)<=5 : pages <= 1);
             $('pagina-anterior').disabled = page <= 1;
             $('pagina-proxima').disabled = page >= pages;
             $('estado-lista').textContent = data.total ? `${data.total} rota(s) encontrada(s)` : '';

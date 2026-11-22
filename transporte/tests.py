@@ -187,6 +187,9 @@ class TransporteFluxosTests(TestCase):
         self.assertContains(response, 'id="pagina-anterior"')
         self.assertContains(response, 'id="pagina-proxima"')
         self.assertContains(response, 'id="legenda-mapa"')
+        self.assertContains(response, 'rotas ativas')
+        self.assertContains(response, 'Rotas exibidas')
+        self.assertNotContains(response, 'Canceladas')
         self.assertNotContains(response, 'id="seletor-rota"')
         self.assertContains(response, "const cartoApiKey = 'cartotestkey';")
         self.assertContains(response, 'basemaps.cartocdn.com')
@@ -234,6 +237,23 @@ class TransporteFluxosTests(TestCase):
         self.assertEqual(payload['trajeto'], [])
         self.assertEqual({p['rota_id'] for p in payload['posicoes_ativas']}, {rota_1.id, rota_2.id})
         self.assertEqual(len(payload['rotas']), 2)
+
+    def test_resumo_de_rotas_ativas_ignora_eventos_de_rotas_encerradas(self):
+        ativa = self.criar_rota()
+        encerrada = self.criar_rota()
+        encerrada.ativa = False
+        encerrada.fim = timezone.now()
+        encerrada.save(update_fields=['ativa', 'fim'])
+        Evento.objects.create(rota=ativa, aluno=self.aluno, tipo='embarque', autorizado=True)
+        Evento.objects.create(rota=encerrada, aluno=self.aluno, tipo='embarque', autorizado=True)
+        Evento.objects.create(rota=encerrada, aluno=self.aluno, tipo='desembarque', autorizado=True)
+        self.client.force_login(self.instituicao_usuario)
+
+        payload = self.client.get(reverse('api_mapa_unificado')).json()
+
+        self.assertEqual(payload['resumo']['embarques'], 1)
+        self.assertEqual(payload['resumo']['desembarques'], 0)
+        self.assertEqual(payload['resumo']['alunos_abordo'], 1)
 
     def test_mapa_pode_selecionar_rota_historica_e_exibir_seu_trajeto(self):
         rota = self.criar_rota()

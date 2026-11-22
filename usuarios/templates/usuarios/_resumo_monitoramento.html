@@ -53,7 +53,7 @@
                         {% empty %}<p class="text-sm text-gray-500">Nenhuma interrupção registrada.</p>{% endfor %}
                     </div>
                     {% if rotas_interrompidas|length > 1 %}
-                    <div class="mt-4 flex items-center justify-between gap-3" aria-label="Navegação das interrupções">
+                    <div class="mt-5 mb-2 flex items-center justify-center gap-4 pb-3" aria-label="Navegação das interrupções">
                         <button type="button" id="interrupcao-anterior" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Interrupção anterior">Anterior</button>
                         <p id="posicao-interrupcao" class="text-sm font-medium text-gray-600" aria-live="polite">1 de {{ rotas_interrompidas|length }}</p>
                         <button type="button" id="proxima-interrupcao" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Próxima interrupção">Próxima</button>
