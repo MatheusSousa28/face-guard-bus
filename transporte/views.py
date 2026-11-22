@@ -336,14 +336,100 @@ def api_frota_mapa_unificada(request):
 
     rotas = Rota.objects.select_related(
         'veiculo', 'motorista', 'motorista__usuario',
-    ).exclude(veiculo__isnull=True)
+    )
     if is_responsavel and not is_admin:
         rotas = rotas.filter(
             veiculo__alunos_autorizados__responsavel=usuario.responsavel,
         ).distinct()
-    rotas = list(rotas.order_by('-ativa', '-inicio'))
+    contexto = request.GET.get('contexto', 'ativas')
+    termo = request.GET.get('q', '').strip()[:100]
+    estado = request.GET.get('situacao', '').strip()[:40]
+    data_inicio = request.GET.get('data_inicio', '').strip()[:10]
+    data_fim = request.GET.get('data_fim', '').strip()[:10]
+
+    resumo = {}
+    if contexto == 'historico':
+        rotas = rotas.filter(ativa=False)
+        if data_inicio:
+            rotas = rotas.filter(inicio__date__gte=data_inicio)
+        if data_fim:
+            rotas = rotas.filter(inicio__date__lte=data_fim)
+        if estado == 'interrompida':
+            rotas = rotas.filter(interrompida=True)
+        elif estado == 'concluida':
+            rotas = rotas.filter(interrompida=False)
+        if termo:
+            from django.db.models import Q
+            busca = (
+                Q(veiculo__placa__icontains=termo)
+                | Q(veiculo__modelo__icontains=termo)
+                | Q(motorista__usuario__first_name__icontains=termo)
+                | Q(motorista__usuario__last_name__icontains=termo)
+            )
+            if termo.isdigit():
+                busca |= Q(pk=int(termo))
+            rotas = rotas.filter(busca)
+        rotas_filtradas = rotas
+        total_historico = rotas_filtradas.count()
+        resumo['concluidas'] = rotas_filtradas.filter(interrompida=False).count()
+        resumo['interrompidas'] = rotas_filtradas.filter(interrompida=True).count()
+        resumo['embarques'] = Evento.objects.filter(
+            rota__in=rotas_filtradas, tipo='embarque', autorizado=True,
+        ).count()
+        resumo['desembarques'] = Evento.objects.filter(
+            rota__in=rotas_filtradas, tipo='desembarque', autorizado=True,
+        ).count()
+        try:
+            pagina = max(1, int(request.GET.get('pagina', '1')))
+        except (TypeError, ValueError):
+            pagina = 1
+        rotas = list(rotas.order_by('-inicio', '-pk')[(pagina - 1) * 25:pagina * 25])
+    else:
+        rotas = rotas.filter(ativa=True)
+        if estado == 'andamento':
+            rotas = rotas.filter(interrompida=False)
+        elif estado == 'interrompida':
+            rotas = rotas.filter(interrompida=True)
+        if termo:
+            from django.db.models import Q
+            busca = (
+                Q(veiculo__placa__icontains=termo)
+                | Q(veiculo__modelo__icontains=termo)
+                | Q(motorista__usuario__first_name__icontains=termo)
+                | Q(motorista__usuario__last_name__icontains=termo)
+            )
+            if termo.isdigit():
+                busca |= Q(pk=int(termo))
+            rotas = rotas.filter(busca)
+        rotas = list(rotas.order_by('-inicio', '-pk'))
+        if estado == 'sem_sinal':
+            rotas = [
+                item for item in rotas
+                if not item.interrompida and obter_estado_gps(item) != 'atualizado'
+            ]
+        rotas_filtradas = rotas
+        resumo['embarques'] = Evento.objects.filter(
+            rota__in=rotas_filtradas, tipo='embarque', autorizado=True,
+        ).count()
+        resumo['desembarques'] = Evento.objects.filter(
+            rota__in=rotas_filtradas, tipo='desembarque', autorizado=True,
+        ).count()
+        resumo['alunos_abordo'] = sum(
+            contar_alunos_a_bordo(item) for item in rotas_filtradas
+        )
+        total_historico = 0
+
     route_id = request.GET.get('rota')
-    rota = next((item for item in rotas if str(item.id) == str(route_id)), None) if route_id else None
+    rota = None
+    if route_id:
+        rota = Rota.objects.select_related(
+            'veiculo', 'motorista', 'motorista__usuario',
+        ).filter(pk=route_id)
+        if is_responsavel and not is_admin:
+            rota = rota.filter(
+                veiculo__alunos_autorizados__responsavel=usuario.responsavel,
+            )
+        rota = rota.first()
     if route_id and rota is None:
         return JsonResponse({'error': 'Rota não encontrada.'}, status=404)
 
@@ -363,12 +449,27 @@ def api_frota_mapa_unificada(request):
         else:
             estado = 'Concluída'
         inicio = timezone.localtime(item.inicio).strftime('%d/%m/%Y %H:%M') if item.inicio else 'Data não informada'
-        return {'id': item.id, 'label': f'{item.veiculo.placa} · {inicio} · {estado}'}
+        placa = item.veiculo.placa if item.veiculo_id else 'Veículo não informado'
+        motorista = (
+            f"{item.motorista.usuario.first_name} {item.motorista.usuario.last_name}".strip()
+            if item.motorista_id else 'Não informado'
+        )
+        return {
+            'id': item.id, 'label': f'{placa} · {inicio} · {estado}',
+            'placa': placa, 'motorista': motorista,
+            'inicio': inicio, 'ativa': item.ativa, 'interrompida': item.interrompida,
+            'gps_status': obter_estado_gps(item, agora=agora) if item.ativa else 'historica',
+        }
 
     rotas_json = [rotulo_rota(item) for item in rotas]
     posicoes_ativas = []
-    for item in rotas:
-        if not item.ativa or item.interrompida:
+    posicoes_qs = Rota.objects.filter(ativa=True).select_related('veiculo', 'motorista__usuario')
+    if is_responsavel and not is_admin:
+        posicoes_qs = posicoes_qs.filter(
+            veiculo__alunos_autorizados__responsavel=usuario.responsavel,
+        ).distinct()
+    for item in posicoes_qs:
+        if not item.veiculo_id:
             continue
         ultima = item.coordenadas.order_by('-timestamp').first()
         if not ultima:
@@ -379,8 +480,11 @@ def api_frota_mapa_unificada(request):
             'longitude': float(ultima.longitude),
             'veiculo': str(item.veiculo),
             'placa': item.veiculo.placa,
-            'motorista': item.motorista.usuario.first_name if item.motorista else 'Não informado',
-            'gps_status': obter_estado_gps(item, ultima, agora),
+            'motorista': (
+                f"{item.motorista.usuario.first_name} {item.motorista.usuario.last_name}".strip()
+                if item.motorista_id else 'Não informado'
+            ),
+            'gps_status': 'interrompida' if item.interrompida else obter_estado_gps(item, ultima, agora),
             'atualizado_em': timezone.localtime(ultima.timestamp).strftime('%H:%M:%S'),
         })
 
@@ -388,6 +492,11 @@ def api_frota_mapa_unificada(request):
         return JsonResponse({
             'rotas': rotas_json,
             'posicoes_ativas': posicoes_ativas,
+            'contexto': contexto,
+            'total': total_historico if contexto == 'historico' else len(rotas_json),
+            'resumo': resumo,
+            'pagina': pagina if contexto == 'historico' else 1,
+            'paginas': ((total_historico + 24) // 25) if contexto == 'historico' else 1,
             'rota': None,
             'trajeto': [],
             'eventos': [],
@@ -398,7 +507,9 @@ def api_frota_mapa_unificada(request):
         })
 
     pontos = list(Localizacao.objects.filter(rota=rota).order_by('timestamp'))
-    eventos_qs = Evento.objects.filter(rota=rota).select_related('aluno').exclude(tipo='desconhecido')
+    eventos_qs = Evento.objects.filter(
+        rota=rota, autorizado=True,
+    ).select_related('aluno').exclude(tipo='desconhecido')
     if is_responsavel and not is_admin:
         eventos_qs = eventos_qs.filter(aluno__responsavel=usuario.responsavel)
     eventos = list(eventos_qs.order_by('data_hora'))
@@ -450,35 +561,75 @@ def api_frota_mapa_unificada(request):
 
     eventos_json = []
     status_por_aluno = {}
+    embarques = 0
+    desembarques = 0
     for evento in eventos:
+        if evento.tipo == 'embarque':
+            embarques += 1
+        elif evento.tipo == 'desembarque':
+            desembarques += 1
         ponto = ponto_proximo_do_evento(evento)
         eventos_json.append({
-            'aluno': evento.aluno.nome, 'tipo': evento.get_tipo_display(),
-            'hora': timezone.localtime(evento.data_hora).strftime('%H:%M:%S'),
+            'aluno': evento.aluno.nome if evento.aluno else 'Aluno não informado',
+            'aluno_id': evento.aluno_id, 'tipo': evento.get_tipo_display(),
+            'hora': timezone.localtime(evento.data_hora).strftime('%d/%m/%Y %H:%M:%S'),
             'latitude': float(ponto.latitude) if ponto else None,
             'longitude': float(ponto.longitude) if ponto else None,
         })
-        status_por_aluno[evento.aluno_id] = {
+        if evento.aluno_id is None:
+            continue
+        status_atual = status_por_aluno.setdefault(evento.aluno_id, {
+            'id': evento.aluno_id,
             'nome': evento.aluno.nome,
             'foto': evento.aluno.foto_perfil.url if evento.aluno.foto_perfil else '',
-            'a_bordo': evento.tipo == 'embarque',
-            'hora': timezone.localtime(evento.data_hora).strftime('%H:%M:%S'),
-        }
-    alunos_abordo = [aluno for aluno in status_por_aluno.values() if aluno['a_bordo']]
+            'a_bordo': False,
+            'hora': '',
+            'hora_embarque': None,
+            'hora_desembarque': None,
+            'embarcou': False,
+        })
+        hora_evento = timezone.localtime(evento.data_hora).strftime('%H:%M:%S')
+        if evento.tipo == 'embarque':
+            status_atual['hora_embarque'] = hora_evento
+            status_atual['embarcou'] = True
+        elif evento.tipo == 'desembarque':
+            status_atual['hora_desembarque'] = hora_evento
+        status_atual['a_bordo'] = evento.tipo == 'embarque'
+        status_atual['hora'] = hora_evento
+        status_atual['tipo'] = evento.get_tipo_display()
+    alunos_historico = [aluno for aluno in status_por_aluno.values() if aluno['embarcou']]
+    alunos_abordo = [aluno for aluno in alunos_historico if aluno['a_bordo']]
 
     estado_gps = obter_estado_gps(rota, pontos[-1] if pontos else None, agora)
 
     return JsonResponse({
         'rotas': rotas_json,
         'posicoes_ativas': posicoes_ativas,
+        'contexto': contexto,
+        'total': total_historico if contexto == 'historico' else len(rotas_json),
+        'resumo': resumo,
+        'pagina': pagina if contexto == 'historico' else 1,
+        'paginas': ((total_historico + 24) // 25) if contexto == 'historico' else 1,
         'rota': {
             'id': rota.id,
             'ativa': rota.ativa,
             'interrompida': rota.interrompida,
+            'inicio': timezone.localtime(rota.inicio).strftime('%d/%m/%Y %H:%M:%S') if rota.inicio else None,
+            'fim': timezone.localtime(rota.fim).strftime('%d/%m/%Y %H:%M:%S') if rota.fim else None,
+            'duracao_segundos': max(0, int(((rota.fim or agora) - rota.inicio).total_seconds())) if rota.inicio else None,
             'gps_status': estado_gps,
             'ultima_atualizacao': timezone.localtime(pontos[-1].timestamp).strftime('%d/%m/%Y %H:%M:%S') if pontos else None,
-            'veiculo': str(rota.veiculo),
-            'motorista': rota.motorista.usuario.first_name if rota.motorista else 'Não informado',
+            'veiculo': str(rota.veiculo) if rota.veiculo_id else 'Não informado',
+            'motorista': (
+                f"{rota.motorista.usuario.first_name} {rota.motorista.usuario.last_name}".strip()
+                if rota.motorista_id else 'Não informado'
+            ),
+            'placa': rota.veiculo.placa if rota.veiculo else 'Não informado',
+            'embarques': embarques,
+            'desembarques': desembarques,
+            'total_alunos': len(alunos_historico),
+            'alunos_historico': alunos_historico,
+            'ocorrencias': sum(1 for evento in Evento.objects.filter(rota=rota, tipo='desconhecido')),
         },
         'trajeto': [{'latitude': float(p.latitude), 'longitude': float(p.longitude)} for p in pontos],
         'eventos': eventos_json, 'paradas': paradas, 'alertas': alertas_json,

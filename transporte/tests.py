@@ -145,7 +145,7 @@ class TransporteFluxosTests(TestCase):
         self.assertContains(response, 'setInterval(enviarLocalizacao, 3000)')
         self.assertContains(response, 'maximumAge: 0')
 
-    def test_tela_de_monitoramento_resume_gps_e_alunos_a_bordo(self):
+    def test_tela_de_monitoramento_exibe_abas_e_carrega_contadores_dinamicos(self):
         rota = self.criar_rota()
         Evento.objects.create(rota=rota, aluno=self.aluno, tipo='embarque', autorizado=True)
         Localizacao.objects.create(rota=rota, latitude=-15.78, longitude=-47.92)
@@ -154,9 +154,9 @@ class TransporteFluxosTests(TestCase):
         response = self.client.get(reverse('mapa_unificado'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Alunos a bordo')
-        self.assertContains(response, 'GPS atualizado')
-        self.assertEqual(response.context['total_alunos_abordo'], 1)
+        self.assertContains(response, 'Rotas ativas')
+        self.assertContains(response, 'Histórico de rotas')
+        self.assertContains(response, 'indicadores')
 
     def test_home_da_instituicao_exibe_dashboard_e_acesso_ao_monitoramento(self):
         self.client.force_login(self.instituicao_usuario)
@@ -170,17 +170,19 @@ class TransporteFluxosTests(TestCase):
         self.assertNotContains(response, 'Rotas com GPS atualizado')
 
     @override_settings(CARTO_API_KEY='cartotestkey')
-    def test_tela_de_mapa_mostra_resumo_institucional_abaixo_do_mapa(self):
+    def test_tela_de_mapa_mostra_indicadores_proprios_e_area_do_mapa(self):
         self.client.force_login(self.instituicao_usuario)
 
         response = self.client.get(reverse('mapa_unificado'))
 
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
-        self.assertLess(html.index('id="mapa-frota"'), html.index('Resumo do monitoramento'))
+        self.assertLess(html.index('id="indicadores"'), html.index('id="mapa-frota"'))
         self.assertContains(response, 'Acompanhamento da frota')
-        self.assertContains(response, 'id="painel-acompanhamento"')
-        self.assertContains(response, 'Mostrar mapa e informações')
+        self.assertContains(response, 'id="aba-ativas"')
+        self.assertContains(response, 'id="aba-historico"')
+        self.assertContains(response, 'id="lista-rotas"')
+        self.assertNotContains(response, 'id="seletor-rota"')
         self.assertContains(response, "const cartoApiKey = 'cartotestkey';")
         self.assertContains(response, 'basemaps.cartocdn.com')
         self.assertNotContains(response, 'tile.openstreetmap.org')
@@ -242,6 +244,45 @@ class TransporteFluxosTests(TestCase):
         payload = response.json()
         self.assertEqual(payload['rota']['id'], rota.id)
         self.assertEqual(len(payload['trajeto']), 1)
+
+    def test_historico_filtra_rotas_e_calcula_totais_no_periodo(self):
+        rota = self.criar_rota()
+        rota.ativa = False
+        rota.fim = timezone.now()
+        rota.save(update_fields=['ativa', 'fim'])
+        Evento.objects.create(rota=rota, aluno=self.aluno, tipo='embarque', autorizado=True)
+        Evento.objects.create(rota=rota, aluno=self.aluno, tipo='desembarque', autorizado=True)
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.get(reverse('api_mapa_unificado'), {'contexto': 'historico'})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['total'], 1)
+        self.assertEqual(payload['resumo']['concluidas'], 1)
+        self.assertEqual(payload['resumo']['embarques'], 1)
+        self.assertEqual(payload['resumo']['desembarques'], 1)
+
+    def test_detalhe_historico_preserva_aluno_desembarcado_na_lista_completa(self):
+        rota = self.criar_rota()
+        rota.ativa = False
+        rota.fim = timezone.now()
+        rota.save(update_fields=['ativa', 'fim'])
+        Evento.objects.create(rota=rota, aluno=self.aluno, tipo='embarque', autorizado=True)
+        Evento.objects.create(rota=rota, aluno=self.aluno, tipo='desembarque', autorizado=True)
+        self.client.force_login(self.instituicao_usuario)
+
+        payload = self.client.get(
+            reverse('api_mapa_unificado'),
+            {'contexto': 'historico', 'rota': rota.id},
+        ).json()
+
+        self.assertEqual(payload['alunos_abordo'], [])
+        self.assertEqual(payload['rota']['total_alunos'], 1)
+        self.assertFalse(payload['rota']['alunos_historico'][0]['a_bordo'])
+        self.assertIsNotNone(payload['rota']['alunos_historico'][0]['hora_embarque'])
+        self.assertIsNotNone(payload['rota']['alunos_historico'][0]['hora_desembarque'])
+        self.assertIsNotNone(payload['rota']['duracao_segundos'])
 
     def test_comando_de_dados_demo_cria_fluxo_completo_e_e_idempotente(self):
         with override_settings(SUPABASE_URL=''):

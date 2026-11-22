@@ -1,194 +1,214 @@
 {% extends 'base.html' %}
-
 {% block content %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<div class="max-w-7xl mx-auto px-4 py-8">
-    <div class="mb-4">
-        {% include '_botao_voltar.html' with voltar_url='home' %}
+<main class="mx-auto max-w-[1600px] px-4 py-6">
+    <div class="mb-4">{% include '_botao_voltar.html' with voltar_url='home' %}</div>
+    <header class="mb-5">
+        <h1 class="font-display text-3xl font-bold text-gray-900">Acompanhamento da frota</h1>
+        <p class="mt-1 text-gray-600">Monitore rotas em andamento e consulte o histórico operacional.</p>
+    </header>
+    <div class="mb-5 flex gap-2 border-b" role="tablist" aria-label="Visão da frota">
+        <button id="aba-ativas" type="button" role="tab" aria-selected="true" class="border-b-2 border-blue-700 px-4 py-3 font-semibold text-blue-800">Rotas ativas</button>
+        <button id="aba-historico" type="button" role="tab" aria-selected="false" class="border-b-2 border-transparent px-4 py-3 font-semibold text-gray-600">Histórico de rotas</button>
     </div>
-    <details id="painel-acompanhamento" class="mb-8 w-full bg-white rounded-xl shadow-lg border border-gray-200">
-        <summary class="flex w-full cursor-pointer list-none items-center justify-between gap-4 rounded-xl bg-gray-50 p-5 text-left hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600">
-            <span>
-                <span class="block font-display text-xl font-bold text-gray-800">Acompanhamento da frota</span>
-                <span class="mt-1 block text-sm text-gray-500">Abra para consultar o mapa, as rotas e os eventos.</span>
-            </span>
-            <span id="rotulo-painel-acompanhamento" class="shrink-0 rounded-lg bg-blue-600 px-5 py-3 text-center font-bold text-white">Mostrar mapa e informações</span>
-        </summary>
-        <div class="overflow-hidden rounded-b-xl">
-            <div class="border-t border-gray-200 bg-white p-6">
-                <p class="text-sm text-gray-500">Veja os ônibus ativos no mapa ou selecione uma rota para consultar seu trajeto e eventos, inclusive os históricos.</p>
-                <label for="seletor-rota" class="block text-sm font-semibold text-gray-700 mt-4 mb-1">Rota</label>
-                <select id="seletor-rota" class="w-full md:max-w-xl border border-gray-300 rounded-lg p-3 bg-white">
-                    <option value="">Acompanhamento ao vivo — selecione uma rota para ver o trajeto</option>
+    <section id="indicadores" class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" aria-live="polite"></section>
+    <div class="grid grid-cols-1 gap-4 xl:grid-cols-[350px_minmax(0,1fr)]">
+        <aside class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div class="flex items-center justify-between border-b p-4">
+                <h2 id="titulo-lista" class="font-bold text-gray-900">Rotas em andamento</h2>
+                <button id="alternar-painel" type="button" class="rounded-lg border px-3 py-1.5 text-sm font-semibold text-gray-700" aria-expanded="true">Recolher</button>
+            </div>
+            <div id="conteudo-painel" class="p-4">
+                <label class="mb-1 block text-sm font-semibold text-gray-700" for="pesquisa-rota">Pesquisar rota, ônibus ou motorista</label>
+                <input id="pesquisa-rota" type="search" class="mb-3 w-full rounded-lg border border-gray-300 p-2.5" placeholder="Código, placa ou nome">
+                <div id="filtros-historico" class="mb-3 hidden space-y-2">
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="text-xs font-semibold text-gray-600">De<input id="data-inicio" type="date" class="mt-1 w-full rounded border p-2 text-sm"></label>
+                        <label class="text-xs font-semibold text-gray-600">Até<input id="data-fim" type="date" class="mt-1 w-full rounded border p-2 text-sm"></label>
+                    </div>
+                </div>
+                <label class="sr-only" for="filtro-situacao">Situação</label>
+                <select id="filtro-situacao" class="mb-3 w-full rounded-lg border border-gray-300 bg-white p-2.5">
+                    <option value="">Todas as situações</option>
+                    <option value="andamento">Em andamento</option>
+                    <option value="sem_sinal">Sem sinal</option>
+                    <option value="interrompida">Interrompida</option>
                 </select>
-                <p id="detalhes-rota" class="text-sm text-gray-600 mt-3"></p>
-                <div id="resumo-alunos" class="mt-3 text-sm text-gray-700"></div>
-                {% if user.instituicao or user.is_superuser %}
-                <div id="alertas-rota" class="hidden mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900"></div>
-                {% endif %}
+                <p id="estado-lista" class="mb-2 text-sm text-gray-500" aria-live="polite"></p>
+                <div id="lista-rotas" class="max-h-[55vh] space-y-2 overflow-y-auto pr-1"></div>
+                <button id="mais-resultados" class="mt-3 hidden w-full rounded-lg border px-3 py-2 text-sm font-semibold hover:bg-gray-50">Carregar mais</button>
             </div>
-            <div id="mapa-frota" class="w-full h-[600px] z-10"></div>
-            <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <p><span class="font-bold text-green-700">● Embarque</span> — clique no ponto para ver o aluno e horário.</p>
-                <p><span class="font-bold text-red-700">● Desembarque</span> — clique no ponto para ver o aluno e horário.</p>
-                <p><span class="font-bold text-blue-700">● Parada</span> — parada estimada a partir dos registros GPS (mínimo 2 minutos).</p>
-            </div>
-        </div>
-    </details>
-    {% if user.instituicao or user.is_superuser %}
-        {% include 'usuarios/_resumo_monitoramento.html' %}
-    {% endif %}
-</div>
-
+        </aside>
+        <section class="min-w-0">
+            <div id="mapa-frota" class="z-0 h-[55vh] min-h-[380px] w-full rounded-xl border border-gray-200 shadow-sm"></div>
+            <div id="mensagem-mapa" class="mt-2 text-sm text-gray-500" aria-live="polite"></div>
+            <section id="detalhes-rota" class="mt-4 hidden rounded-xl border border-gray-200 bg-white p-5 shadow-sm"></section>
+            {% if user.instituicao or user.is_superuser %}
+            <div id="alertas-rota" class="mt-3 hidden rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900"></div>
+            {% endif %}
+        </section>
+    </div>
+    {% if user.instituicao or user.is_superuser %}{% include 'usuarios/_resumo_monitoramento.html' %}{% endif %}
+</main>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const slidesInterrupcao = [...document.querySelectorAll('.interrupcao-slide')];
-    if (slidesInterrupcao.length > 1) {
-        const botaoAnterior = document.getElementById('interrupcao-anterior');
-        const botaoProximo = document.getElementById('proxima-interrupcao');
-        const posicaoInterrupcao = document.getElementById('posicao-interrupcao');
-        let interrupcaoAtual = 0;
-        const mostrarInterrupcao = indice => {
-            interrupcaoAtual = (indice + slidesInterrupcao.length) % slidesInterrupcao.length;
-            slidesInterrupcao.forEach((slide, index) => {
-                slide.hidden = index !== interrupcaoAtual;
-            });
-            posicaoInterrupcao.textContent = `${interrupcaoAtual + 1} de ${slidesInterrupcao.length}`;
-        };
-        botaoAnterior.addEventListener('click', () => mostrarInterrupcao(interrupcaoAtual - 1));
-        botaoProximo.addEventListener('click', () => mostrarInterrupcao(interrupcaoAtual + 1));
-    }
-
+    const api = new URL('{% url "api_mapa_unificado" %}', location.origin);
     const mapa = L.map('mapa-frota').setView([-15.7801, -47.9292], 12);
-    const painelAcompanhamento = document.getElementById('painel-acompanhamento');
-    const rotuloPainelAcompanhamento = document.getElementById('rotulo-painel-acompanhamento');
-    painelAcompanhamento.addEventListener('toggle', () => {
-        rotuloPainelAcompanhamento.textContent = painelAcompanhamento.open
-            ? 'Ocultar mapa e informações'
-            : 'Mostrar mapa e informações';
-        if (painelAcompanhamento.open) {
-            requestAnimationFrame(() => mapa.invalidateSize());
-        }
-    });
     const cartoApiKey = '{{ carto_api_key|default:""|escapejs }}';
-    const urlTiles = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' +
-        (cartoApiKey ? `?key=${encodeURIComponent(cartoApiKey)}` : '');
-    L.tileLayer(urlTiles, {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 20,
-    }).addTo(mapa);
-    const seletor = document.getElementById('seletor-rota');
-    const detalhes = document.getElementById('detalhes-rota');
-    const resumoAlunos = document.getElementById('resumo-alunos');
-    const camadaRota = L.layerGroup().addTo(mapa);
-    const camadaVeiculos = L.layerGroup().addTo(mapa);
-    let seletorConfigurado = false;
-    let timerAtualizacao = null;
-    let carregamentoAtual = 0;
-    const escapar = valor => String(valor).replace(/[&<>"']/g, caractere => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[caractere]));
-
-    function carregarRota(id = seletor.value) {
-        clearInterval(timerAtualizacao);
-        const requisicao = ++carregamentoAtual;
-        const url = new URL('{% url "api_mapa_unificado" %}', window.location.origin);
-        if (id) url.searchParams.set('rota', id);
-        fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
-            .then(response => {
-                if (!response.ok) throw new Error('Não foi possível carregar as rotas.');
-                return response.json();
-            })
-            .then(dados => {
-                if (requisicao !== carregamentoAtual) return;
-                if (!seletorConfigurado) {
-                    seletorConfigurado = true;
-                    seletor.addEventListener('change', () => carregarRota(seletor.value));
-                }
-                seletor.innerHTML = '';
-                seletor.add(new Option('Acompanhamento ao vivo — selecione uma rota para ver o trajeto', ''));
-                dados.rotas.forEach(rota => seletor.add(new Option(rota.label, rota.id)));
-                camadaRota.clearLayers();
-                camadaVeiculos.clearLayers();
-                dados.posicoes_ativas.forEach(posicao => {
-                    const semSinal = posicao.gps_status !== 'atualizado';
-                    L.circleMarker([posicao.latitude, posicao.longitude], {
-                        radius: 10,
-                        color: semSinal ? '#b45309' : '#1e3a8a',
-                        fillColor: semSinal ? '#f59e0b' : '#3b82f6',
-                        fillOpacity: 0.95,
-                    }).bindPopup(
-                        `<strong>${escapar(posicao.placa)} · ${escapar(posicao.veiculo)}</strong><br>` +
-                        `Motorista: ${escapar(posicao.motorista)}<br>` +
-                        `${semSinal ? 'Sem sinal — ' : 'GPS atualizado às '}${escapar(posicao.atualizado_em)}<br>` +
-                        '<span>Selecione o marcador para abrir o trajeto</span>'
-                    ).on('click', () => carregarRota(String(posicao.rota_id)))
-                      .addTo(camadaVeiculos);
-                });
-
-                if (!dados.rota) {
-                    seletor.value = '';
-                    resumoAlunos.textContent = '';
-                    detalhes.textContent = dados.posicoes_ativas.length
-                        ? `${dados.posicoes_ativas.length} ônibus em rota. Selecione um marcador ou uma rota para ver o trajeto.`
-                        : 'Nenhum ônibus em rota no momento. Selecione uma rota abaixo para consultar o histórico.';
-                    timerAtualizacao = setInterval(() => carregarRota(seletor.value), 5000);
-                    return;
-                }
-
-                seletor.value = String(dados.rota.id);
-                const statusGps = {
-                    atualizado: 'GPS atualizado',
-                    sem_sinal: 'GPS sem sinal',
-                    interrompida: dados.rota.ativa ? 'interrompida — revisão necessária' : 'rota interrompida',
-                }[dados.rota.gps_status];
-                const ultimaAtualizacao = dados.rota.ultima_atualizacao
-                    ? ` · Último GPS: ${dados.rota.ultima_atualizacao}`
-                    : ' · Sem coordenadas GPS';
-                detalhes.textContent = `Veículo: ${dados.rota.veiculo} · Motorista: ${dados.rota.motorista} · ${statusGps}${ultimaAtualizacao}`;
-                const nomesAlunos = dados.alunos_abordo.map(aluno => escapar(aluno.nome));
-                const rotaEmAndamento = dados.rota.ativa && !dados.rota.interrompida;
-                resumoAlunos.innerHTML = `<strong>Alunos a bordo ${rotaEmAndamento ? 'agora' : 'ao final da rota'}:</strong> ${nomesAlunos.length ? nomesAlunos.join(', ') : 'nenhum'}`;
-                const coordenadas = dados.trajeto.map(p => [p.latitude, p.longitude]);
-                if (coordenadas.length) {
-                    const linha = L.polyline(coordenadas, {color: '#2563eb', weight: 5, opacity: 0.8}).addTo(camadaRota);
-                    mapa.fitBounds(linha.getBounds(), {padding: [30, 30]});
-                }
-                dados.eventos.forEach(evento => {
-                    if (evento.latitude === null || evento.longitude === null) return;
-                    const embarque = evento.tipo === 'Embarque';
-                    L.circleMarker([evento.latitude, evento.longitude], {
-                        radius: 9, color: embarque ? '#15803d' : '#b91c1c',
-                        fillColor: embarque ? '#22c55e' : '#ef4444', fillOpacity: 0.9
-                      }).bindPopup(`<strong>${escapar(evento.tipo)}</strong><br>${escapar(evento.aluno)}<br>${escapar(evento.hora)}`)
-                      .addTo(camadaRota);
-                });
-                const painelAlertas = document.getElementById('alertas-rota');
-                if (painelAlertas) {
-                    painelAlertas.classList.toggle('hidden', !dados.alertas.length);
-                    painelAlertas.innerHTML = dados.alertas.length
-                        ? `<strong>Alertas de face desconhecida</strong><ul class="mt-2 list-disc pl-5">${dados.alertas.map(a => `<li>Captura às ${a.hora}</li>`).join('')}</ul>`
-                        : '';
-                    dados.alertas.forEach(alerta => {
-                        if (alerta.latitude === null || alerta.longitude === null) return;
-                        L.marker([alerta.latitude, alerta.longitude]).bindPopup(`<strong>Face desconhecida</strong><br>Alerta às ${alerta.hora}`).addTo(camadaRota);
-                    });
-                }
-                dados.paradas.forEach(parada => {
-                    L.circleMarker([parada.latitude, parada.longitude], {
-                        radius: 8, color: '#1d4ed8', fillColor: '#60a5fa', fillOpacity: 0.9
-                    }).bindPopup(`<strong>Parada estimada</strong><br>${parada.inicio}–${parada.fim}<br>Duração aproximada: ${parada.duracao_minutos} min`)
-                      .addTo(camadaRota);
-                });
-                clearInterval(timerAtualizacao);
-                timerAtualizacao = setInterval(() => carregarRota(seletor.value), 5000);
-            })
-            .catch(error => { detalhes.textContent = error.message; });
+    const tiles = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' + (cartoApiKey ? `?key=${encodeURIComponent(cartoApiKey)}` : '');
+    L.tileLayer(tiles, {attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 20}).addTo(mapa);
+    const layerRoutes = L.layerGroup().addTo(mapa), layerBuses = L.layerGroup().addTo(mapa);
+    const $ = id => document.getElementById(id);
+    const safe = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const colors = ['#2563eb','#7c3aed','#059669','#db2777','#d97706','#0891b2','#4f46e5','#65a30d'];
+    let tab = 'ativas', selected = null, page = 1, pages = 1, refreshTimer, requestCounter = 0, collapsed = false, routeCards = [];
+    const params = () => {
+        const p = new URLSearchParams({contexto: tab === 'ativas' ? 'ativas' : 'historico'});
+        if ($('pesquisa-rota').value.trim()) p.set('q', $('pesquisa-rota').value.trim());
+        if ($('filtro-situacao').value) p.set('situacao', $('filtro-situacao').value);
+        if (tab === 'historico') {
+            p.set('pagina', String(page));
+            if ($('data-inicio').value) p.set('data_inicio', $('data-inicio').value);
+            if ($('data-fim').value) p.set('data_fim', $('data-fim').value);
+        }
+        return p;
+    };
+    const duration = seconds => {
+        if (seconds == null) return 'Não informado';
+        const h = Math.floor(seconds / 3600), m = Math.floor(seconds % 3600 / 60);
+        return h ? `${h}h ${m}min` : `${m}min`;
+    };
+    function showStats(cards, payload) {
+        const counts = cards.reduce((a, r) => {
+            if (r.interrompida) a.interrupted++;
+            else if (r.ativa) a.running++;
+            if (r.ativa && r.gps_status !== 'atualizado') a.noSignal++;
+            return a;
+        }, {running:0,noSignal:0,interrupted:0});
+        $('indicadores').innerHTML = tab === 'ativas' ? [
+            ['Rotas em andamento',counts.running],['Ônibus em circulação',payload.posicoes_ativas.filter(p => cards.some(r => String(r.id) === String(p.rota_id))).length],
+            ['Alunos embarcados',payload.resumo?.alunos_abordo ?? '—'],['Embarques realizados',payload.resumo?.embarques ?? '—'],
+            ['Desembarques realizados',payload.resumo?.desembarques ?? '—'],['Interrompidas / sem sinal',counts.interrupted + counts.noSignal]
+        ].map(([name,value]) => `<article class="rounded-xl border bg-white p-4"><p class="text-xs font-semibold text-gray-500">${name}</p><p class="mt-1 text-2xl font-bold text-gray-900">${value}</p></article>`).join('') : [
+            ['Rotas no resultado',payload.total],['Concluídas',payload.resumo?.concluidas ?? '—'],
+            ['Interrompidas',payload.resumo?.interrompidas ?? '—'],['Canceladas','Não há estado de cancelamento'],
+            ['Embarques no filtro',payload.resumo?.embarques ?? '—'],['Desembarques no filtro',payload.resumo?.desembarques ?? '—']
+        ].map(([name,value]) => `<article class="rounded-xl border bg-white p-4"><p class="text-xs font-semibold text-gray-500">${name}</p><p class="mt-1 text-xl font-bold text-gray-900">${value}</p></article>`).join('');
     }
-    carregarRota(new URLSearchParams(window.location.search).get('rota') || '');
+    function renderCards(cards, append=false) {
+        routeCards = append ? routeCards.concat(cards) : cards;
+        if (!append) $('lista-rotas').innerHTML = '';
+        if (!routeCards.length) $('lista-rotas').innerHTML = '<p class="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">Nenhuma rota encontrada com esses filtros.</p>';
+        routeCards.forEach(r => {
+            if (append && $('rota-card-' + r.id)) return;
+            const status = r.interrompida ? 'Interrompida' : r.ativa ? (r.gps_status === 'atualizado' ? 'Em andamento' : 'Sem sinal') : 'Concluída';
+            const color = colors[(Number(r.id) - 1) % colors.length];
+            $('lista-rotas').insertAdjacentHTML('beforeend', `<button id="rota-card-${r.id}" type="button" data-rota="${r.id}" class="w-full rounded-lg border p-3 text-left transition hover:border-blue-400 ${String(selected)===String(r.id)?'border-blue-600 bg-blue-50 ring-1 ring-blue-500':''}"><span class="flex items-start justify-between gap-2"><span class="font-bold text-gray-900">Rota #${r.id} · ${safe(r.placa)}</span><span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold">${status}</span></span><span class="mt-1 block text-xs text-gray-600">${safe(r.inicio)} · ${safe(r.motorista)}</span><span class="mt-2 block h-1 rounded" style="background:${color}"></span></button>`);
+        });
+        $('lista-rotas').querySelectorAll('[data-rota]').forEach(b => b.onclick = () => selectRoute(b.dataset.rota));
+    }
+    function fetchData({append=false}={}) {
+        const req = ++requestCounter;
+        const p = params();
+        if (selected) p.set('rota', selected);
+        api.search = p.toString();
+        $('estado-lista').textContent = 'Carregando rotas…';
+        return fetch(api, {headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r => {if(!r.ok) throw new Error('Não foi possível carregar os dados da frota.'); return r.json();}).then(data => {
+            if (req !== requestCounter) return;
+            pages = data.paginas || 1;
+            $('mais-resultados').classList.toggle('hidden', tab !== 'historico' || page >= pages);
+            $('estado-lista').textContent = data.total ? `${data.total} rota(s) no resultado` : '';
+            showStats(data.rotas, data);
+            renderCards(data.rotas, append);
+            drawVehicles(tab === 'ativas' ? data.posicoes_ativas : []);
+            if (selected) {
+                if (data.rota) renderDetails(data);
+                else loadRoute(selected);
+            } else {
+                $('detalhes-rota').classList.add('hidden');
+                $('mensagem-mapa').textContent = tab === 'ativas' ? (data.posicoes_ativas.length ? 'Todas as rotas ativas com localização estão no mapa. Selecione um cartão para ver detalhes.' : 'Nenhum ônibus ativo com localização disponível.') : 'Selecione uma rota histórica para carregar o trajeto completo.';
+                if (tab === 'ativas' && data.posicoes_ativas.length) fitVehicles(data.posicoes_ativas);
+                else if (tab === 'historico') { layerRoutes.clearLayers(); }
+            }
+        }).catch(e => $('estado-lista').textContent = e.message);
+    }
+    function drawVehicles(positions) {
+        layerBuses.clearLayers();
+        positions.forEach(pos => {
+            const color = colors[(Number(pos.rota_id)-1)%colors.length], selectedBus = String(selected)===String(pos.rota_id);
+            L.circleMarker([pos.latitude,pos.longitude], {radius:selectedBus?13:9,color,weight:selectedBus?4:2,fillColor:color,fillOpacity:.95})
+                .bindPopup(`<strong>Rota #${pos.rota_id} · ${safe(pos.placa)}</strong><br>${safe(pos.motorista)}<br>${pos.gps_status==='atualizado'?'GPS atualizado':'Sem sinal'} · ${safe(pos.atualizado_em)}<br><button type="button" onclick="window.selecionarRota('${pos.rota_id}')">Abrir detalhes</button>`)
+                .on('click',()=>selectRoute(pos.rota_id)).addTo(layerBuses);
+        });
+    }
+    function fitVehicles(positions) {
+        if (positions.length === 1) mapa.setView([positions[0].latitude,positions[0].longitude],14);
+        else if (positions.length > 1) mapa.fitBounds(L.latLngBounds(positions.map(p=>[p.latitude,p.longitude])),{padding:[35,35],maxZoom:14});
+    }
+    function loadRoute(id) {
+        const p = params(); p.set('rota',id);
+        const url = new URL(api); url.search = p;
+        fetch(url).then(r=>{if(!r.ok) throw new Error('Não foi possível carregar a rota.');return r.json();}).then(renderDetails).catch(e=>{$('mensagem-mapa').textContent=e.message;});
+    }
+    function renderDetails(data) {
+        if (!data.rota) return;
+        const r = data.rota, color = colors[(Number(r.id)-1)%colors.length];
+        layerRoutes.clearLayers();
+        const coords = data.trajeto.map(p=>[p.latitude,p.longitude]);
+        if (coords.length) {
+            L.polyline(coords,{color,weight:6,opacity:.9}).addTo(layerRoutes);
+            L.circleMarker(coords[0],{radius:8,color:'#047857',fillColor:'#34d399',fillOpacity:1}).bindPopup('Início do trajeto').addTo(layerRoutes);
+            if (coords.length > 1) L.circleMarker(coords[coords.length-1],{radius:8,color:'#b91c1c',fillColor:'#f87171',fillOpacity:1}).bindPopup(r.ativa?'Localização mais recente':'Término do trajeto').addTo(layerRoutes);
+            mapa.fitBounds(L.latLngBounds(coords),{padding:[35,35]});
+        } else $('mensagem-mapa').textContent='Esta rota não possui coordenadas GPS registradas.';
+        data.eventos.forEach(ev=>{if(ev.latitude==null||ev.longitude==null)return;const board=ev.tipo==='Embarque';L.circleMarker([ev.latitude,ev.longitude],{radius:7,color:board?'#15803d':'#b91c1c',fillColor:board?'#22c55e':'#ef4444',fillOpacity:.9}).bindPopup(`<strong>${safe(ev.tipo)}</strong><br>${safe(ev.aluno)}<br>${safe(ev.hora)}`).addTo(layerRoutes);});
+        data.paradas.forEach(s=>L.circleMarker([s.latitude,s.longitude],{radius:7,color:'#1d4ed8',fillColor:'#60a5fa',fillOpacity:.9}).bindPopup(`Parada estimada · ${s.inicio}–${s.fim} · ${s.duracao_minutos} min`).addTo(layerRoutes));
+        const board = data.alunos_abordo, history = r.alunos_historico;
+        $('detalhes-rota').classList.remove('hidden');
+        $('detalhes-rota').innerHTML = `<div class="flex flex-wrap items-start justify-between gap-3"><div><h2 class="text-xl font-bold text-gray-900">Rota #${r.id} · ${safe(r.placa)}</h2><p class="mt-1 text-sm text-gray-600">${safe(r.veiculo)} · Motorista: ${safe(r.motorista)}</p></div><span class="rounded-full px-3 py-1 text-sm font-semibold ${r.interrompida?'bg-amber-100 text-amber-900':r.ativa?'bg-green-100 text-green-900':'bg-gray-100 text-gray-800'}">${r.interrompida?'Interrompida':r.ativa?'Em andamento':'Concluída'}</span></div>
+        <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4"><div><small class="text-gray-500">Início</small><p class="font-semibold">${safe(r.inicio||'Não informado')}</p></div><div><small class="text-gray-500">Finalização</small><p class="font-semibold">${safe(r.fim||'Em andamento')}</p></div><div><small class="text-gray-500">Duração</small><p class="font-semibold">${duration(r.duracao_segundos)}</p></div><div><small class="text-gray-500">GPS</small><p class="font-semibold">${safe(r.gps_status)}</p></div></div>
+        <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4"><div class="rounded bg-gray-50 p-3"><small>Embarques</small><p class="text-xl font-bold">${r.embarques}</p></div><div class="rounded bg-gray-50 p-3"><small>Desembarques</small><p class="text-xl font-bold">${r.desembarques}</p></div><div class="rounded bg-emerald-50 p-3"><small>A bordo agora</small><p class="text-xl font-bold">${board.length}</p></div><div class="rounded bg-gray-50 p-3"><small>Alunos na rota</small><p class="text-xl font-bold">${r.total_alunos}</p></div></div>
+        <div class="mt-5 grid gap-5 md:grid-cols-2"><section><h3 class="mb-2 font-bold">Atualmente embarcados (${board.length})</h3>${studentList(board,true)}</section><section><h3 class="mb-2 font-bold">Todos que embarcaram (${history.length})</h3>${studentList(history,false)}</section></div>
+        <section class="mt-5"><h3 class="mb-2 font-bold">Eventos registrados (${data.eventos.length})</h3><ol class="max-h-56 space-y-2 overflow-y-auto">${data.eventos.length?data.eventos.map(ev=>`<li class="flex justify-between gap-3 border-b pb-2 text-sm"><span>${safe(ev.tipo)} · ${safe(ev.aluno)}</span><time class="shrink-0 text-gray-500">${safe(ev.hora)}</time></li>`).join(''):'<li class="text-sm text-gray-500">Nenhum evento registrado.</li>'}</ol></section>
+        ${r.ocorrencias?`<p class="mt-3 rounded bg-amber-50 p-3 text-sm text-amber-900">${r.ocorrencias} ocorrência(s) de face desconhecida registradas.</p>`:''}`;
+        $('mensagem-mapa').textContent = coords.length ? 'Trajeto e eventos da rota selecionada.' : 'Trajeto indisponível: não há coordenadas para esta rota.';
+        $('lista-rotas').querySelectorAll('[data-rota]').forEach(b=>b.classList.toggle('ring-1',b.dataset.rota===String(selected)));
+        const alert = $('alertas-rota');
+        if(alert){alert.classList.toggle('hidden',!data.alertas.length);alert.innerHTML=data.alertas.length?`<strong>Alertas de face desconhecida</strong><ul class="mt-2 list-disc pl-5">${data.alertas.map(a=>`<li>Captura às ${safe(a.hora)}</li>`).join('')}</ul>`:'';}
+    }
+    function studentList(students, current) {
+        if(!students.length)return '<p class="rounded bg-gray-50 p-3 text-sm text-gray-500">Nenhum aluno registrado.</p>';
+        return `<ul class="max-h-56 space-y-2 overflow-y-auto">${students.map(s=>`<li class="flex items-center justify-between gap-2 rounded border p-2 text-sm"><span><strong>${safe(s.nome)}</strong><span class="block text-xs text-gray-500">ID ${s.id} · Embarque ${safe(s.hora_embarque||'não informado')}${s.hora_desembarque?` · Desembarque ${safe(s.hora_desembarque)}`:''}</span></span><span class="rounded-full px-2 py-1 text-xs ${s.a_bordo?'bg-green-100 text-green-800':'bg-gray-100 text-gray-700'}">${s.a_bordo?'Embarcado':'Desembarcado'}</span></li>`).join('')}</ul>`;
+    }
+    function selectRoute(id) {
+        selected = String(id); fetchData();
+    }
+    window.selecionarRota = selectRoute;
+    function changeTab(which) {
+        tab=which;selected=null;page=1;routeCards=[];
+        $('aba-ativas').setAttribute('aria-selected',String(tab==='ativas'));
+        $('aba-historico').setAttribute('aria-selected',String(tab==='historico'));
+        $('aba-ativas').className=tab==='ativas'?'border-b-2 border-blue-700 px-4 py-3 font-semibold text-blue-800':'border-b-2 border-transparent px-4 py-3 font-semibold text-gray-600';
+        $('aba-historico').className=tab==='historico'?'border-b-2 border-blue-700 px-4 py-3 font-semibold text-blue-800':'border-b-2 border-transparent px-4 py-3 font-semibold text-gray-600';
+        $('titulo-lista').textContent=tab==='ativas'?'Rotas em andamento':'Histórico de rotas';
+        $('filtros-historico').classList.toggle('hidden',tab!=='historico');
+        $('filtro-situacao').innerHTML=tab==='ativas'
+            ? '<option value="">Todas as situações</option><option value="andamento">Em andamento</option><option value="sem_sinal">Sem sinal</option><option value="interrompida">Interrompida</option>'
+            : '<option value="">Todas as situações</option><option value="concluida">Concluída</option><option value="interrompida">Interrompida</option>';
+        layerRoutes.clearLayers(); fetchData();
+        clearInterval(refreshTimer);
+        if(tab==='ativas') refreshTimer=setInterval(()=>fetchData(),5000);
+    }
+    $('aba-ativas').onclick=()=>changeTab('ativas');
+    $('aba-historico').onclick=()=>changeTab('historico');
+    $('alternar-painel').onclick=()=>{collapsed=!collapsed;$('conteudo-painel').classList.toggle('hidden',collapsed);$('alternar-painel').textContent=collapsed?'Expandir':'Recolher';$('alternar-painel').setAttribute('aria-expanded',String(!collapsed));requestAnimationFrame(()=>mapa.invalidateSize());};
+    let searchTimer; $('pesquisa-rota').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{page=1;routeCards=[];fetchData();},250);};
+    $('filtro-situacao').onchange=()=>{page=1;routeCards=[];fetchData();};
+    $('data-inicio').onchange=$('data-fim').onchange=()=>{page=1;routeCards=[];fetchData();};
+    $('mais-resultados').onclick=()=>{if(page<pages){page++;fetchData({append:true});}};
+    fetchData();
+    refreshTimer=setInterval(()=>{if(tab==='ativas')fetchData();},5000);
 });
 </script>
 {% endblock %}
