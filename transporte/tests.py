@@ -182,6 +182,11 @@ class TransporteFluxosTests(TestCase):
         self.assertContains(response, 'id="aba-ativas"')
         self.assertContains(response, 'id="aba-historico"')
         self.assertContains(response, 'id="lista-rotas"')
+        self.assertContains(response, 'id="carregando-aba"')
+        self.assertContains(response, 'Carregando dados')
+        self.assertContains(response, 'id="pagina-anterior"')
+        self.assertContains(response, 'id="pagina-proxima"')
+        self.assertContains(response, 'id="legenda-mapa"')
         self.assertNotContains(response, 'id="seletor-rota"')
         self.assertContains(response, "const cartoApiKey = 'cartotestkey';")
         self.assertContains(response, 'basemaps.cartocdn.com')
@@ -262,6 +267,31 @@ class TransporteFluxosTests(TestCase):
         self.assertEqual(payload['resumo']['concluidas'], 1)
         self.assertEqual(payload['resumo']['embarques'], 1)
         self.assertEqual(payload['resumo']['desembarques'], 1)
+
+    def test_historico_carrega_cinco_rotas_por_pagina(self):
+        for minutos in range(6):
+            Rota.objects.create(
+                veiculo=self.veiculo,
+                motorista=self.motorista,
+                inicio=timezone.now() - timedelta(minutes=minutos),
+                fim=timezone.now(),
+                ativa=False,
+            )
+        self.client.force_login(self.instituicao_usuario)
+
+        primeira = self.client.get(
+            reverse('api_mapa_unificado'),
+            {'contexto': 'historico'},
+        ).json()
+        segunda = self.client.get(
+            reverse('api_mapa_unificado'),
+            {'contexto': 'historico', 'pagina': 2},
+        ).json()
+
+        self.assertEqual(primeira['total'], 6)
+        self.assertEqual(primeira['paginas'], 2)
+        self.assertEqual(len(primeira['rotas']), 5)
+        self.assertEqual(len(segunda['rotas']), 1)
 
     def test_detalhe_historico_preserva_aluno_desembarcado_na_lista_completa(self):
         rota = self.criar_rota()

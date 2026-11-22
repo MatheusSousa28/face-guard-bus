@@ -383,7 +383,7 @@ def api_frota_mapa_unificada(request):
             pagina = max(1, int(request.GET.get('pagina', '1')))
         except (TypeError, ValueError):
             pagina = 1
-        rotas = list(rotas.order_by('-inicio', '-pk')[(pagina - 1) * 25:pagina * 25])
+        rotas = list(rotas.order_by('-inicio', '-pk')[(pagina - 1) * 5:pagina * 5])
     else:
         rotas = rotas.filter(ativa=True)
         if estado == 'andamento':
@@ -435,6 +435,12 @@ def api_frota_mapa_unificada(request):
 
     agora = timezone.now()
 
+    def url_imagem(campo):
+        try:
+            return campo.url if campo else ''
+        except (ValueError, AttributeError):
+            return ''
+
     def rotulo_rota(item):
         if item.interrompida:
             if item.ativa:
@@ -459,6 +465,8 @@ def api_frota_mapa_unificada(request):
             'placa': placa, 'motorista': motorista,
             'inicio': inicio, 'ativa': item.ativa, 'interrompida': item.interrompida,
             'gps_status': obter_estado_gps(item, agora=agora) if item.ativa else 'historica',
+            'veiculo_foto': url_imagem(item.veiculo.foto) if item.veiculo_id else '',
+            'motorista_foto': url_imagem(item.motorista.foto_perfil) if item.motorista_id else '',
         }
 
     rotas_json = [rotulo_rota(item) for item in rotas]
@@ -480,6 +488,9 @@ def api_frota_mapa_unificada(request):
             'longitude': float(ultima.longitude),
             'veiculo': str(item.veiculo),
             'placa': item.veiculo.placa,
+            'cor': item.veiculo.cor_avatar,
+            'veiculo_foto': url_imagem(item.veiculo.foto),
+            'motorista_foto': url_imagem(item.motorista.foto_perfil) if item.motorista_id else '',
             'motorista': (
                 f"{item.motorista.usuario.first_name} {item.motorista.usuario.last_name}".strip()
                 if item.motorista_id else 'Não informado'
@@ -496,7 +507,7 @@ def api_frota_mapa_unificada(request):
             'total': total_historico if contexto == 'historico' else len(rotas_json),
             'resumo': resumo,
             'pagina': pagina if contexto == 'historico' else 1,
-            'paginas': ((total_historico + 24) // 25) if contexto == 'historico' else 1,
+            'paginas': ((total_historico + 4) // 5) if contexto == 'historico' else 1,
             'rota': None,
             'trajeto': [],
             'eventos': [],
@@ -573,6 +584,8 @@ def api_frota_mapa_unificada(request):
             'aluno': evento.aluno.nome if evento.aluno else 'Aluno não informado',
             'aluno_id': evento.aluno_id, 'tipo': evento.get_tipo_display(),
             'hora': timezone.localtime(evento.data_hora).strftime('%d/%m/%Y %H:%M:%S'),
+            'timestamp': evento.data_hora.isoformat(),
+            'foto': url_imagem(evento.aluno.foto_perfil) if evento.aluno_id else '',
             'latitude': float(ponto.latitude) if ponto else None,
             'longitude': float(ponto.longitude) if ponto else None,
         })
@@ -581,7 +594,7 @@ def api_frota_mapa_unificada(request):
         status_atual = status_por_aluno.setdefault(evento.aluno_id, {
             'id': evento.aluno_id,
             'nome': evento.aluno.nome,
-            'foto': evento.aluno.foto_perfil.url if evento.aluno.foto_perfil else '',
+            'foto': url_imagem(evento.aluno.foto_perfil),
             'a_bordo': False,
             'hora': '',
             'hora_embarque': None,
@@ -609,7 +622,7 @@ def api_frota_mapa_unificada(request):
         'total': total_historico if contexto == 'historico' else len(rotas_json),
         'resumo': resumo,
         'pagina': pagina if contexto == 'historico' else 1,
-        'paginas': ((total_historico + 24) // 25) if contexto == 'historico' else 1,
+        'paginas': ((total_historico + 4) // 5) if contexto == 'historico' else 1,
         'rota': {
             'id': rota.id,
             'ativa': rota.ativa,
@@ -620,10 +633,12 @@ def api_frota_mapa_unificada(request):
             'gps_status': estado_gps,
             'ultima_atualizacao': timezone.localtime(pontos[-1].timestamp).strftime('%d/%m/%Y %H:%M:%S') if pontos else None,
             'veiculo': str(rota.veiculo) if rota.veiculo_id else 'Não informado',
+            'veiculo_foto': url_imagem(rota.veiculo.foto) if rota.veiculo_id else '',
             'motorista': (
                 f"{rota.motorista.usuario.first_name} {rota.motorista.usuario.last_name}".strip()
                 if rota.motorista_id else 'Não informado'
             ),
+            'motorista_foto': url_imagem(rota.motorista.foto_perfil) if rota.motorista_id else '',
             'placa': rota.veiculo.placa if rota.veiculo else 'Não informado',
             'embarques': embarques,
             'desembarques': desembarques,
