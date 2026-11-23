@@ -118,7 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const initialTab=initialQuery.get('contexto')==='historico'?'historico':'ativas';
     const initialRoute=initialQuery.get('rota');
     const initialPage=Math.max(1,Number.parseInt(initialQuery.get('pagina')||'1',10)||1);
-    let tab = initialTab, selected = initialRoute, page = initialPage, pages = 1, renderedActivePage = null, refreshTimer, requestCounter = 0, collapsed = false, routeCards = [], mapRequestCounter = 0;
+    let tab = initialTab, selected = initialRoute, page = initialPage, pages = 1, renderedActivePage = null, refreshTimer, requestCounter = 0, collapsed = false, routeCards = [], mapRequestCounter = 0, pendingRouteLoad = null;
+    let mapFocusTimer=null, lastMapInteraction=0, lastActivePositions=[];
     const selectedByTab={ativas:initialTab==='ativas'?initialRoute:null,historico:initialTab==='historico'?initialRoute:null};
     const searchByTab={ativas:initialQuery.get('q')||'',historico:initialQuery.get('q')||''};
     const statusByTab={ativas:initialTab==='ativas'?(initialQuery.get('situacao')||''):'',historico:initialTab==='historico'?(initialQuery.get('situacao')||''):''};
@@ -127,22 +128,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const imageCache = new Map();
     const cachedImageSources = new Map();
     const fallbackImage = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+    function imageCacheKey(url) {
+        if(!url)return '';
+        try {
+            const parsed=new URL(url,location.origin);
+            const signed=[...parsed.searchParams.keys()].some(key=>/^x-amz-/i.test(key)||/^(awsaccesskeyid|signature|expires)$/i.test(key));
+            if(signed)parsed.search='';
+            return parsed.href;
+        } catch (_) {
+            return url.split('?')[0];
+        }
+    }
     function cacheImage(url) {
         if (!url) return Promise.resolve('');
-        if (!imageCache.has(url)) {
-            imageCache.set(url, fetch(url, {credentials:'same-origin'})
+        const key=imageCacheKey(url);
+        if (!imageCache.has(key)) {
+            imageCache.set(key, fetch(url, {credentials:'same-origin'})
                 .then(response => {
                     if (!response.ok) throw new Error('Image unavailable');
                     return response.blob();
                 })
                 .then(blob => {
                     const objectUrl=URL.createObjectURL(blob);
-                    cachedImageSources.set(url,objectUrl);
+                    cachedImageSources.set(key,objectUrl);
                     return objectUrl;
                 })
                 .catch(() => url));
         }
-        return imageCache.get(url);
+        return imageCache.get(key);
     }
     function hydrateCachedImages(root=document) {
         root.querySelectorAll('img[data-cache-image]').forEach(image => {
@@ -160,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }))).observe(document.body,{childList:true,subtree:true});
     hydrateCachedImages(document);
     const avatar = (url, name, size='h-10 w-10') => url
-        ? `<img src="${safe(cachedImageSources.get(url)||fallbackImage)}" data-image-url="${safe(url)}" ${cachedImageSources.has(url)?'':'data-cache-image="'+safe(url)+'"'} alt="${safe(name)}" class="${size} shrink-0 rounded-full border-2 border-white object-cover shadow-sm" loading="lazy">`
+        ? `<img src="${safe(cachedImageSources.get(imageCacheKey(url))||fallbackImage)}" data-image-url="${safe(imageCacheKey(url))}" ${cachedImageSources.has(imageCacheKey(url))?'':'data-cache-image="'+safe(url)+'"'} alt="${safe(name)}" class="${size} shrink-0 rounded-full border-2 border-white object-cover shadow-sm" loading="lazy">`
         : `<span class="${size} flex shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600">${safe(String(name||'?').trim().split(/\s+/).map(n=>n[0]).slice(0,2).join('').toUpperCase())}</span>`;
     function setTabLoading(show, message='Estamos atualizando as informações da frota.') {
         $('mensagem-carregamento-aba').textContent = message;
@@ -243,8 +256,8 @@ document.addEventListener('DOMContentLoaded', () => {
             && previousCards.every((old,index)=>{
                 const current=routeCards[index];
                 return String(old.id)===String(current.id)
-                    && old.veiculo_foto===current.veiculo_foto
-                    && old.motorista_foto===current.motorista_foto
+                    && imageCacheKey(old.veiculo_foto)===imageCacheKey(current.veiculo_foto)
+                    && imageCacheKey(old.motorista_foto)===imageCacheKey(current.motorista_foto)
                     && old.placa===current.placa
                     && old.motorista===current.motorista
                     && old.inicio===current.inicio;
@@ -304,35 +317,60 @@ document.addEventListener('DOMContentLoaded', () => {
             $('estado-lista').textContent = data.total ? `${data.total} rota(s) encontrada(s)` : '';
             showStats(data.rotas, data);
             renderCards(data.rotas, append);
+            lastActivePositions=tab==='ativas'?data.posicoes_ativas:[];
             drawVehicles(tab === 'ativas' ? data.posicoes_ativas : []);
             if (selected) {
-                if (data.rota) renderDetails(data);
+                if (data.rota && String(data.rota.id)===String(selected)) {
+                    const loading=pendingRouteLoad && pendingRouteLoad.id===String(selected)?pendingRouteLoad:null;
+                    renderDetails(data,{focusMap:Boolean(loading)});
+                    if(loading)finishRouteLoadAfterPaint(loading.id,loading.version);
+                }
                 else throw new Error('Não foi possível carregar os detalhes da rota.');
             } else {
                 $('detalhes-rota').classList.add('hidden');
                 $('mensagem-mapa').textContent = tab === 'ativas' ? (data.posicoes_ativas.length ? 'Todas as rotas ativas com localização estão no mapa. Selecione um cartão para ver detalhes.' : 'Nenhum ônibus ativo com localização disponível.') : 'Selecione uma rota histórica para carregar o trajeto completo.';
-                if (tab === 'ativas' && data.posicoes_ativas.length) fitVehicles(data.posicoes_ativas);
+                if (tab === 'ativas' && data.posicoes_ativas.length && !mapFocusTimer) fitVehicles(data.posicoes_ativas);
                 else if (tab === 'historico') { layerRoutes.clearLayers(); }
             }
         }).catch(e => {
             if (req === requestCounter) {
                 $('estado-lista').textContent = e.message;
                 if (selected) $('mensagem-mapa').textContent = 'Não foi possível carregar esta rota. Tente novamente.';
+                if(pendingRouteLoad && pendingRouteLoad.id===String(selected)){
+                    pendingRouteLoad=null;
+                    setMapLoading(false);
+                }
             }
             return null;
         });
     }
     function drawVehicles(positions) {
-        layerBuses.clearLayers();
+        const existingMarkers=new Map();
+        layerBuses.eachLayer(marker=>{
+            const id=String(marker.options.routeId||'');
+            if(id)existingMarkers.set(id,marker);
+        });
+        const currentIds=new Set(positions.map(pos=>String(pos.rota_id)));
+        existingMarkers.forEach((marker,id)=>{if(!currentIds.has(id))layerBuses.removeLayer(marker);});
         positions.forEach(pos => {
+            const routeId=String(pos.rota_id), existing=existingMarkers.get(routeId);
+            if(existing) {
+                existing.setLatLng([pos.latitude,pos.longitude]);
+                if(!existing.isTooltipOpen())existing.setTooltipContent(vehicleTooltip(pos));
+                return;
+            }
             const color = routeColor(pos.rota_id);
             const marker = L.marker([pos.latitude,pos.longitude], {icon:L.divIcon({
                 className:'fleet-bus-marker', html:`<div class="fleet-bus-pin" style="background:${color}"><span class="fleet-bus-glyph"></span></div>`,
                 iconSize:[42,50],iconAnchor:[21,45],tooltipAnchor:[0,-42]
             })});
-            marker.bindTooltip(`<div class="flex items-center gap-2 p-3">${avatar(pos.veiculo_foto,pos.placa,'h-10 w-10 rounded-lg')}<div><strong>Rota #${pos.rota_id} · ${safe(pos.placa)}</strong><div class="mt-1 text-xs text-slate-600">${safe(pos.motorista)} · ${safe(pos.atualizado_em)}</div></div></div>`,{sticky:true,className:'fleet-tooltip'});
+            marker.options.routeId=routeId;
+            marker.bindTooltip(vehicleTooltip(pos),{sticky:true,className:'fleet-tooltip'});
             marker.on('click',()=>selectRoute(pos.rota_id)).addTo(layerBuses);
         });
+    }
+    function vehicleTooltip(pos) {
+        return `<div class="flex items-center gap-2 p-3">${avatar(pos.veiculo_foto,pos.placa,'h-10 w-10 rounded-lg')}<div><strong>Rota #${pos.rota_id} · ${safe(pos.placa)}</strong><div class="mt-1 text-xs text-slate-600">${safe(pos.motorista)} · ${safe(pos.atualizado_em)}</div></div></div>`;
     }
     function fitVehicles(positions) {
         if (positions.length === 1) mapa.setView([positions[0].latitude,positions[0].longitude],14);
@@ -341,6 +379,37 @@ document.addEventListener('DOMContentLoaded', () => {
             if(bounds.getNorthEast().equals(bounds.getSouthWest()))mapa.setView(bounds.getCenter(),14);
             else mapa.fitBounds(bounds,{padding:[60,60],maxZoom:14});
         }
+    }
+    function scheduleMapRefocus() {
+        if(mapFocusTimer)clearTimeout(mapFocusTimer);
+        mapFocusTimer=setTimeout(()=>{
+            mapFocusTimer=null;
+            if(Date.now()-lastMapInteraction<5000){scheduleMapRefocus();return;}
+            if(selected){
+                if(lastSelectedRouteData)focusRoute(lastSelectedRouteData,true);
+            } else if(lastActivePositions.length)fitVehicles(lastActivePositions,true);
+        },5000);
+    }
+    function markMapInteraction() {
+        lastMapInteraction=Date.now();
+        scheduleMapRefocus();
+    }
+    mapa.on('drag',markMapInteraction);
+    const mapContainer=mapa.getContainer();
+    mapContainer.addEventListener('wheel',markMapInteraction,{passive:true});
+    mapContainer.addEventListener('pointerdown',markMapInteraction,{passive:true});
+    mapContainer.addEventListener('touchstart',markMapInteraction,{passive:true});
+    mapContainer.addEventListener('keydown',markMapInteraction);
+    function finishRouteLoadAfterPaint(routeId,version) {
+        requestAnimationFrame(()=>requestAnimationFrame(()=>{
+            if(!pendingRouteLoad || pendingRouteLoad.id!==routeId || pendingRouteLoad.version!==version || String(selected)!==routeId)return;
+            pendingRouteLoad=null;
+            setMapLoading(false);
+        }));
+    }
+    function focusRoute(data,animate=false) {
+        const coords=data?.trajeto?.map(point=>[point.latitude,point.longitude])||[];
+        if(coords.length)mapa.fitBounds(L.latLngBounds(coords),{padding:[35,35],maxZoom:16,animate});
     }
     const distanceMeters = (a,b) => {
         const rad=x=>x*Math.PI/180, dLat=rad(b.latitude-a.latitude), dLon=rad(b.longitude-a.longitude);
@@ -373,8 +442,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('[data-legend-route]').forEach(el=>el.style.borderColor=color);
         $('legenda-onibus').innerHTML=`<i class="h-3 w-3 rounded-full" style="background:${color}"></i>Ônibus`;
     }
-    function renderDetails(data) {
+    let lastSelectedRouteData=null;
+    function renderDetails(data,{focusMap=false}={}) {
         if (!data.rota) return;
+        lastSelectedRouteData=data;
         const r = data.rota, color = routeColor(r.id), listKey=key=>`rota-${r.id}-${key}`;
         const oldImages=new Map();
         $('detalhes-rota').querySelectorAll('img[data-image-url]').forEach(image=>{
@@ -389,7 +460,7 @@ document.addEventListener('DOMContentLoaded', () => {
             L.polyline(coords,{color,weight:6,opacity:.9}).addTo(layerRoutes);
             L.circleMarker(coords[0],{radius:9,color,weight:3,fillColor:'#fff',fillOpacity:1}).bindTooltip(`<div class="p-3"><strong>🚩 Início do trajeto</strong><p class="mt-1 text-xs text-slate-600">${safe(r.inicio||'Horário não informado')}</p></div>`,{sticky:true,className:'fleet-tooltip'}).addTo(layerRoutes);
             if (coords.length > 1) L.circleMarker(coords[coords.length-1],{radius:9,color,weight:3,fillColor:r.ativa?'#64748b':'#fff',fillOpacity:1}).bindTooltip(`<div class="p-3"><strong>${r.ativa?'📍 Posição mais recente':'🏁 Fim do trajeto'}</strong><p class="mt-1 text-xs text-slate-600">${safe(r.fim||r.ultima_atualizacao||'Horário não informado')}</p></div>`,{sticky:true,className:'fleet-tooltip'}).addTo(layerRoutes);
-            mapa.fitBounds(L.latLngBounds(coords),{padding:[35,35]});
+            if(focusMap)mapa.fitBounds(L.latLngBounds(coords),{padding:[35,35],maxZoom:16});
         } else $('mensagem-mapa').textContent='Esta rota não possui coordenadas GPS registradas.';
         addRouteEvents(data.eventos,color);
         data.paradas.forEach(s=>L.circleMarker([s.latitude,s.longitude],{radius:8,color,weight:3,fillColor:'#7dd3fc',fillOpacity:.95}).bindTooltip(`<div class="p-3"><strong>⏸ Parada estimada</strong><p class="mt-1 text-xs text-slate-600">${safe(s.inicio)}–${safe(s.fim)} · ${s.duracao_minutos} min</p></div>`,{sticky:true,className:'fleet-tooltip'}).addTo(layerRoutes));
@@ -443,16 +514,20 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedByTab[tab]=selected;
         syncRouteUrl();
         const version=++mapRequestCounter;
+        pendingRouteLoad={id:selected,version};
+        if(mapFocusTimer){clearTimeout(mapFocusTimer);mapFocusTimer=null;}
         setMapLoading(true);
-        fetchData().catch(()=>{}).finally(()=>{if(version===mapRequestCounter)setMapLoading(false);});
+        fetchData();
     }
     function clearRouteSelection() {
         if(!selected)return;
         selected=null;
         selectedByTab[tab]=null;
+        pendingRouteLoad=null;
         syncRouteUrl();
         mapRequestCounter++;
         setMapLoading(false);
+        if(mapFocusTimer){clearTimeout(mapFocusTimer);mapFocusTimer=null;}
         $('detalhes-rota').classList.add('hidden');
         $('alertas-rota')?.classList.add('hidden');
         layerRoutes.clearLayers();
@@ -483,13 +558,14 @@ document.addEventListener('DOMContentLoaded', () => {
         $('data-fim').value=datesByTab[tab].fim;
         layerRoutes.clearLayers();
         clearInterval(refreshTimer);
-        setMapLoading(false);
         mapRequestCounter++;
+        pendingRouteLoad=selected?{id:String(selected),version:mapRequestCounter}:null;
+        setMapLoading(Boolean(pendingRouteLoad));
         setTabLoading(true,tab==='ativas'?'Carregando rotas em andamento e posições dos ônibus.':'Carregando as cinco rotas mais recentes.');
         syncRouteUrl();
         const pending=fetchData(), version=requestCounter;
         pending.catch(()=>{}).finally(()=>{if(version===requestCounter)setTabLoading(false);});
-        if(tab==='ativas') refreshTimer=setInterval(()=>fetchData(),5000);
+        if(tab==='ativas') refreshTimer=setInterval(()=>{if(!pendingRouteLoad)fetchData();},5000);
     }
     $('aba-ativas').onclick=()=>changeTab('ativas');
     $('aba-historico').onclick=()=>changeTab('historico');
