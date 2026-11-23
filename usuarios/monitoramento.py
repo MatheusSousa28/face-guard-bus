@@ -19,7 +19,12 @@ def obter_contexto_monitoramento():
         .order_by('-interrompida_em')
     )
     rotas_interrompidas_encerradas = list(
-        Rota.objects.filter(interrompida=True, ativa=False)
+        Rota.objects.filter(
+            interrompida=True, ativa=False,
+        ).exclude(
+            resolvida_por__isnull=True,
+            instituicao_ciente_encerramento=True,
+        )
         .select_related('veiculo', 'motorista__usuario', 'resolvida_por')
         .order_by('-interrompida_em')[:10]
     )

@@ -150,6 +150,36 @@ def resolver_rota_interrompida(request, rota_id):
     messages.success(request, 'A rota interrompida foi encerrada após revisão.')
     return redirect('home')
 
+
+@login_required(login_url='login')
+def confirmar_ciencia_rota_encerrada(request, rota_id):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    if not (hasattr(request.user, 'instituicao') or request.user.is_superuser):
+        messages.error(request, 'Apenas a instituição pode confirmar ciência de uma rota encerrada.')
+        return redirect('home')
+    if request.POST.get('confirmacao_ciencia') != 'on':
+        messages.error(request, 'Marque a confirmação de ciência para ocultar este aviso.')
+        return redirect('home')
+
+    with transaction.atomic():
+        rota = Rota.objects.select_for_update().filter(
+            pk=rota_id,
+            ativa=False,
+            interrompida=True,
+            resolvida_por__isnull=True,
+            instituicao_ciente_encerramento=False,
+        ).first()
+        if not rota:
+            messages.error(request, 'Esta rota não possui um aviso pendente de ciência.')
+            return redirect('home')
+        rota.instituicao_ciente_encerramento = True
+        rota.save(update_fields=['instituicao_ciente_encerramento'])
+
+    messages.success(request, 'Ciência registrada; o aviso da rota foi dispensado.')
+    return redirect('home')
+
+
 @login_required(login_url='login')
 def receber_localizacao(request):
     if request.method != 'POST':

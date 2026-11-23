@@ -2,7 +2,10 @@
 {% load static %}
 {% block content %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <style>
     @keyframes fleet-progress { 0% { transform: translateX(-110%); } 100% { transform: translateX(320%); } }
     .fleet-progress::after { content:""; display:block; width:36%; height:100%; border-radius:9999px; background:#2563eb; animation:fleet-progress 1.15s ease-in-out infinite; }
@@ -10,6 +13,7 @@
     .fleet-tooltip::before { display:none !important; }
     .fleet-bus-pin { width:42px; height:42px; border:3px solid white; border-radius:50% 50% 50% 0; transform:rotate(-45deg); box-shadow:0 3px 12px #0f172a55; display:grid; place-items:center; }
     .fleet-bus-glyph { width:22px; height:22px; display:block; transform:rotate(45deg); background:#fff; -webkit-mask:url("{% static 'img/icone_onibus.png' %}") center/contain no-repeat; mask:url("{% static 'img/icone_onibus.png' %}") center/contain no-repeat; }
+    .fleet-bus-cluster { display:grid; width:46px; height:46px; place-items:center; border:3px solid #fff; border-radius:50%; background:#1d4ed8; color:#fff; font-size:14px; font-weight:800; box-shadow:0 3px 12px #0f172a66; }
     @media (prefers-reduced-motion:reduce) { .fleet-progress::after { animation-duration:2.5s; } }
 </style>
 <main class="mx-auto max-w-[1600px] px-4 py-6">
@@ -18,13 +22,13 @@
         <h1 class="font-display text-3xl font-bold text-gray-900">Acompanhamento da frota</h1>
         <p class="mt-1 text-gray-600">Monitore rotas em andamento e consulte o histórico operacional.</p>
     </header>
-    <div class="mb-5 flex gap-2 border-b" role="tablist" aria-label="Visão da frota">
-        <button id="aba-ativas" type="button" role="tab" aria-selected="true" class="border-b-2 border-blue-700 px-4 py-3 font-semibold text-blue-800">Rotas ativas</button>
-        <button id="aba-historico" type="button" role="tab" aria-selected="false" class="border-b-2 border-transparent px-4 py-3 font-semibold text-gray-600">Histórico de rotas</button>
+    <div class="mb-6 flex flex-wrap justify-center gap-2" role="tablist" aria-label="Visão da frota">
+        <button id="aba-ativas" type="button" role="tab" aria-selected="true" class="aba-rota rounded-lg px-5 py-2 font-semibold bg-blue-700 text-white">Rotas ativas</button>
+        <button id="aba-historico" type="button" role="tab" aria-selected="false" class="aba-rota rounded-lg px-5 py-2 font-semibold bg-white text-gray-700 border border-gray-300">Histórico de rotas</button>
     </div>
     <section id="indicadores" class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" aria-live="polite"></section>
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-[350px_minmax(0,1fr)]">
-        <aside class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <aside id="painel-lista-rotas" class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div class="flex items-center justify-between border-b p-4">
                 <h2 id="titulo-lista" class="font-bold text-gray-900">Rotas em andamento</h2>
                 <button id="alternar-painel" type="button" class="rounded-lg border px-3 py-1.5 text-sm font-semibold text-gray-700" aria-expanded="true">Recolher</button>
@@ -96,12 +100,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const cartoApiKey = '{{ carto_api_key|default:""|escapejs }}';
     const tiles = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' + (cartoApiKey ? `?key=${encodeURIComponent(cartoApiKey)}` : '');
     L.tileLayer(tiles, {attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 20}).addTo(mapa);
-    const layerRoutes = L.layerGroup().addTo(mapa), layerBuses = L.layerGroup().addTo(mapa);
+    const layerRoutes = L.layerGroup().addTo(mapa);
+    const layerBuses = L.markerClusterGroup({
+        showCoverageOnHover:false,
+        spiderfyOnMaxZoom:true,
+        maxClusterRadius:48,
+        iconCreateFunction:cluster=>L.divIcon({
+            className:'fleet-bus-cluster-wrap',
+            html:`<span class="fleet-bus-cluster" aria-label="${cluster.getChildCount()} ônibus agrupados">${cluster.getChildCount()}</span>`,
+            iconSize:[46,46]
+        })
+    }).addTo(mapa);
     const $ = id => document.getElementById(id);
     const safe = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const colors = ['#2563eb','#7c3aed','#059669','#db2777','#d97706','#0891b2','#4f46e5','#65a30d'];
-    let tab = 'ativas', selected = null, page = 1, pages = 1, renderedActivePage = null, refreshTimer, requestCounter = 0, collapsed = false, routeCards = [], mapRequestCounter = 0;
-    const selectedByTab={ativas:null,historico:null}, searchByTab={ativas:'',historico:''}, statusByTab={ativas:'',historico:''};
+    const initialQuery=new URLSearchParams(location.search);
+    const initialTab=initialQuery.get('contexto')==='historico'?'historico':'ativas';
+    const initialRoute=initialQuery.get('rota');
+    const initialPage=Math.max(1,Number.parseInt(initialQuery.get('pagina')||'1',10)||1);
+    let tab = initialTab, selected = initialRoute, page = initialPage, pages = 1, renderedActivePage = null, refreshTimer, requestCounter = 0, collapsed = false, routeCards = [], mapRequestCounter = 0;
+    const selectedByTab={ativas:initialTab==='ativas'?initialRoute:null,historico:initialTab==='historico'?initialRoute:null};
+    const searchByTab={ativas:initialQuery.get('q')||'',historico:initialQuery.get('q')||''};
+    const statusByTab={ativas:initialTab==='ativas'?(initialQuery.get('situacao')||''):'',historico:initialTab==='historico'?(initialQuery.get('situacao')||''):''};
+    const datesByTab={ativas:{inicio:'',fim:''},historico:{inicio:initialQuery.get('data_inicio')||'',fim:initialQuery.get('data_fim')||''}};
     const routeColor = id => colors[(Number(id)-1)%colors.length];
     const imageCache = new Map();
     const cachedImageSources = new Map();
@@ -139,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }))).observe(document.body,{childList:true,subtree:true});
     hydrateCachedImages(document);
     const avatar = (url, name, size='h-10 w-10') => url
-        ? `<img src="${safe(cachedImageSources.get(url)||fallbackImage)}" ${cachedImageSources.has(url)?'':'data-cache-image="'+safe(url)+'"'} alt="${safe(name)}" class="${size} shrink-0 rounded-full border-2 border-white object-cover shadow-sm" loading="lazy">`
+        ? `<img src="${safe(cachedImageSources.get(url)||fallbackImage)}" data-image-url="${safe(url)}" ${cachedImageSources.has(url)?'':'data-cache-image="'+safe(url)+'"'} alt="${safe(name)}" class="${size} shrink-0 rounded-full border-2 border-white object-cover shadow-sm" loading="lazy">`
         : `<span class="${size} flex shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600">${safe(String(name||'?').trim().split(/\s+/).map(n=>n[0]).slice(0,2).join('').toUpperCase())}</span>`;
     function setTabLoading(show, message='Estamos atualizando as informações da frota.') {
         $('mensagem-carregamento-aba').textContent = message;
@@ -162,6 +183,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return p;
     };
+    function syncRouteUrl() {
+        const url=new URL(location.href);
+        url.searchParams.set('contexto',tab==='ativas'?'ativas':'historico');
+        if(selected)url.searchParams.set('rota',selected);
+        else url.searchParams.delete('rota');
+        if(page>1)url.searchParams.set('pagina',String(page));
+        else url.searchParams.delete('pagina');
+        if($('pesquisa-rota').value.trim())url.searchParams.set('q',$('pesquisa-rota').value.trim());
+        else url.searchParams.delete('q');
+        if($('filtro-situacao').value)url.searchParams.set('situacao',$('filtro-situacao').value);
+        else url.searchParams.delete('situacao');
+        if(tab==='historico'){
+            if($('data-inicio').value)url.searchParams.set('data_inicio',$('data-inicio').value);
+            else url.searchParams.delete('data_inicio');
+            if($('data-fim').value)url.searchParams.set('data_fim',$('data-fim').value);
+            else url.searchParams.delete('data_fim');
+        }
+        history.replaceState({rota:selected,contexto:tab},'',url);
+    }
     const duration = seconds => {
         if (seconds == null) return 'Não informado';
         const h = Math.floor(seconds / 3600), m = Math.floor(seconds % 3600 / 60);
@@ -296,7 +336,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function fitVehicles(positions) {
         if (positions.length === 1) mapa.setView([positions[0].latitude,positions[0].longitude],14);
-        else if (positions.length > 1) mapa.fitBounds(L.latLngBounds(positions.map(p=>[p.latitude,p.longitude])),{padding:[35,35],maxZoom:14});
+        else if (positions.length > 1) {
+            const bounds=L.latLngBounds(positions.map(p=>[p.latitude,p.longitude]));
+            if(bounds.getNorthEast().equals(bounds.getSouthWest()))mapa.setView(bounds.getCenter(),14);
+            else mapa.fitBounds(bounds,{padding:[60,60],maxZoom:14});
+        }
     }
     const distanceMeters = (a,b) => {
         const rad=x=>x*Math.PI/180, dLat=rad(b.latitude-a.latitude), dLon=rad(b.longitude-a.longitude);
@@ -332,6 +376,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderDetails(data) {
         if (!data.rota) return;
         const r = data.rota, color = routeColor(r.id), listKey=key=>`rota-${r.id}-${key}`;
+        const oldImages=new Map();
+        $('detalhes-rota').querySelectorAll('img[data-image-url]').forEach(image=>{
+            const url=image.dataset.imageUrl;
+            if(!oldImages.has(url))oldImages.set(url,[]);
+            oldImages.get(url).push(image);
+        });
         updateLegend(color);
         layerRoutes.clearLayers();
         const coords = data.trajeto.map(p=>[p.latitude,p.longitude]);
@@ -345,12 +395,17 @@ document.addEventListener('DOMContentLoaded', () => {
         data.paradas.forEach(s=>L.circleMarker([s.latitude,s.longitude],{radius:8,color,weight:3,fillColor:'#7dd3fc',fillOpacity:.95}).bindTooltip(`<div class="p-3"><strong>⏸ Parada estimada</strong><p class="mt-1 text-xs text-slate-600">${safe(s.inicio)}–${safe(s.fim)} · ${s.duracao_minutos} min</p></div>`,{sticky:true,className:'fleet-tooltip'}).addTo(layerRoutes));
         const board = data.alunos_abordo, history = r.alunos_historico;
         $('detalhes-rota').classList.remove('hidden');
-        $('detalhes-rota').innerHTML = `<div class="flex flex-wrap items-center justify-between gap-4"><div class="flex min-w-0 items-center gap-3">${avatar(r.veiculo_foto,r.placa,'h-16 w-16 rounded-2xl')}<div><p class="text-xs font-bold uppercase tracking-wide text-blue-700">Rota #${r.id}</p><h2 class="font-display text-xl font-bold text-gray-900">${safe(r.placa)}</h2><p class="text-xs text-gray-500">${safe(r.veiculo)}</p></div></div><span class="rounded-full px-3 py-1.5 text-xs font-bold ${r.interrompida?'bg-rose-100 text-rose-800':r.ativa?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-700'}">${r.interrompida?'Interrompida':r.ativa?'Em andamento':'Concluída'}</span></div>
+        $('detalhes-rota').innerHTML = `<div class="flex flex-wrap items-center justify-between gap-4"><div class="flex min-w-0 items-center gap-3">${avatar(r.veiculo_foto,r.placa,'h-16 w-16 rounded-2xl')}<div><p class="text-xs font-bold uppercase tracking-wide text-blue-700">Rota #${r.id}</p><h2 class="font-display text-xl font-bold text-gray-900">${safe(r.placa)}</h2><p class="text-xs text-gray-500">${safe(r.veiculo)}</p></div></div><span class="rounded-full px-3 py-1.5 text-xs font-bold ${r.interrompida?'bg-rose-100 text-rose-800':r.ativa?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-gray-700'}">${r.interrompida?'Interrompida':r.ativa?'Em andamento':'Concluída'}</span></div>
         <div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3">${avatar(r.motorista_foto,r.motorista,'h-12 w-12')}<div><p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Motorista</p><p class="font-semibold text-slate-900">${safe(r.motorista)}</p></div><div class="ml-auto grid grid-cols-2 gap-x-5 gap-y-1 text-xs sm:grid-cols-3"><span>🟢 ${safe(r.inicio||'Início n/d')}</span><span>⏱ ${duration(r.duracao_segundos)}</span><span>📡 ${safe(r.gps_status)}</span><span>🏁 ${safe(r.fim||'Em andamento')}</span></div></div>
         <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">${[['⬆️','Embarques',r.embarques,'#10b981'],['⬇️','Desembarques',r.desembarques,'#0ea5e9'],['👥','A bordo',board.length,'#059669'],['🧒','Alunos na rota',r.total_alunos,'#7c3aed']].map(([icon,label,value,accent])=>`<article class="rounded-xl border border-gray-100 border-b-4 bg-white p-3 shadow-sm" style="border-bottom-color:${accent}"><div class="flex items-center justify-between"><span class="text-xs text-gray-500">${label}</span><span>${icon}</span></div><p class="mt-1 text-xl font-bold">${value}</p></article>`).join('')}</div>
         <div class="mt-5 grid gap-5 lg:grid-cols-2"><section class="rounded-xl border p-4"><h3 class="mb-3 flex items-center gap-2 font-bold">🟢 A bordo agora <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">${board.length}</span></h3>${paginatedList(board,listKey('board'),studentList)}</section><section class="rounded-xl border p-4"><h3 class="mb-3 flex items-center gap-2 font-bold">🧒 Passaram pela rota <span class="rounded-full bg-violet-100 px-2 py-0.5 text-xs text-violet-800">${history.length}</span></h3>${paginatedList(history,listKey('history'),studentList)}</section></div>
         <section class="mt-5 rounded-xl border p-4"><h3 class="mb-3 font-bold">🕘 Eventos da rota <span class="text-xs font-normal text-gray-500">${data.eventos.length}</span></h3>${paginatedList(data.eventos,listKey('events'),eventList)}</section>
         ${r.ocorrencias?`<p class="mt-3 rounded bg-amber-50 p-3 text-sm text-amber-900">${r.ocorrencias} ocorrência(s) de face desconhecida registradas.</p>`:''}`;
+        $('detalhes-rota').querySelectorAll('img[data-image-url]').forEach(image=>{
+            const matches=oldImages.get(image.dataset.imageUrl);
+            if(!matches?.length)return;
+            image.replaceWith(matches.shift());
+        });
         $('mensagem-mapa').textContent = coords.length ? 'Trajeto e eventos da rota selecionada.' : 'Trajeto indisponível: não há coordenadas para esta rota.';
         $('lista-rotas').querySelectorAll('[data-rota]').forEach(b=>{
             const isSelected=b.dataset.rota===String(selected), cardColor=routeColor(b.dataset.rota);
@@ -386,44 +441,69 @@ document.addEventListener('DOMContentLoaded', () => {
     function selectRoute(id) {
         selected = String(id);
         selectedByTab[tab]=selected;
+        syncRouteUrl();
         const version=++mapRequestCounter;
         setMapLoading(true);
         fetchData().catch(()=>{}).finally(()=>{if(version===mapRequestCounter)setMapLoading(false);});
     }
+    function clearRouteSelection() {
+        if(!selected)return;
+        selected=null;
+        selectedByTab[tab]=null;
+        syncRouteUrl();
+        mapRequestCounter++;
+        setMapLoading(false);
+        $('detalhes-rota').classList.add('hidden');
+        $('alertas-rota')?.classList.add('hidden');
+        layerRoutes.clearLayers();
+        fetchData();
+    }
     window.selecionarRota = selectRoute;
-    function changeTab(which) {
-        searchByTab[tab]=$('pesquisa-rota').value;
-        statusByTab[tab]=$('filtro-situacao').value;
-        tab=which;selected=selectedByTab[tab];page=1;routeCards=[];
+    function changeTab(which, initial=false) {
+        if(!initial){
+            searchByTab[tab]=$('pesquisa-rota').value;
+            statusByTab[tab]=$('filtro-situacao').value;
+            datesByTab[tab]={inicio:$('data-inicio').value,fim:$('data-fim').value};
+        }
+        tab=which;selected=selectedByTab[tab];page=initial?initialPage:1;routeCards=[];
         $('pesquisa-rota').value=searchByTab[tab];
         $('aba-ativas').setAttribute('aria-selected',String(tab==='ativas'));
         $('aba-historico').setAttribute('aria-selected',String(tab==='historico'));
-        $('aba-ativas').className=tab==='ativas'?'border-b-2 border-blue-700 px-4 py-3 font-semibold text-blue-800':'border-b-2 border-transparent px-4 py-3 font-semibold text-gray-600';
-        $('aba-historico').className=tab==='historico'?'border-b-2 border-blue-700 px-4 py-3 font-semibold text-blue-800':'border-b-2 border-transparent px-4 py-3 font-semibold text-gray-600';
+        [$('aba-ativas'),$('aba-historico')].forEach(button=>{
+            const active=(button.id==='aba-ativas')===(tab==='ativas');
+            button.className=`aba-rota rounded-lg px-5 py-2 font-semibold ${active?'bg-blue-700 text-white':'bg-white text-gray-700 border border-gray-300'}`;
+        });
         $('titulo-lista').textContent=tab==='ativas'?'Rotas em andamento':'Histórico de rotas';
         $('filtros-historico').classList.toggle('hidden',tab!=='historico');
         $('filtro-situacao').innerHTML=tab==='ativas'
             ? '<option value="">Todas as situações</option><option value="andamento">Em andamento</option><option value="sem_sinal">Sem sinal</option><option value="interrompida">Interrompida</option>'
             : '<option value="">Todas as situações</option><option value="concluida">Concluída</option><option value="interrompida">Interrompida</option>';
         $('filtro-situacao').value=statusByTab[tab];
+        $('data-inicio').value=datesByTab[tab].inicio;
+        $('data-fim').value=datesByTab[tab].fim;
         layerRoutes.clearLayers();
         clearInterval(refreshTimer);
         setMapLoading(false);
         mapRequestCounter++;
         setTabLoading(true,tab==='ativas'?'Carregando rotas em andamento e posições dos ônibus.':'Carregando as cinco rotas mais recentes.');
+        syncRouteUrl();
         const pending=fetchData(), version=requestCounter;
         pending.catch(()=>{}).finally(()=>{if(version===requestCounter)setTabLoading(false);});
         if(tab==='ativas') refreshTimer=setInterval(()=>fetchData(),5000);
     }
     $('aba-ativas').onclick=()=>changeTab('ativas');
     $('aba-historico').onclick=()=>changeTab('historico');
+    $('painel-lista-rotas').addEventListener('click',event=>{
+        if(event.target.closest('button,input,select,textarea,label,a,[data-rota]'))return;
+        clearRouteSelection();
+    });
     $('alternar-painel').onclick=()=>{collapsed=!collapsed;$('conteudo-painel').classList.toggle('hidden',collapsed);$('alternar-painel').textContent=collapsed?'Expandir':'Recolher';$('alternar-painel').setAttribute('aria-expanded',String(!collapsed));requestAnimationFrame(()=>mapa.invalidateSize());};
-    const reloadFiltered = () => {searchByTab[tab]=$('pesquisa-rota').value;statusByTab[tab]=$('filtro-situacao').value;page=1;selected=null;selectedByTab[tab]=null;routeCards=[];layerRoutes.clearLayers();$('detalhes-rota').classList.add('hidden');fetchData();};
+    const reloadFiltered = () => {searchByTab[tab]=$('pesquisa-rota').value;statusByTab[tab]=$('filtro-situacao').value;datesByTab[tab]={inicio:$('data-inicio').value,fim:$('data-fim').value};page=1;selected=null;selectedByTab[tab]=null;syncRouteUrl();layerRoutes.clearLayers();$('detalhes-rota').classList.add('hidden');fetchData();};
     let searchTimer; $('pesquisa-rota').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(reloadFiltered,250);};
     $('filtro-situacao').onchange=reloadFiltered;
     $('data-inicio').onchange=$('data-fim').onchange=reloadFiltered;
-    $('pagina-anterior').onclick=()=>{if(page>1){page--;selected=null;fetchData();}};
-    $('pagina-proxima').onclick=()=>{if(page<pages){page++;selected=null;fetchData();}};
+    $('pagina-anterior').onclick=()=>{if(page>1){page--;selected=null;selectedByTab[tab]=null;syncRouteUrl();fetchData();}};
+    $('pagina-proxima').onclick=()=>{if(page<pages){page++;selected=null;selectedByTab[tab]=null;syncRouteUrl();fetchData();}};
     const interruptionSlides=[...document.querySelectorAll('.interrupcao-slide')];
     if(interruptionSlides.length>1){
         let currentSlide=0;
@@ -435,8 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
         $('interrupcao-anterior')?.addEventListener('click',()=>showSlide(currentSlide-1));
         $('proxima-interrupcao')?.addEventListener('click',()=>showSlide(currentSlide+1));
     }
-    fetchData().catch(()=>{});
-    refreshTimer=setInterval(()=>{if(tab==='ativas')fetchData();},5000);
+    changeTab(tab,true);
 });
 </script>
 {% endblock %}

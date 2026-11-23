@@ -181,6 +181,7 @@ class TransporteFluxosTests(TestCase):
         self.assertContains(response, 'Acompanhamento da frota')
         self.assertContains(response, 'id="aba-ativas"')
         self.assertContains(response, 'id="aba-historico"')
+        self.assertContains(response, 'flex flex-wrap justify-center gap-2')
         self.assertContains(response, 'id="lista-rotas"')
         self.assertContains(response, 'id="carregando-aba"')
         self.assertContains(response, 'Carregando dados')
@@ -366,6 +367,44 @@ class TransporteFluxosTests(TestCase):
         self.assertTrue(rota.interrompida)
         self.assertIsNotNone(rota.fim)
         self.assertContains(response, 'Encerrada automaticamente por falta de GPS')
+        self.assertContains(response, 'Estou ciente deste encerramento automático')
+        self.assertContains(response, 'img/icone_onibus.png')
+
+    def test_instituicao_pode_confirmar_ciencia_de_rota_encerrada_automaticamente(self):
+        rota = self.criar_rota()
+        Rota.objects.filter(pk=rota.pk).update(
+            ativa=False, interrompida=True, fim=timezone.now(),
+        )
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.post(
+            reverse('confirmar_ciencia_rota_encerrada', args=(rota.pk,)),
+            {'confirmacao_ciencia': 'on'},
+        )
+
+        rota.refresh_from_db()
+        self.assertRedirects(response, reverse('home'))
+        self.assertTrue(rota.instituicao_ciente_encerramento)
+        self.assertFalse(rota.ativa)
+        self.assertIsNone(rota.resolvida_por)
+        painel = self.client.get(reverse('mapa_unificado'))
+        self.assertNotContains(painel, 'Estou ciente deste encerramento automático')
+
+    def test_responsavel_nao_pode_confirmar_ciencia_de_rota_encerrada(self):
+        rota = self.criar_rota()
+        Rota.objects.filter(pk=rota.pk).update(
+            ativa=False, interrompida=True, fim=timezone.now(),
+        )
+        self.client.force_login(self.responsavel_usuario)
+
+        response = self.client.post(
+            reverse('confirmar_ciencia_rota_encerrada', args=(rota.pk,)),
+            {'confirmacao_ciencia': 'on'},
+        )
+
+        rota.refresh_from_db()
+        self.assertRedirects(response, reverse('home'))
+        self.assertFalse(rota.instituicao_ciente_encerramento)
 
     def test_rota_sem_gps_com_aluno_a_bordo_fica_pendente_e_reserva_recursos(self):
         rota = self.criar_rota()

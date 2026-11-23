@@ -1,8 +1,9 @@
+{% load static %}
         {% if rotas_interrompidas %}
                 <section class="mt-6 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
                     <div class="flex items-center justify-between border-b border-amber-100 bg-gradient-to-r from-amber-50 to-white p-5">
-                        <div><p class="text-xs font-bold uppercase tracking-wider text-amber-700">Atenção operacional</p><h4 class="mt-1 text-lg font-bold text-gray-900">Rotas pendentes de revisão</h4></div>
-                        <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">{{ interrupcoes_pendentes }} pendente{{ interrupcoes_pendentes|pluralize }}</span>
+                        <div><p class="text-xs font-bold uppercase tracking-wider text-amber-700">Atenção operacional</p><h4 class="mt-1 text-lg font-bold text-gray-900">Interrupções recentes e revisão</h4></div>
+                        <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">{{ interrupcoes_pendentes }} revisão{{ interrupcoes_pendentes|pluralize }} pendente{{ interrupcoes_pendentes|pluralize }}</span>
                     </div>
                     <div id="carrossel-interrupcoes" class="relative" role="group" aria-roledescription="carrossel" aria-label="Interrupções recentes">
                         {% for item in rotas_interrompidas %}
@@ -13,7 +14,7 @@
                                         {% if item.rota.veiculo.foto %}
                                             <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" data-cache-image="{{ item.rota.veiculo.foto.url }}" alt="Veículo {{ item.rota.veiculo.placa }}" class="h-16 w-16 rounded-2xl border border-slate-200 object-cover shadow-sm">
                                         {% else %}
-                                            <span class="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-2xl">🚌</span>
+                                            <span class="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-700"><img src="{% static 'img/icone_onibus.png' %}" alt="" class="h-9 w-9 object-contain brightness-0 invert"></span>
                                         {% endif %}
                                         <div class="min-w-0"><p class="text-xs font-bold uppercase tracking-wide text-blue-700">Rota #{{ item.rota.id }}</p><h5 class="truncate text-xl font-bold text-gray-900">{{ item.rota.veiculo.placa|default:'Veículo não informado' }}</h5><p class="truncate text-sm text-gray-500">{{ item.rota.veiculo.modelo|default:'Veículo indisponível' }}</p></div>
                                         <span class="ml-auto hidden shrink-0 rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-800 sm:inline-flex">Interrompida</span>
@@ -35,7 +36,14 @@
                                     {% elif item.rota.resolvida_por %}
                                         <p class="mt-3 text-xs font-semibold text-gray-600">Revisada por {{ item.rota.resolvida_por.first_name|default:item.rota.resolvida_por.email }}{% if item.rota.observacao_resolucao %} · {{ item.rota.observacao_resolucao }}{% endif %}</p>
                                     {% else %}
-                                        <p class="mt-3 text-xs font-semibold text-gray-600">Encerrada automaticamente por falta de GPS, sem alunos registrados a bordo.</p>
+                                        <div class="mt-3 rounded-xl border border-sky-100 bg-sky-50 p-3">
+                                            <p class="text-xs font-semibold text-sky-900">Encerrada automaticamente por falta de GPS; nenhum aluno estava a bordo.</p>
+                                            <form method="post" action="{% url 'confirmar_ciencia_rota_encerrada' item.rota.id %}" class="mt-3 flex flex-wrap items-center justify-between gap-3">
+                                                {% csrf_token %}
+                                                <label class="flex items-start gap-2 text-xs text-sky-900"><input type="checkbox" name="confirmacao_ciencia" required class="mt-0.5">Estou ciente deste encerramento automático.</label>
+                                                <button type="submit" class="rounded-lg bg-blue-700 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-800">Confirmar ciência</button>
+                                            </form>
+                                        </div>
                                     {% endif %}
                                 </div>
                                 {% if item.rota.ativa %}

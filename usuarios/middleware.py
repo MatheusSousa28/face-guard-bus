@@ -19,6 +19,7 @@ class AuditoriaMiddleware:
         'iniciar_rota': 'Iniciou uma rota',
         'finalizar_rota': 'Finalizou uma rota',
         'resolver_rota_interrompida': 'Revisou uma rota interrompida',
+        'confirmar_ciencia_rota_encerrada': 'Confirmou ciência de uma rota encerrada automaticamente',
         'api_reconhecimento': 'Registrou um evento de transporte',
         'gerenciar_veiculo': 'Cadastrou ou atualizou um veículo',
         'deletar_veiculo': 'Excluiu um veículo',
