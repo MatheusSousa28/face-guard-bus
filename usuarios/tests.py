@@ -246,17 +246,56 @@ class FluxosCadastroTests(TestCase):
         )
         self.client.force_login(self.instituicao_usuario)
 
-        url = f"{reverse('aprovar_cadastro', args=('aluno', aluno.pk))}?categoria=aluno"
+        url = reverse('editar_aluno_pendente_instituicao', args=(aluno.pk,))
         response = self.client.post(url, {
-            'editar': '1', 'nome': 'Nome Corrigido', 'idade': '9',
+            'nome': 'Nome Corrigido', 'idade': '9',
         })
+
+        self.assertRedirects(response, f"{reverse('painel_aprovacoes')}?categoria=aluno&foco={aluno.pk}")
+        aluno.refresh_from_db()
+        self.assertFalse(aluno.is_aprovado)
+        self.assertEqual(aluno.nome, 'Nome Corrigido')
+        self.assertEqual(aluno.idade, 9)
+
+    def test_aprovacao_de_aluno_exige_vinculo_a_veiculo(self):
+        aluno = Aluno.objects.create(
+            nome='Aluno sem vínculo', idade=8, responsavel=self.responsavel,
+            foto_perfil='fotos/aluno-sem-vinculo.png',
+        )
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.post(reverse('aprovar_cadastro', args=('aluno', aluno.pk)))
+
+        self.assertRedirects(response, f"{reverse('painel_aprovacoes')}?categoria=aluno")
+        aluno.refresh_from_db()
+        self.assertFalse(aluno.is_aprovado)
+
+    def test_aprovacao_pode_vincular_veiculo_acima_da_capacidade_informativa(self):
+        veiculo = Veiculo.objects.create(
+            modelo='Van de capacidade informativa', capacidade=1,
+            placa='INF1234', cor='Branca',
+        )
+        outro_aluno = Aluno.objects.create(
+            nome='Outro aluno aprovado', idade=8, responsavel=self.responsavel,
+            foto_perfil='fotos/outro-aluno.png', is_aprovado=True,
+        )
+        veiculo.alunos_autorizados.add(outro_aluno)
+        aluno = Aluno.objects.create(
+            nome='Aluno excedente', idade=9, responsavel=self.responsavel,
+            foto_perfil='fotos/aluno-excedente.png',
+        )
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.post(
+            reverse('aprovar_cadastro', args=('aluno', aluno.pk)),
+            {'veiculos': [str(veiculo.pk)]},
+        )
 
         self.assertRedirects(response, f"{reverse('painel_aprovacoes')}?categoria=aluno")
         aluno.refresh_from_db()
         self.assertTrue(aluno.is_aprovado)
-        self.assertFalse(aluno.responsavel_aprovacao_notificada)
-        self.assertEqual(aluno.nome, 'Nome Corrigido')
-        self.assertEqual(aluno.idade, 9)
+        self.assertTrue(aluno.veiculos.filter(pk=veiculo.pk).exists())
+        self.assertEqual(veiculo.alunos_autorizados.count(), 2)
 
     def test_edicao_invalida_nao_aprova_cadastro_pendente(self):
         aluno = Aluno.objects.create(
@@ -265,15 +304,15 @@ class FluxosCadastroTests(TestCase):
         )
         self.client.force_login(self.instituicao_usuario)
 
-        url = f"{reverse('aprovar_cadastro', args=('aluno', aluno.pk))}?categoria=responsavel"
+        url = reverse('editar_aluno_pendente_instituicao', args=(aluno.pk,))
         response = self.client.post(url, {
-            'editar': '1', 'nome': '', 'idade': '99',
+            'nome': '', 'idade': '99',
         }, follow=True)
 
         aluno.refresh_from_db()
         self.assertFalse(aluno.is_aprovado)
-        self.assertRedirects(response, f"{reverse('painel_aprovacoes')}?categoria=responsavel")
-        self.assertContains(response, 'O cadastro não foi aprovado')
+        self.assertRedirects(response, f"{reverse('painel_aprovacoes')}?categoria=aluno&foco={aluno.pk}")
+        self.assertContains(response, 'Informe um nome válido e idade entre 2 e 30 anos.')
 
     def test_reprovacao_retorna_para_mesma_categoria_do_painel(self):
         aluno = Aluno.objects.create(
@@ -309,7 +348,7 @@ class FluxosCadastroTests(TestCase):
         self.assertNotContains(response, 'motoristas_pendentes')
         self.assertContains(response, 'id="pending-search"')
         self.assertContains(response, 'id="pending-list"')
-        self.assertContains(response, 'Salvar alterações e aprovar')
+        self.assertContains(response, 'Salvar alterações')
         self.assertContains(response, 'id="pending-edit-modal"')
         self.assertContains(response, 'id="pending-confirm-modal"')
         self.assertContains(response, 'data-confirm-title="Aprovar cadastro?"')
@@ -433,6 +472,11 @@ class FluxosCadastroTests(TestCase):
         self.assertContains(response, 'A instituição está verificando uma rota')
         self.assertContains(response, 'A equipe da instituição já foi avisada')
         self.assertEqual(len(response.context['avisos_rotas_interrompidas']), 1)
+        self.assertContains(response, 'institution-notification-bell')
+        self.assertEqual(response.context['notificacoes_responsavel_total'], 1)
+        mapa = self.client.get(reverse('api_mapa_unificado'), {'contexto': 'ativas', 'rota': rota.pk})
+        self.assertEqual(mapa.status_code, 200)
+        self.assertEqual(mapa.json()['rota']['id'], rota.pk)
 
     def test_cadastro_de_aluno_exige_consentimento(self):
         self.client.force_login(self.responsavel_usuario)

@@ -15,6 +15,7 @@ from usuarios.monitoramento import obter_contexto_monitoramento
 from alunos.models import Aluno
 from django.contrib import messages
 from django.db import transaction
+from django.db.models import Exists, OuterRef, Q
 from monitoramento.models import Evento 
 import base64
 import binascii
@@ -369,7 +370,12 @@ def api_frota_mapa_unificada(request):
     )
     if is_responsavel and not is_admin:
         rotas = rotas.filter(
-            veiculo__alunos_autorizados__responsavel=usuario.responsavel,
+            Q(veiculo__alunos_autorizados__responsavel=usuario.responsavel)
+            | Exists(Evento.objects.filter(
+                rota_id=OuterRef('pk'),
+                aluno__responsavel=usuario.responsavel,
+                autorizado=True,
+            )),
         ).distinct()
     contexto = request.GET.get('contexto', 'ativas')
     termo = request.GET.get('q', '').strip()[:100]
@@ -389,7 +395,6 @@ def api_frota_mapa_unificada(request):
         elif estado == 'concluida':
             rotas = rotas.filter(interrompida=False)
         if termo:
-            from django.db.models import Q
             busca = (
                 Q(veiculo__placa__icontains=termo)
                 | Q(veiculo__modelo__icontains=termo)
@@ -421,7 +426,6 @@ def api_frota_mapa_unificada(request):
         elif estado == 'interrompida':
             rotas = rotas.filter(interrompida=True)
         if termo:
-            from django.db.models import Q
             busca = (
                 Q(veiculo__placa__icontains=termo)
                 | Q(veiculo__modelo__icontains=termo)
@@ -457,7 +461,12 @@ def api_frota_mapa_unificada(request):
         ).filter(pk=route_id)
         if is_responsavel and not is_admin:
             rota = rota.filter(
-                veiculo__alunos_autorizados__responsavel=usuario.responsavel,
+                Q(veiculo__alunos_autorizados__responsavel=usuario.responsavel)
+                | Exists(Evento.objects.filter(
+                    rota_id=OuterRef('pk'),
+                    aluno__responsavel=usuario.responsavel,
+                    autorizado=True,
+                )),
             )
         rota = rota.first()
     if route_id and rota is None:
@@ -493,6 +502,7 @@ def api_frota_mapa_unificada(request):
         return {
             'id': item.id, 'label': f'{placa} · {inicio} · {estado}',
             'placa': placa, 'motorista': motorista,
+            'capacidade': item.veiculo.capacidade if item.veiculo_id else 0,
             'inicio': inicio, 'ativa': item.ativa, 'interrompida': item.interrompida,
             'gps_status': obter_estado_gps(item, agora=agora) if item.ativa else 'historica',
             'veiculo_foto': url_imagem(item.veiculo.foto) if item.veiculo_id else '',
@@ -504,7 +514,12 @@ def api_frota_mapa_unificada(request):
     posicoes_qs = Rota.objects.filter(ativa=True).select_related('veiculo', 'motorista__usuario')
     if is_responsavel and not is_admin:
         posicoes_qs = posicoes_qs.filter(
-            veiculo__alunos_autorizados__responsavel=usuario.responsavel,
+            Q(veiculo__alunos_autorizados__responsavel=usuario.responsavel)
+            | Exists(Evento.objects.filter(
+                rota_id=OuterRef('pk'),
+                aluno__responsavel=usuario.responsavel,
+                autorizado=True,
+            )),
         ).distinct()
     for item in posicoes_qs:
         if not item.veiculo_id:
@@ -670,6 +685,7 @@ def api_frota_mapa_unificada(request):
             ),
             'motorista_foto': url_imagem(rota.motorista.foto_perfil) if rota.motorista_id else '',
             'placa': rota.veiculo.placa if rota.veiculo else 'Não informado',
+            'capacidade': rota.veiculo.capacidade if rota.veiculo_id else 0,
             'embarques': embarques,
             'desembarques': desembarques,
             'total_alunos': len(alunos_historico),
@@ -716,7 +732,6 @@ def api_alunos_para_veiculo(request):
         'responsavel__usuario'
     ).order_by('nome', 'pk')
     if termo:
-        from django.db.models import Q
         qs = qs.filter(Q(nome__icontains=termo)
                        | Q(responsavel__usuario__first_name__icontains=termo)
                        | Q(responsavel__usuario__last_name__icontains=termo))
@@ -783,13 +798,6 @@ def gerenciar_veiculo(request, id=None):
                 raise ValueError
         except (TypeError, ValueError):
             messages.error(request, 'A capacidade deve estar entre 1 e 100 alunos.')
-            return render(request, 'transporte/form_veiculo.html', {
-                'veiculo': veiculo, 'motoristas': motoristas, 'alunos_selecionados': alunos_selecionados,
-                'avatar_colors': avatar_colors,
-            })
-
-        if len(alunos_ids) > capacidade:
-            messages.error(request, f'A quantidade de alunos vinculados não pode exceder a capacidade de {capacidade}.')
             return render(request, 'transporte/form_veiculo.html', {
                 'veiculo': veiculo, 'motoristas': motoristas, 'alunos_selecionados': alunos_selecionados,
                 'avatar_colors': avatar_colors,

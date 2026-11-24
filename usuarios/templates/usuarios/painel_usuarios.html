@@ -538,7 +538,7 @@
                 : `<div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700" aria-hidden="true"><svg class="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 17h14l1-7H4l1 7Zm0 0v2m14-2v2M4 10l1-5h14l1 5M7 13h.01M17 13h.01"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/></svg></div>`;
             return `<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 p-3 transition hover:border-blue-300 hover:bg-blue-50 ${selected ? 'border-blue-400 bg-blue-50' : 'bg-white'}">
                 <input type="checkbox" form="user-form" name="veiculos" value="${id}" data-vehicle-choice ${selected ? 'checked' : ''} ${canEditVehicles ? '' : 'disabled'} class="h-5 w-5 shrink-0 rounded text-blue-600 focus:ring-blue-500 disabled:opacity-50">
-                ${foto}<span class="min-w-0 flex-1"><span class="block truncate font-semibold text-gray-900">${escapeHtml(veiculo.modelo)}</span><span class="block truncate text-sm text-gray-600">Placa: ${escapeHtml(veiculo.placa)} · ${escapeHtml(veiculo.cor)} · ${veiculo.capacidade} lugares</span></span>
+                ${foto}<span class="min-w-0 flex-1"><span class="block truncate font-semibold text-gray-900">${escapeHtml(veiculo.modelo)}</span><span class="block truncate text-sm text-gray-600">Placa: ${escapeHtml(veiculo.placa)} · ${escapeHtml(veiculo.cor)} · Capacidade informativa: ${veiculo.capacidade} alunos</span></span>
             </label>`;
         }).join('');
         updateVehicleCount();

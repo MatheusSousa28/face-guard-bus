@@ -269,6 +269,7 @@ class TransporteFluxosTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload['rota']['id'], rota.id)
+        self.assertEqual(payload['rota']['capacidade'], self.veiculo.capacidade)
         self.assertEqual(len(payload['trajeto']), 1)
 
     def test_historico_filtra_rotas_e_calcula_totais_no_periodo(self):
@@ -520,7 +521,7 @@ class TransporteFluxosTests(TestCase):
             {self.aluno.id, segundo_aluno.id},
         )
 
-    def test_veiculo_rejeita_alunos_acima_da_capacidade(self):
+    def test_capacidade_do_veiculo_e_informativa_para_vinculos_de_alunos(self):
         segundo_aluno = Aluno.objects.create(
             nome='Segundo Aluno', idade=8, responsavel=self.responsavel,
             dados_faciais='[]', foto_perfil='perfil_alunos/segundo.jpg', is_aprovado=True,
@@ -532,9 +533,13 @@ class TransporteFluxosTests(TestCase):
             'alunos': [str(self.aluno.id), str(segundo_aluno.id)],
         })
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'não pode exceder a capacidade de 1')
-        self.assertFalse(Veiculo.objects.filter(placa='CAP1234').exists())
+        self.assertRedirects(response, reverse('painel_veiculos'))
+        veiculo = Veiculo.objects.get(placa='CAP1234')
+        self.assertEqual(veiculo.capacidade, 1)
+        self.assertSetEqual(
+            set(veiculo.alunos_autorizados.values_list('id', flat=True)),
+            {self.aluno.id, segundo_aluno.id},
+        )
 
     def test_veiculo_nao_associa_alunos_ou_motoristas_nao_aprovados(self):
         motorista_pendente_usuario = Usuario.objects.create_user(

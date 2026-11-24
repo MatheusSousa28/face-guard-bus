@@ -33,19 +33,18 @@
                             {% if aluno.foto_perfil %}<img src="{{ aluno.foto_perfil.url }}" alt="Foto de {{ aluno.nome }}" class="h-14 w-14 shrink-0 rounded-full object-cover">{% else %}<img src="{% static 'img/icone_pessoa.png' %}" alt="" class="h-14 w-14 shrink-0 rounded-full bg-blue-700 object-contain brightness-0 invert">{% endif %}
                             <div class="min-w-0"><p class="truncate font-bold text-gray-900">{{ aluno.nome }}</p><p class="truncate text-sm text-gray-500">{{ aluno.idade }} anos · Responsável: {{ aluno.responsavel.usuario.get_full_name }}</p></div>
                         </div>
-                        <div class="flex flex-wrap gap-2 self-end sm:self-auto">
-                            <button type="button" data-open-edit class="rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">Editar</button>
+                        <div class="grid w-full grid-cols-3 items-stretch gap-2 sm:w-auto sm:min-w-[19rem]">
+                            <button type="button" data-open-edit class="inline-flex h-10 items-center justify-center rounded-lg border border-blue-200 px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-50">Editar</button>
                             <template data-edit-form>
-                                <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}?categoria=aluno" class="space-y-4">
-                                    {% csrf_token %}<input type="hidden" name="editar" value="1">
+                                <form method="post" action="{% url 'editar_aluno_pendente_instituicao' aluno.id %}" class="space-y-4">
+                                    {% csrf_token %}
                                     <label class="block text-sm font-semibold text-gray-700">Nome do aluno<input name="nome" value="{{ aluno.nome }}" minlength="2" maxlength="100" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
                                     <label class="block text-sm font-semibold text-gray-700">Idade<input name="idade" type="number" min="2" max="30" value="{{ aluno.idade }}" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
-                                    <fieldset class="space-y-2"><legend class="text-sm font-semibold text-gray-700">Vincular a veículos</legend>{% for veiculo in veiculos_disponiveis %}<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="veiculos" value="{{ veiculo.id }}" {% if veiculo in aluno.veiculos.all %}checked{% endif %}>{{ veiculo.modelo }} · {{ veiculo.placa }} ({{ veiculo.alunos_autorizados.count }}/{{ veiculo.capacidade }})</label>{% empty %}<p class="text-sm text-gray-500">Nenhum veículo cadastrado.</p>{% endfor %}</fieldset>
-                                    <button class="w-full rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">Salvar alterações e aprovar</button>
+                                    <button class="w-full rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">Salvar alterações</button>
                                 </form>
                             </template>
-                            <form method="post" action="{% url 'reprovar_cadastro' 'aluno' aluno.id %}?categoria=aluno" data-confirm-title="Reprovar cadastro?" data-confirm-message="Deseja realmente reprovar e remover o cadastro de {{ aluno.nome }}?" data-confirm-label="Sim, reprovar" data-confirm-style="reject">{% csrf_token %}<button class="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700">Reprovar</button></form>
-                            <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}?categoria=aluno" data-confirm-title="Aprovar cadastro?" data-confirm-message="Deseja realmente aprovar o cadastro de {{ aluno.nome }}?" data-confirm-label="Sim, aprovar" data-confirm-style="approve">{% csrf_token %}<details class="mb-2 text-left"><summary class="cursor-pointer text-xs text-blue-700">Vincular veículos (opcional)</summary><div class="mt-2 max-h-32 overflow-y-auto">{% for veiculo in veiculos_disponiveis %}<label class="block text-xs"><input type="checkbox" name="veiculos" value="{{ veiculo.id }}"> {{ veiculo.modelo }} · {{ veiculo.placa }} ({{ veiculo.alunos_autorizados.count }}/{{ veiculo.capacidade }})</label>{% empty %}<span class="text-xs text-gray-500">Sem veículos cadastrados</span>{% endfor %}</div></details><button class="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">Aprovar</button></form>
+                            <form method="post" action="{% url 'reprovar_cadastro' 'aluno' aluno.id %}?categoria=aluno" data-confirm-title="Reprovar cadastro?" data-confirm-message="Deseja realmente reprovar e remover o cadastro de {{ aluno.nome }}?" data-confirm-label="Sim, reprovar" data-confirm-style="reject" class="flex">{% csrf_token %}<button class="h-10 w-full rounded-lg bg-red-600 px-3 text-sm font-bold text-white transition hover:bg-red-700">Reprovar</button></form>
+                            <form method="post" action="{% url 'aprovar_cadastro' 'aluno' aluno.id %}?categoria=aluno" data-approve-student="true" data-confirm-title="Aprovar cadastro?" data-confirm-message="Deseja realmente aprovar o cadastro de {{ aluno.nome }}?" data-confirm-label="Sim, aprovar" data-confirm-style="approve" class="flex">{% csrf_token %}<button class="h-10 w-full rounded-lg bg-green-600 px-3 text-sm font-bold text-white transition hover:bg-green-700">Aprovar</button></form>
                         </div>
                     </div>
                 </article>
@@ -57,8 +56,8 @@
                             {% if responsavel.foto_perfil %}<img src="{{ responsavel.foto_perfil.url }}" alt="Foto de {{ responsavel.usuario.get_full_name }}" class="h-14 w-14 shrink-0 rounded-full object-cover">{% else %}<img src="{% static 'img/icone_pessoa.png' %}" alt="" class="h-14 w-14 shrink-0 rounded-full bg-blue-700 object-contain brightness-0 invert">{% endif %}
                             <div class="min-w-0"><p class="truncate font-bold text-gray-900">{{ responsavel.usuario.get_full_name }}</p><p class="truncate text-sm text-gray-500">{{ responsavel.usuario.email }} · CPF: {{ responsavel.cpf }}</p></div>
                         </div>
-                        <div class="flex flex-wrap gap-2 self-end sm:self-auto">
-                            <button type="button" data-open-edit class="rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">Editar</button>
+                        <div class="grid w-full grid-cols-3 items-stretch gap-2 sm:w-auto sm:min-w-[19rem]">
+                            <button type="button" data-open-edit class="inline-flex h-10 items-center justify-center rounded-lg border border-blue-200 px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-50">Editar</button>
                             <template data-edit-form>
                                 <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}?categoria=responsavel" class="space-y-4">
                                     {% csrf_token %}<input type="hidden" name="editar" value="1">
@@ -69,8 +68,8 @@
                                     <button class="w-full rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">Salvar alterações e aprovar</button>
                                 </form>
                             </template>
-                            <form method="post" action="{% url 'reprovar_cadastro' 'responsavel' responsavel.id %}?categoria=responsavel" data-confirm-title="Reprovar cadastro?" data-confirm-message="Deseja realmente reprovar e remover o cadastro de {{ responsavel.usuario.get_full_name }}?" data-confirm-label="Sim, reprovar" data-confirm-style="reject">{% csrf_token %}<button class="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700">Reprovar</button></form>
-                            <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}?categoria=responsavel" data-confirm-title="Aprovar cadastro?" data-confirm-message="Deseja realmente aprovar o cadastro de {{ responsavel.usuario.get_full_name }}?" data-confirm-label="Sim, aprovar" data-confirm-style="approve">{% csrf_token %}<button class="rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">Aprovar</button></form>
+                            <form method="post" action="{% url 'reprovar_cadastro' 'responsavel' responsavel.id %}?categoria=responsavel" data-confirm-title="Reprovar cadastro?" data-confirm-message="Deseja realmente reprovar e remover o cadastro de {{ responsavel.usuario.get_full_name }}?" data-confirm-label="Sim, reprovar" data-confirm-style="reject" class="flex">{% csrf_token %}<button class="h-10 w-full rounded-lg bg-red-600 px-3 text-sm font-bold text-white transition hover:bg-red-700">Reprovar</button></form>
+                            <form method="post" action="{% url 'aprovar_cadastro' 'responsavel' responsavel.id %}?categoria=responsavel" data-confirm-title="Aprovar cadastro?" data-confirm-message="Deseja realmente aprovar o cadastro de {{ responsavel.usuario.get_full_name }}?" data-confirm-label="Sim, aprovar" data-confirm-style="approve" class="flex">{% csrf_token %}<button class="h-10 w-full rounded-lg bg-green-600 px-3 text-sm font-bold text-white transition hover:bg-green-700">Aprovar</button></form>
                         </div>
                     </div>
                 </article>
@@ -78,6 +77,8 @@
         </div>
     </section>
 </div>
+
+<template id="approval-vehicles-template"><fieldset class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4"><legend class="px-2 text-sm font-bold text-slate-800">Escolha pelo menos um veículo</legend><p class="mb-3 text-xs text-slate-600">O aluno só será vinculado ao confirmar a aprovação. A capacidade é informativa e não bloqueia vínculos.</p><label class="relative mb-3 block"><span class="sr-only">Buscar veículo</span><input data-vehicle-search type="search" placeholder="Buscar por modelo ou placa" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500"></label><div class="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">{% for veiculo in veiculos_disponiveis %}<label data-vehicle-option data-search="{{ veiculo.modelo }} {{ veiculo.placa }}" class="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-100 bg-white p-3 shadow-sm transition hover:border-amber-400 hover:bg-amber-50 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50"><input class="mt-1 shrink-0 accent-amber-600" type="checkbox" value="{{ veiculo.id }}"><span class="min-w-0"><strong class="block truncate text-sm text-slate-800">{{ veiculo.modelo }}</strong><span class="mt-0.5 block text-xs text-slate-600">Placa {{ veiculo.placa }}</span><span class="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">Capacidade informativa: {{ veiculo.capacidade }}</span></span></label>{% empty %}<p class="col-span-full rounded-xl border border-dashed border-rose-300 bg-white p-4 text-sm text-rose-700">Cadastre um veículo antes de aprovar alunos.</p>{% endfor %}</div><p data-vehicle-error class="mt-2 hidden text-sm font-semibold text-rose-700" role="alert">Selecione pelo menos um veículo para continuar.</p></fieldset></template>
 
 <div id="pending-edit-modal" class="fixed inset-0 z-[90] hidden items-center justify-center overflow-y-auto bg-gray-900/60 p-4" role="dialog" aria-modal="true" aria-labelledby="pending-edit-title">
     <div class="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
@@ -90,9 +91,10 @@
 </div>
 
 <div id="pending-confirm-modal" class="fixed inset-0 z-[95] hidden items-center justify-center bg-gray-900/60 p-4" role="dialog" aria-modal="true" aria-labelledby="pending-confirm-title" aria-describedby="pending-confirm-message">
-    <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+    <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <h2 id="pending-confirm-title" class="text-xl font-bold text-gray-900"></h2>
         <p id="pending-confirm-message" class="mt-3 text-gray-600"></p>
+        <div id="pending-confirm-extra" class="mt-4"></div>
         <div class="mt-6 flex justify-end gap-3">
             <button type="button" id="pending-confirm-cancel" class="rounded-lg bg-gray-100 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-200">Cancelar</button>
             <button type="button" id="pending-confirm-submit" class="rounded-lg px-4 py-2 font-bold text-white"></button>
@@ -112,6 +114,7 @@
     const editModal = document.getElementById('pending-edit-modal');
     const editContent = document.getElementById('pending-edit-content');
     const confirmModal = document.getElementById('pending-confirm-modal');
+    const confirmExtra = document.getElementById('pending-confirm-extra');
     let pendingForm = null;
     const openModal = modal => { modal.classList.remove('hidden'); modal.classList.add('flex'); };
     const closeModal = modal => { modal.classList.add('hidden'); modal.classList.remove('flex'); };
@@ -155,6 +158,26 @@
     document.querySelectorAll('form[data-confirm-title]').forEach(form => form.addEventListener('submit', event => {
         event.preventDefault();
         pendingForm = form;
+        confirmExtra.replaceChildren();
+        if (form.dataset.approveStudent === 'true') {
+            const template = document.getElementById('approval-vehicles-template');
+            if (template) {
+                confirmExtra.append(template.content.cloneNode(true));
+                const picker = confirmExtra.querySelector('fieldset');
+                const searchVehicles = confirmExtra.querySelector('[data-vehicle-search]');
+                const vehicleOptions = [...confirmExtra.querySelectorAll('[data-vehicle-option]')];
+                searchVehicles?.addEventListener('input', () => {
+                    const query = searchVehicles.value.trim().toLocaleLowerCase('pt-BR');
+                    vehicleOptions.forEach(option => option.classList.toggle(
+                        'hidden',
+                        !option.dataset.search.toLocaleLowerCase('pt-BR').includes(query),
+                    ));
+                });
+                confirmExtra.dataset.requiresVehicles = picker ? 'true' : 'false';
+            }
+        } else {
+            confirmExtra.dataset.requiresVehicles = 'false';
+        }
         document.getElementById('pending-confirm-title').textContent = form.dataset.confirmTitle;
         document.getElementById('pending-confirm-message').textContent = form.dataset.confirmMessage;
         const submit = document.getElementById('pending-confirm-submit');
@@ -167,6 +190,22 @@
     document.getElementById('pending-confirm-submit').addEventListener('click', () => {
         if (pendingForm) {
             const button = document.getElementById('pending-confirm-submit');
+            if (confirmExtra.dataset.requiresVehicles === 'true') {
+                const selectedIds = [...confirmExtra.querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value);
+                const error = confirmExtra.querySelector('[data-vehicle-error]');
+                if (!selectedIds.length) {
+                    if (error) error.classList.remove('hidden');
+                    return;
+                }
+                selectedIds.forEach(id => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'veiculos';
+                    input.value = id;
+                    input.dataset.approvalVehicle = 'true';
+                    pendingForm.append(input);
+                });
+            }
             button.disabled = true;
             button.textContent = 'Processando…';
             pendingForm.submit();

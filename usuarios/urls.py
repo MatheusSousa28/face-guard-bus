@@ -9,6 +9,7 @@ urlpatterns = [
     path('perfil/alterar-senha/', views.alterar_senha_propria, name='alterar_senha_propria'),
     path('cadastro/', view=views.cadastro_responsavel, name='cadastro'),
     path('painel/aprovacoes/', views.painel_instituicao_aprovacoes, name='painel_aprovacoes'),
+    path('painel/aluno/<int:aluno_id>/editar-pendente/', views.editar_aluno_pendente_instituicao, name='editar_aluno_pendente_instituicao'),
     path('painel/notificacoes/aluno/<int:aluno_id>/vista/', views.marcar_notificacao_aluno_vista, name='marcar_notificacao_aluno_vista'),
     path('painel/aprovar/<str:tipo>/<int:obj_id>/', views.aprovar_cadastro, name='aprovar_cadastro'),
     path('notificacoes/aluno/<int:aluno_id>/aprovacao-vista/', views.marcar_aviso_aprovacao_aluno_visto, name='marcar_aviso_aprovacao_aluno_visto'),

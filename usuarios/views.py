@@ -63,15 +63,6 @@ def _imagem_perfil_edicao_valida(arquivo, limite_bytes=2 * 1024 * 1024):
         return False
 
 
-def _vincular_aluno_veiculos(aluno, ids):
-    veiculos = Veiculo.objects.filter(pk__in=ids)
-    for veiculo in veiculos:
-        ocupacao = veiculo.alunos_autorizados.filter(deleted_at__isnull=True).exclude(pk=aluno.pk).count()
-        if ocupacao >= veiculo.capacidade:
-            return veiculo
-    aluno.veiculos.set(veiculos)
-    return None
-
 def login_view(request):
     #se o usuário clicou no botão entrar então ele enviou um formulário
     if request.method == 'POST':
@@ -358,6 +349,30 @@ def painel_instituicao_aprovacoes(request):
 
 
 @login_required(login_url='login')
+def editar_aluno_pendente_instituicao(request, aluno_id):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    if not hasattr(request.user, 'instituicao'):
+        return redirect('home')
+    aluno = get_object_or_404(
+        Aluno, pk=aluno_id, is_aprovado=False, deleted_at__isnull=True,
+    )
+    nome = request.POST.get('nome', '').strip()
+    try:
+        idade = int(request.POST.get('idade', ''))
+    except (TypeError, ValueError):
+        idade = 0
+    if not 2 <= len(nome) <= 100 or not 2 <= idade <= 30:
+        messages.error(request, 'Informe um nome válido e idade entre 2 e 30 anos.')
+    else:
+        aluno.nome = nome
+        aluno.idade = idade
+        aluno.save(update_fields=['nome', 'idade'])
+        messages.success(request, 'Dados do cadastro atualizados. O aluno continua pendente de aprovação.')
+    return redirect(f"{reverse('painel_aprovacoes')}?categoria=aluno&foco={aluno.pk}")
+
+
+@login_required(login_url='login')
 def marcar_notificacao_aluno_vista(request, aluno_id):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
@@ -410,23 +425,7 @@ def aprovar_cadastro(request, tipo, obj_id):
 
     if request.POST.get('editar') == '1':
         if tipo == 'aluno':
-            nome = request.POST.get('nome', '').strip()
-            try:
-                idade = int(request.POST.get('idade', ''))
-            except (TypeError, ValueError):
-                idade = 0
-            if not 2 <= len(nome) <= 100 or not 2 <= idade <= 30:
-                messages.error(request, 'Informe um nome válido e idade entre 2 e 30 anos. O cadastro não foi aprovado.')
-                return redirect(url_painel)
-            veiculo_cheio = _vincular_aluno_veiculos(obj, request.POST.getlist('veiculos'))
-            if veiculo_cheio:
-                messages.error(request, f'O veículo {veiculo_cheio.modelo} ({veiculo_cheio.placa}) está sem vagas. O cadastro não foi aprovado.')
-                return redirect(url_painel)
-            obj.nome, obj.idade, obj.is_aprovado = nome, idade, True
-            obj.responsavel_aprovacao_notificada = False
-            obj.save(update_fields=[
-                'nome', 'idade', 'is_aprovado', 'responsavel_aprovacao_notificada',
-            ])
+            return redirect(f"{reverse('painel_aprovacoes')}?categoria=aluno")
         else:
             nome = request.POST.get('first_name', '').strip()
             sobrenome = request.POST.get('last_name', '').strip()
@@ -455,16 +454,15 @@ def aprovar_cadastro(request, tipo, obj_id):
         obj.usuario.is_aprovado = True
         obj.usuario.save(update_fields=['is_aprovado'])
     else:
-        obj.is_aprovado = True
-        obj.responsavel_aprovacao_notificada = False
-        obj.save(update_fields=['is_aprovado', 'responsavel_aprovacao_notificada'])
-        veiculo_cheio = _vincular_aluno_veiculos(obj, request.POST.getlist('veiculos'))
-        if veiculo_cheio:
-            messages.error(request, f'O veículo {veiculo_cheio.modelo} ({veiculo_cheio.placa}) está sem vagas. O cadastro não foi aprovado.')
-            obj.is_aprovado = False
-            obj.responsavel_aprovacao_notificada = True
-            obj.save(update_fields=['is_aprovado', 'responsavel_aprovacao_notificada'])
+        veiculos = Veiculo.objects.filter(pk__in=request.POST.getlist('veiculos'))
+        if not veiculos.exists():
+            messages.error(request, 'Selecione pelo menos um veículo para aprovar o cadastro do aluno.')
             return redirect(url_painel)
+        with transaction.atomic():
+            obj.is_aprovado = True
+            obj.responsavel_aprovacao_notificada = False
+            obj.save(update_fields=['is_aprovado', 'responsavel_aprovacao_notificada'])
+            obj.veiculos.set(veiculos)
 
     messages.success(request, 'Cadastro aprovado com sucesso!')
     return redirect(url_painel)
@@ -672,11 +670,6 @@ def api_usuarios(request, tipo, obj_id=None):
                 item.save()
                 if data.get('atualizar_veiculos') == '1':
                     veiculos_selecionados = Veiculo.objects.filter(pk__in=data.getlist('veiculos'))
-                    for veiculo in veiculos_selecionados:
-                        atuais = veiculo.alunos_autorizados.filter(deleted_at__isnull=True).exclude(pk=item.pk if item.pk else None).count()
-                        if atuais >= veiculo.capacidade:
-                            transaction.set_rollback(True)
-                            return JsonResponse({'erro': f'O veículo {veiculo.modelo} ({veiculo.placa}) já atingiu a capacidade.'}, status=400)
                     item.veiculos.set(veiculos_selecionados)
             else:
                 email = data.get('email', '').strip().lower()

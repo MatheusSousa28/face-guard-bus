@@ -14,18 +14,6 @@
         </div>
     </header>
 
-    {% if alunos_aprovados_aviso %}
-    <section class="space-y-3" aria-label="Avisos de aprovação">
-        {% for aluno in alunos_aprovados_aviso %}
-        <article class="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 shadow-sm sm:p-5" role="status">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-xl shadow-sm" aria-hidden="true">🌿</span>
-            <div class="min-w-0 flex-1"><p class="font-bold">Boa notícia: {{ aluno.nome }} foi aprovado(a)!</p><p class="mt-1 text-sm text-emerald-900">A instituição concluiu a análise do cadastro. Você pode acompanhar os próximos registros de transporte por aqui.</p></div>
-            <form method="post" action="{% url 'marcar_aviso_aprovacao_aluno_visto' aluno.id %}">{% csrf_token %}<button type="submit" aria-label="Dispensar aviso de aprovação de {{ aluno.nome }}" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xl leading-none text-emerald-700 transition hover:bg-white hover:text-emerald-950">&times;</button></form>
-        </article>
-        {% endfor %}
-    </section>
-    {% endif %}
-
     {% if avisos_rotas_interrompidas %}
     <section class="space-y-3" aria-label="Avisos de transporte">
         {% for aviso in avisos_rotas_interrompidas %}
@@ -33,6 +21,17 @@
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-xl shadow-sm" aria-hidden="true">🛡️</span>
             <div class="min-w-0 flex-1"><p class="font-bold">A instituição está verificando uma rota</p><p class="mt-1 text-sm text-sky-900">A rota de {{ aviso.alunos|join:', ' }} precisa de revisão. A equipe da instituição já foi avisada e está cuidando da situação; você não precisa tomar nenhuma providência agora.</p></div>
             <a href="{% url 'mapa_unificado' %}?contexto=ativas&amp;rota={{ aviso.rota.id }}" class="inline-flex shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-bold text-sky-900 transition hover:bg-sky-100">Acompanhar com tranquilidade</a>
+        </article>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if alunos_aprovados_aviso %}
+    <section class="space-y-3" aria-label="Avisos de aprovação">
+        {% for aluno in alunos_aprovados_aviso %}
+        <article class="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 shadow-sm sm:p-5" role="status">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-xl shadow-sm" aria-hidden="true">🌿</span>
+            <div class="min-w-0 flex-1"><p class="font-bold">Boa notícia: {{ aluno.nome }} foi aprovado(a)!</p><p class="mt-1 text-sm text-emerald-900">A instituição concluiu a análise do cadastro. Você pode acompanhar os próximos registros de transporte por aqui.</p></div>
         </article>
         {% endfor %}
     </section>
