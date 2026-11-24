@@ -28,7 +28,15 @@
                                         <div class="min-w-0"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Motorista</p><p class="truncate text-sm font-semibold text-slate-900">{{ item.rota.motorista.usuario.first_name|default:'Não informado' }}</p></div>
                                         <div class="flex gap-2">
                                             <div class="rounded-lg border-b-2 border-emerald-500 bg-white px-3 py-2 text-center shadow-sm"><p class="text-lg font-bold text-slate-900">{{ item.alunos_abordo }}</p><p class="text-[10px] text-slate-500">A bordo</p></div>
-                                            <div class="rounded-lg border-b-2 border-blue-500 bg-white px-3 py-2 text-center shadow-sm"><p class="text-lg font-bold text-slate-900">{% if item.ultima_localizacao %}{{ item.ultima_localizacao.timestamp|date:'H:i' }}{% else %}—{% endif %}</p><p class="text-[10px] text-slate-500">Último GPS</p></div>
+                                            <div class="min-w-32 rounded-lg border-b-2 border-blue-500 bg-white px-3 py-2 text-center shadow-sm">
+                                                {% if item.ultima_localizacao %}
+                                                    <p class="text-sm font-bold text-slate-900">Sem atualização há {{ item.ultima_localizacao.timestamp|timesince }}</p>
+                                                    <p class="mt-1 text-[10px] text-slate-500">Último GPS: {{ item.ultima_localizacao.timestamp|date:'d/m/Y · H:i' }}</p>
+                                                {% else %}
+                                                    <p class="text-sm font-bold text-slate-900">Sem GPS recebido</p>
+                                                    <p class="mt-1 text-[10px] text-slate-500">Nenhuma posição registrada</p>
+                                                {% endif %}
+                                            </div>
                                         </div>
                                     </div>
                                     {% if item.rota.ativa %}

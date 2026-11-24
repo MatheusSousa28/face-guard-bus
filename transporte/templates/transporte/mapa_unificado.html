@@ -14,6 +14,8 @@
     .fleet-bus-pin { width:42px; height:42px; border:3px solid white; border-radius:50% 50% 50% 0; transform:rotate(-45deg); box-shadow:0 3px 12px #0f172a55; display:grid; place-items:center; }
     .fleet-bus-glyph { width:22px; height:22px; display:block; transform:rotate(45deg); background:#fff; -webkit-mask:url("{% static 'img/icone_onibus.png' %}") center/contain no-repeat; mask:url("{% static 'img/icone_onibus.png' %}") center/contain no-repeat; }
     .fleet-bus-cluster { display:grid; width:46px; height:46px; place-items:center; border:3px solid #fff; border-radius:50%; background:#1d4ed8; color:#fff; font-size:14px; font-weight:800; box-shadow:0 3px 12px #0f172a66; }
+    #filtro-situacao option { background:#fff; color:#334155; }
+    #filtro-situacao option:checked { background:#475569 linear-gradient(0deg,#475569 0%,#475569 100%); color:#fff; }
     @media (prefers-reduced-motion:reduce) { .fleet-progress::after { animation-duration:2.5s; } }
 </style>
 <main class="mx-auto max-w-[1600px] px-4 py-6">
@@ -41,13 +43,30 @@
                         <label class="text-xs font-semibold text-gray-600">Até<input id="data-fim" type="date" class="mt-1 w-full rounded border p-2 text-sm"></label>
                     </div>
                 </div>
-                <label class="sr-only" for="filtro-situacao">Situação</label>
-                <select id="filtro-situacao" class="mb-3 w-full rounded-lg border border-gray-300 bg-white p-2.5">
-                    <option value="">Todas as situações</option>
-                    <option value="andamento">Em andamento</option>
-                    <option value="sem_sinal">Sem sinal</option>
-                    <option value="interrompida">Interrompida</option>
-                </select>
+                <div class="mb-3">
+                    <div class="mb-1 flex items-center justify-between">
+                        <label class="text-sm font-semibold text-gray-700" for="filtro-situacao">Situação</label>
+                        <details class="group relative">
+                            <summary class="flex h-6 w-6 cursor-pointer list-none items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-slate-500" aria-label="Ajuda sobre as situações das rotas">?</summary>
+                            <div class="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-4 text-xs leading-relaxed text-slate-700 shadow-xl">
+                                <p class="mb-2 font-bold text-slate-900">Como as situações são definidas</p>
+                                <p><strong>Em andamento:</strong> rota ativa que ainda não foi interrompida. Pode estar com GPS recente ou temporariamente sem sinal.</p>
+                                <p class="mt-2"><strong>Sem sinal:</strong> rota ativa sem uma posição GPS nos últimos 90 segundos.</p>
+                                <p class="mt-2"><strong>Interrompida:</strong> sem posição GPS por 15 minutos; se nunca recebeu GPS, a contagem começa no início da rota.</p>
+                                <p class="mt-2"><strong>Concluída:</strong> rota encerrada normalmente, sem interrupção por falta de GPS.</p>
+                            </div>
+                        </details>
+                    </div>
+                    <div class="relative">
+                        <select id="filtro-situacao" class="w-full appearance-none rounded-xl border border-slate-300 bg-white p-2.5 pr-9 text-sm text-slate-700 shadow-[0_4px_12px_rgba(15,23,42,0.12)] outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200">
+                            <option value="">Todas as situações</option>
+                            <option value="andamento">Em andamento</option>
+                            <option value="sem_sinal">Sem sinal</option>
+                            <option value="interrompida">Interrompida</option>
+                        </select>
+                        <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.22 7.22a.75.75 0 0 1 1.06 0L10 10.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 8.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
+                    </div>
+                </div>
                 <p id="estado-lista" class="mb-2 text-sm text-gray-500" aria-live="polite"></p>
                 <div id="lista-rotas" class="max-h-[52vh] space-y-2 overflow-y-auto pr-1"></div>
                 <div id="paginacao-historico" class="mt-4 hidden border-t pt-3">
@@ -244,9 +263,9 @@ document.addEventListener('DOMContentLoaded', () => {
             ['⬇️','Desembarques',payload.resumo?.desembarques ?? '—','#0ea5e9']
         ];
         const historical=tab==='historico';
-        $('indicadores').className=historical?'mb-5 flex flex-wrap justify-center gap-3':'mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6';
+        $('indicadores').className=historical?'mb-5 grid grid-cols-5 gap-3 xl:mx-auto xl:w-5/6':'mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6';
         $('indicadores').innerHTML = stats.map(([icon,name,value,color]) =>
-            `<article class="group w-full ${historical?'max-w-[240px] ':''}rounded-2xl border border-gray-200 border-b-4 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style="border-bottom-color:${color}"><div class="flex items-center justify-between gap-2"><p class="text-xs font-semibold text-gray-600">${name}</p><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-lg" aria-hidden="true">${icon}</span></div><p class="mt-2 text-2xl font-bold text-gray-900">${value}</p></article>`
+            `<article class="group w-full rounded-2xl border border-gray-200 border-b-4 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style="border-bottom-color:${color}"><div class="flex items-center justify-between gap-2"><p class="text-xs font-semibold text-gray-600">${name}</p><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-lg" aria-hidden="true">${icon}</span></div><p class="mt-2 text-2xl font-bold text-gray-900">${value}</p></article>`
         ).join('');
     }
     function renderCards(cards, append=false) {
