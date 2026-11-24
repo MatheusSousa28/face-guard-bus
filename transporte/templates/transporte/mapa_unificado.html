@@ -14,8 +14,6 @@
     .fleet-bus-pin { width:42px; height:42px; border:3px solid white; border-radius:50% 50% 50% 0; transform:rotate(-45deg); box-shadow:0 3px 12px #0f172a55; display:grid; place-items:center; }
     .fleet-bus-glyph { width:22px; height:22px; display:block; transform:rotate(45deg); background:#fff; -webkit-mask:url("{% static 'img/icone_onibus.png' %}") center/contain no-repeat; mask:url("{% static 'img/icone_onibus.png' %}") center/contain no-repeat; }
     .fleet-bus-cluster { display:grid; width:46px; height:46px; place-items:center; border:3px solid #fff; border-radius:50%; background:#1d4ed8; color:#fff; font-size:14px; font-weight:800; box-shadow:0 3px 12px #0f172a66; }
-    #filtro-situacao option { background:#fff; color:#334155; }
-    #filtro-situacao option:checked { background:#475569 linear-gradient(0deg,#475569 0%,#475569 100%); color:#fff; }
     @media (prefers-reduced-motion:reduce) { .fleet-progress::after { animation-duration:2.5s; } }
 </style>
 <main class="mx-auto max-w-[1600px] px-4 py-6">
@@ -45,7 +43,7 @@
                 </div>
                 <div class="mb-3">
                     <div class="mb-1 flex items-center justify-between">
-                        <label class="text-sm font-semibold text-gray-700" for="filtro-situacao">Situação</label>
+                        <span id="situacao-label" class="text-sm font-semibold text-gray-700">Situação</span>
                         <details class="group relative">
                             <summary class="flex h-6 w-6 cursor-pointer list-none items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-slate-500" aria-label="Ajuda sobre as situações das rotas">?</summary>
                             <div class="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-4 text-xs leading-relaxed text-slate-700 shadow-xl">
@@ -57,14 +55,18 @@
                             </div>
                         </details>
                     </div>
-                    <div class="relative">
-                        <select id="filtro-situacao" class="w-full appearance-none rounded-xl border border-slate-300 bg-white p-2.5 pr-9 text-sm text-slate-700 shadow-[0_4px_12px_rgba(15,23,42,0.12)] outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200">
+                    <div id="filtro-situacao-componente" class="relative z-20">
+                        <select id="filtro-situacao" class="hidden" aria-hidden="true" tabindex="-1">
                             <option value="">Todas as situações</option>
                             <option value="andamento">Em andamento</option>
                             <option value="sem_sinal">Sem sinal</option>
                             <option value="interrompida">Interrompida</option>
                         </select>
-                        <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.22 7.22a.75.75 0 0 1 1.06 0L10 10.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 8.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
+                        <button id="filtro-situacao-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="situacao-label filtro-situacao-valor" class="flex w-full items-center justify-between rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-left text-sm text-slate-700 shadow-[0_4px_12px_rgba(15,23,42,0.12)] outline-none transition focus-visible:ring-2 focus-visible:ring-slate-300">
+                            <span id="filtro-situacao-valor">Todas as situações</span>
+                            <svg id="filtro-situacao-seta" class="ml-3 h-4 w-4 shrink-0 text-slate-500 transition-transform" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.22 7.22a.75.75 0 0 1 1.06 0L10 10.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 8.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
+                        </button>
+                        <div id="filtro-situacao-menu" class="absolute left-0 right-0 top-full hidden overflow-hidden rounded-b-xl border border-t-0 border-slate-300 bg-white shadow-[0_10px_18px_rgba(15,23,42,0.16)]" role="listbox" aria-labelledby="situacao-label"></div>
                     </div>
                 </div>
                 <p id="estado-lista" class="mb-2 text-sm text-gray-500" aria-live="polite"></p>
@@ -131,6 +133,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }).addTo(mapa);
     const $ = id => document.getElementById(id);
     const safe = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    function setSituationMenuOpen(open) {
+        const trigger=$('filtro-situacao-trigger'), menu=$('filtro-situacao-menu');
+        trigger.setAttribute('aria-expanded',String(open));
+        trigger.classList.toggle('rounded-b-none',open);
+        trigger.classList.toggle('border-b-0',open);
+        trigger.classList.toggle('shadow-none',open);
+        $('filtro-situacao-seta').classList.toggle('rotate-180',open);
+        menu.classList.toggle('hidden',!open);
+    }
+    function renderSituationOptions() {
+        const select=$('filtro-situacao');
+        const selected=select.options[select.selectedIndex];
+        $('filtro-situacao-valor').textContent=selected?.textContent||'Todas as situações';
+        $('filtro-situacao-menu').innerHTML=[...select.options].map((option,index)=>{
+            const isSelected=option.value===select.value;
+            return `<button type="button" role="option" aria-selected="${isSelected}" data-situation-value="${safe(option.value)}" class="block w-full px-3 py-2.5 text-left text-sm transition ${isSelected?'bg-slate-600 font-semibold text-white':'bg-white text-slate-800 hover:bg-slate-100 focus:bg-slate-100'}">${safe(option.textContent)}</button>`;
+        }).join('');
+    }
+    $('filtro-situacao-trigger').addEventListener('click',()=>{
+        setSituationMenuOpen($('filtro-situacao-trigger').getAttribute('aria-expanded')!=='true');
+    });
+    $('filtro-situacao-menu').addEventListener('click',event=>{
+        const option=event.target.closest('[data-situation-value]');
+        if(!option)return;
+        $('filtro-situacao').value=option.dataset.situationValue;
+        renderSituationOptions();
+        setSituationMenuOpen(false);
+        $('filtro-situacao').dispatchEvent(new Event('change',{bubbles:true}));
+    });
+    $('filtro-situacao-componente').addEventListener('keydown',event=>{
+        if(event.key==='Escape'){
+            setSituationMenuOpen(false);
+            $('filtro-situacao-trigger').focus();
+        } else if(event.key==='ArrowDown' && $('filtro-situacao-trigger').getAttribute('aria-expanded')==='true'){
+            event.preventDefault();
+            $('filtro-situacao-menu').querySelector('[role="option"]')?.focus();
+        }
+    });
+    $('filtro-situacao-menu').addEventListener('keydown',event=>{
+        if(!['ArrowDown','ArrowUp'].includes(event.key))return;
+        event.preventDefault();
+        const options=[...$('filtro-situacao-menu').querySelectorAll('[role="option"]')];
+        const current=options.indexOf(document.activeElement);
+        const next=(current+(event.key==='ArrowDown'?1:-1)+options.length)%options.length;
+        options[next]?.focus();
+    });
+    document.addEventListener('click',event=>{
+        if(!$('filtro-situacao-componente').contains(event.target))setSituationMenuOpen(false);
+    });
+    renderSituationOptions();
     const colors = ['#2563eb','#7c3aed','#059669','#db2777','#d97706','#0891b2','#4f46e5','#65a30d'];
     const initialQuery=new URLSearchParams(location.search);
     const initialTab=initialQuery.get('contexto')==='historico'?'historico':'ativas';
@@ -574,6 +626,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ? '<option value="">Todas as situações</option><option value="andamento">Em andamento</option><option value="sem_sinal">Sem sinal</option><option value="interrompida">Interrompida</option>'
             : '<option value="">Todas as situações</option><option value="concluida">Concluída</option><option value="interrompida">Interrompida</option>';
         $('filtro-situacao').value=statusByTab[tab];
+        renderSituationOptions();
+        setSituationMenuOpen(false);
         $('data-inicio').value=datesByTab[tab].inicio;
         $('data-fim').value=datesByTab[tab].fim;
         layerRoutes.clearLayers();
