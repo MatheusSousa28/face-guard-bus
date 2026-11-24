@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 
 from alunos.models import Aluno
@@ -253,6 +254,7 @@ class FluxosCadastroTests(TestCase):
         self.assertRedirects(response, f"{reverse('painel_aprovacoes')}?categoria=aluno")
         aluno.refresh_from_db()
         self.assertTrue(aluno.is_aprovado)
+        self.assertFalse(aluno.responsavel_aprovacao_notificada)
         self.assertEqual(aluno.nome, 'Nome Corrigido')
         self.assertEqual(aluno.idade, 9)
 
@@ -313,6 +315,124 @@ class FluxosCadastroTests(TestCase):
         self.assertContains(response, 'data-confirm-title="Aprovar cadastro?"')
         self.assertContains(response, 'data-confirm-title="Reprovar cadastro?"')
         self.assertNotContains(response, 'onsubmit="return confirm(')
+
+    def test_instituicao_recebe_notificacoes_de_alunos_e_rotas_no_sino(self):
+        Aluno.objects.create(
+            nome='Aluno Um', idade=8, responsavel=self.responsavel,
+            foto_perfil='fotos/aluno-um.png',
+        )
+        Aluno.objects.create(
+            nome='Aluno Dois', idade=9, responsavel=self.responsavel,
+            foto_perfil='fotos/aluno-dois.png',
+        )
+        motorista_usuario = Usuario.objects.create_user(
+            username='motorista.aviso@test.local', email='motorista.aviso@test.local',
+            password='SenhaForte123!', first_name='Motorista', last_name='Aviso',
+            is_aprovado=True,
+        )
+        motorista = Motorista.objects.create(usuario=motorista_usuario, cpf='12345678919')
+        veiculo = Veiculo.objects.create(modelo='Micro-ônibus', capacidade=20, placa='AVS-1234', cor='Azul')
+        rota = Rota.objects.create(
+            veiculo=veiculo, motorista=motorista, inicio=timezone.now(),
+            ativa=True, interrompida=True, interrompida_em=timezone.now(),
+        )
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['notificacoes_instituicao_total'], 3)
+        self.assertContains(response, 'institution-notification-bell')
+        self.assertContains(response, '2 alunos aguardando aprovação')
+        self.assertContains(response, '1 rota aguardando revisão')
+        self.assertContains(response, 'data-route-review-countdown')
+        self.client.post(reverse('resolver_rota_interrompida', args=(rota.pk,)), {
+            'observacao': 'Situação verificada com a instituição.',
+            'confirmacao_seguranca': 'on',
+        })
+        rota.refresh_from_db()
+        self.assertFalse(rota.ativa)
+        self.assertEqual(
+            self.client.get(reverse('home')).context['notificacoes_instituicao_total'],
+            2,
+        )
+
+    def test_notificacao_de_aluno_so_e_marcada_vista_apos_clique_autorizado(self):
+        aluno = Aluno.objects.create(
+            nome='Aluno Aviso', idade=8, responsavel=self.responsavel,
+            foto_perfil='fotos/aluno-aviso.png',
+        )
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.post(reverse('marcar_notificacao_aluno_vista', args=(aluno.pk,)))
+
+        self.assertEqual(response.status_code, 200)
+        aluno.refresh_from_db()
+        self.assertTrue(aluno.instituicao_notificacao_vista)
+
+    def test_notificacao_abre_o_cadastro_selecionado_no_topo_da_lista(self):
+        Aluno.objects.create(
+            nome='Primeiro cadastro', idade=8, responsavel=self.responsavel,
+            foto_perfil='fotos/primeiro-cadastro.png',
+        )
+        aluno_destino = Aluno.objects.create(
+            nome='Cadastro escolhido', idade=9, responsavel=self.responsavel,
+            foto_perfil='fotos/cadastro-escolhido.png',
+        )
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.get(
+            reverse('painel_aprovacoes'),
+            {'categoria': 'aluno', 'foco': aluno_destino.pk},
+        )
+
+        self.assertEqual(response.context['alunos_pendentes'][0].pk, aluno_destino.pk)
+        self.assertContains(response, f'id="pending-aluno-{aluno_destino.pk}"')
+
+    def test_responsavel_recebe_aviso_calmo_apos_aprovacao_do_aluno(self):
+        aluno = Aluno.objects.create(
+            nome='Aluno Aprovado', idade=8, responsavel=self.responsavel,
+            foto_perfil='fotos/aluno-aprovado.png',
+            is_aprovado=True, responsavel_aprovacao_notificada=False,
+        )
+        self.client.force_login(self.responsavel_usuario)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertContains(response, 'Boa notícia: Aluno Aprovado foi aprovado(a)!')
+        self.assertIn(aluno, response.context['alunos_aprovados_aviso'])
+        response = self.client.post(
+            reverse('marcar_aviso_aprovacao_aluno_visto', args=(aluno.pk,)),
+        )
+        self.assertRedirects(response, reverse('home'))
+        aluno.refresh_from_db()
+        self.assertTrue(aluno.responsavel_aprovacao_notificada)
+
+    def test_responsavel_recebe_aviso_tranquilizador_de_rota_pendente(self):
+        aluno = Aluno.objects.create(
+            nome='Aluno a Bordo', idade=8, responsavel=self.responsavel,
+            foto_perfil='fotos/aluno-rota-pendente.png', is_aprovado=True,
+        )
+        motorista_usuario = Usuario.objects.create_user(
+            username='motorista.rota@test.local', email='motorista.rota@test.local',
+            password='SenhaForte123!', first_name='Motorista', last_name='Rota',
+            is_aprovado=True,
+        )
+        motorista = Motorista.objects.create(usuario=motorista_usuario, cpf='12345678920')
+        veiculo = Veiculo.objects.create(modelo='Van', capacidade=12, placa='ROT-1234', cor='Branca')
+        veiculo.alunos_autorizados.add(aluno)
+        rota = Rota.objects.create(
+            veiculo=veiculo, motorista=motorista, inicio=timezone.now(),
+            ativa=True, interrompida=True, interrompida_em=timezone.now(),
+        )
+        Evento.objects.create(rota=rota, aluno=aluno, tipo='embarque', autorizado=True)
+        self.client.force_login(self.responsavel_usuario)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertContains(response, 'A instituição está verificando uma rota')
+        self.assertContains(response, 'A equipe da instituição já foi avisada')
+        self.assertEqual(len(response.context['avisos_rotas_interrompidas']), 1)
 
     def test_cadastro_de_aluno_exige_consentimento(self):
         self.client.force_login(self.responsavel_usuario)

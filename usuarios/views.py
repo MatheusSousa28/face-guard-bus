@@ -344,7 +344,10 @@ def painel_instituicao_aprovacoes(request):
 
     # Busca todo mundo que o is_aprovado é False
     responsaveis = Responsavel.objects.filter(usuario__is_aprovado=False, deleted_at__isnull=True)
-    alunos = Aluno.objects.filter(is_aprovado=False, deleted_at__isnull=True)
+    alunos = list(Aluno.objects.filter(is_aprovado=False, deleted_at__isnull=True))
+    foco = request.GET.get('foco', '')
+    if foco.isdigit():
+        alunos.sort(key=lambda aluno: (aluno.pk != int(foco), aluno.pk))
 
     contexto = {
         'responsaveis_pendentes': responsaveis,
@@ -352,6 +355,35 @@ def painel_instituicao_aprovacoes(request):
         'veiculos_disponiveis': Veiculo.objects.order_by('modelo', 'placa'),
     }
     return render(request, 'usuarios/painel_aprovacoes.html', contexto)
+
+
+@login_required(login_url='login')
+def marcar_notificacao_aluno_vista(request, aluno_id):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    if not (hasattr(request.user, 'instituicao') or request.user.is_superuser):
+        return JsonResponse({'erro': 'Acesso negado.'}, status=403)
+    aluno = get_object_or_404(
+        Aluno, pk=aluno_id, is_aprovado=False, deleted_at__isnull=True,
+    )
+    Aluno.objects.filter(pk=aluno.pk).update(instituicao_notificacao_vista=True)
+    return JsonResponse({'ok': True})
+
+
+@login_required(login_url='login')
+def marcar_aviso_aprovacao_aluno_visto(request, aluno_id):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    if not hasattr(request.user, 'responsavel'):
+        return redirect('home')
+    Aluno.objects.filter(
+        pk=aluno_id,
+        responsavel=request.user.responsavel,
+        is_aprovado=True,
+        deleted_at__isnull=True,
+    ).update(responsavel_aprovacao_notificada=True)
+    return redirect('home')
+
 
 @login_required(login_url='login')
 def aprovar_cadastro(request, tipo, obj_id):
@@ -391,7 +423,10 @@ def aprovar_cadastro(request, tipo, obj_id):
                 messages.error(request, f'O veículo {veiculo_cheio.modelo} ({veiculo_cheio.placa}) está sem vagas. O cadastro não foi aprovado.')
                 return redirect(url_painel)
             obj.nome, obj.idade, obj.is_aprovado = nome, idade, True
-            obj.save(update_fields=['nome', 'idade', 'is_aprovado'])
+            obj.responsavel_aprovacao_notificada = False
+            obj.save(update_fields=[
+                'nome', 'idade', 'is_aprovado', 'responsavel_aprovacao_notificada',
+            ])
         else:
             nome = request.POST.get('first_name', '').strip()
             sobrenome = request.POST.get('last_name', '').strip()
@@ -421,12 +456,14 @@ def aprovar_cadastro(request, tipo, obj_id):
         obj.usuario.save(update_fields=['is_aprovado'])
     else:
         obj.is_aprovado = True
-        obj.save(update_fields=['is_aprovado'])
+        obj.responsavel_aprovacao_notificada = False
+        obj.save(update_fields=['is_aprovado', 'responsavel_aprovacao_notificada'])
         veiculo_cheio = _vincular_aluno_veiculos(obj, request.POST.getlist('veiculos'))
         if veiculo_cheio:
             messages.error(request, f'O veículo {veiculo_cheio.modelo} ({veiculo_cheio.placa}) está sem vagas. O cadastro não foi aprovado.')
             obj.is_aprovado = False
-            obj.save(update_fields=['is_aprovado'])
+            obj.responsavel_aprovacao_notificada = True
+            obj.save(update_fields=['is_aprovado', 'responsavel_aprovacao_notificada'])
             return redirect(url_painel)
 
     messages.success(request, 'Cadastro aprovado com sucesso!')

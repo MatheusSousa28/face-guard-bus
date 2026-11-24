@@ -95,11 +95,36 @@ def contexto_dashboard_responsavel(responsavel):
             evento_ativo_data=Subquery(evento_em_rota_ativa.values('data_hora')[:1]),
         ).order_by('nome', 'pk')
     )
+    alunos_aprovados_aviso = [
+        aluno for aluno in alunos
+        if aluno.is_aprovado and not aluno.responsavel_aprovacao_notificada
+    ]
+    ultimo_evento_por_aluno = Evento.objects.filter(
+        aluno_id=OuterRef('aluno_id'), autorizado=True,
+    ).exclude(tipo='desconhecido').order_by('-data_hora', '-pk').values('pk')[:1]
+    eventos_rotas_interrompidas = Evento.objects.filter(
+        aluno__in=alunos,
+        autorizado=True,
+        tipo='embarque',
+        rota__ativa=True,
+        rota__interrompida=True,
+    ).annotate(ultimo_evento=Subquery(ultimo_evento_por_aluno)).filter(
+        pk=F('ultimo_evento'),
+    ).select_related('aluno', 'rota__veiculo').order_by('-data_hora', '-pk')
+    avisos_rotas_por_id = {}
+    for evento in eventos_rotas_interrompidas:
+        aviso = avisos_rotas_por_id.setdefault(evento.rota_id, {
+            'rota': evento.rota,
+            'alunos': [],
+        })
+        aviso['alunos'].append(evento.aluno.nome)
     return {
         'alunos': alunos,
         'total_alunos': len(alunos),
         'alunos_pendentes': sum(not aluno.is_aprovado for aluno in alunos),
         'alunos_a_bordo': sum(aluno.evento_ativo_tipo == 'embarque' for aluno in alunos),
+        'alunos_aprovados_aviso': alunos_aprovados_aviso,
+        'avisos_rotas_interrompidas': list(avisos_rotas_por_id.values()),
     }
 
 

@@ -33,7 +33,14 @@
             <a href="{% url 'home' %}" aria-label="FaceGuard Bus - início" class="inline-flex items-center">
                 <img src="{% static 'img/logo_branco.png' %}" alt="FaceGuard Bus" class="h-14 w-auto max-w-[160px] object-contain">
             </a>
-            <div class="relative">
+            <div class="flex items-center gap-2">
+                {% if exibir_sino_instituicao %}
+                    <button id="institution-notification-bell" type="button" aria-label="Notificações: {{ notificacoes_instituicao_total }}" class="relative z-[110] flex h-11 w-11 items-center justify-center rounded-full bg-amber-500 text-amber-950 shadow-md transition hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+                        <svg class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22a2.25 2.25 0 0 0 2.2-1.8H9.8A2.25 2.25 0 0 0 12 22Zm7-6.2-1.5-1.7V10a5.5 5.5 0 0 0-4.5-5.4V4a1 1 0 1 0-2 0v.6A5.5 5.5 0 0 0 6.5 10v4.1L5 15.8a1 1 0 0 0 .8 1.7h12.4a1 1 0 0 0 .8-1.7Z"/></svg>
+                        <span class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-blue-800 bg-rose-600 px-1 text-[10px] font-extrabold leading-none text-white">{{ notificacoes_instituicao_total }}</span>
+                    </button>
+                {% endif %}
+                <div class="relative">
                 {% if user.is_authenticated %}
                     <button id="profile-menu-button" type="button" aria-expanded="false" aria-controls="profile-menu" class="flex items-center gap-3 rounded-xl px-2 py-1.5 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/70">
                         {% if user.instituicao.foto_perfil %}
@@ -61,9 +68,82 @@
                         <form method="POST" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" role="menuitem" class="block w-full px-4 py-3 text-left text-sm font-medium text-red-700 hover:bg-red-50">Sair</button></form>
                     </div>
                 {% endif %}
+                </div>
             </div>
         </div>
     </nav>
+
+    {% if exibir_sino_instituicao %}
+        <form id="institution-notification-csrf" class="hidden">{% csrf_token %}</form>
+        <div id="institution-notification-overlay" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-950/30 p-4 backdrop-blur-md transition-opacity duration-300" role="dialog" aria-modal="true" aria-labelledby="institution-notification-title">
+            <div class="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/70 bg-slate-50 p-5 shadow-2xl sm:p-7">
+                <div id="institution-notification-summary-view" class="space-y-4">
+                    <div class="text-center">
+                        <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-2xl" aria-hidden="true">🔔</span>
+                        <h2 id="institution-notification-title" class="mt-3 font-display text-2xl font-bold text-slate-900">Atenção da instituição</h2>
+                        <p class="mt-1 text-sm text-slate-600">Há itens que precisam da sua atenção. Você pode voltar a eles pelo sino.</p>
+                    </div>
+                    {% if notificacoes_instituicao_alunos %}
+                    <article data-notification-summary data-notification-ids="{% for aluno in notificacoes_instituicao_alunos %}cadastro-{{ aluno.id }} {% endfor %}" class="relative rounded-2xl border border-amber-200 bg-white p-5 pr-12 shadow-lg transition-[transform,opacity] duration-500 ease-[cubic-bezier(.2,.8,.2,1)]">
+                        <button type="button" data-dismiss-notification-card aria-label="Fechar aviso de cadastros" class="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-xl leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-800">&times;</button>
+                        <div class="flex items-start gap-4">
+                            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-2xl" aria-hidden="true">🧒</span>
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-wide text-amber-700">Cadastros para analisar</p>
+                                <h3 class="mt-1 text-lg font-bold text-slate-900">{{ notificacoes_instituicao_alunos|length }} aluno{% if notificacoes_instituicao_alunos|length != 1 %}s{% endif %} aguardando aprovação</h3>
+                                <p class="mt-1 text-sm text-slate-600">Confira os dados e conclua a análise quando puder.</p>
+                                <a href="{% url 'painel_aprovacoes' %}?categoria=aluno" class="mt-4 inline-flex rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-amber-700">Ver cadastros pendentes <span class="ml-2" aria-hidden="true">→</span></a>
+                            </div>
+                        </div>
+                    </article>
+                    {% endif %}
+                    {% if notificacoes_instituicao_rotas %}
+                    <article data-notification-summary data-notification-ids="{% for rota in notificacoes_instituicao_rotas %}rota-{{ rota.id }} {% endfor %}" class="relative rounded-2xl border border-rose-200 bg-white p-5 pr-12 shadow-lg transition-[transform,opacity] duration-500 ease-[cubic-bezier(.2,.8,.2,1)]">
+                        <button type="button" data-dismiss-notification-card aria-label="Fechar aviso de rotas" class="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-xl leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-800">&times;</button>
+                        <div class="flex items-start gap-4">
+                            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-2xl" aria-hidden="true">🚌</span>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-bold uppercase tracking-wide text-rose-700">Revisão prioritária</p>
+                                <h3 class="mt-1 text-lg font-bold text-slate-900">{{ notificacoes_instituicao_rotas|length }} rota{% if notificacoes_instituicao_rotas|length != 1 %}s{% endif %} aguardando revisão</h3>
+                                <p class="mt-1 text-sm text-slate-600">A verificação ajuda a confirmar que todos os alunos estão bem.</p>
+                                <a data-route-review-countdown href="{% url 'mapa_unificado' %}?contexto=ativas{% if notificacoes_instituicao_rotas|length == 1 %}&amp;rota={{ notificacoes_instituicao_rotas.0.id }}{% else %}&amp;situacao=interrompida{% endif %}" aria-disabled="true" tabindex="-1" class="mt-4 inline-flex cursor-not-allowed items-center gap-3 rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-bold text-white opacity-75 shadow-sm transition">
+                                    <span data-review-countdown-ring class="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-xs font-extrabold">
+                                        <svg class="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="2"/><circle data-review-countdown-progress cx="18" cy="18" r="15" fill="none" stroke="white" stroke-linecap="round" stroke-width="2.5" stroke-dasharray="94.25" stroke-dashoffset="0"/></svg>
+                                        <span data-review-countdown-number>3</span>
+                                    </span>
+                                    <span data-review-countdown-label>Aguarde para continuar</span>
+                                </a>
+                            </div>
+                        </div>
+                    </article>
+                    {% endif %}
+                </div>
+                <div id="institution-notification-list-view" class="hidden">
+                    <div class="mb-5 flex items-start justify-between gap-4">
+                        <div><p class="text-xs font-bold uppercase tracking-wide text-amber-700">Central de avisos</p><h2 id="institution-notification-list-title" class="mt-1 font-display text-2xl font-bold text-slate-900">Notificações</h2><p class="mt-1 text-sm text-slate-600">Cadastros vistos saem da contagem; rotas permanecem até a revisão.</p></div>
+                        <button type="button" data-close-notification-dialog aria-label="Fechar notificações" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-slate-400 transition hover:bg-slate-200 hover:text-slate-800">&times;</button>
+                    </div>
+                    <div class="space-y-3">
+                        {% for aluno in notificacoes_instituicao_alunos %}
+                        <a data-student-notification href="{% url 'painel_aprovacoes' %}?categoria=aluno&amp;foco={{ aluno.id }}" data-mark-seen-url="{% url 'marcar_notificacao_aluno_vista' aluno.id %}" class="flex items-center gap-3 rounded-2xl border border-amber-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100" aria-hidden="true">🧒</span>
+                            <span class="min-w-0 flex-1"><strong class="block truncate text-sm text-slate-900">{{ aluno.nome }}</strong><span class="mt-0.5 block text-xs text-slate-600">Cadastro de {{ aluno.responsavel.usuario.get_full_name|default:'responsável' }} aguardando análise</span></span><span class="text-amber-700" aria-hidden="true">→</span>
+                        </a>
+                        {% endfor %}
+                        {% for rota in notificacoes_instituicao_rotas %}
+                        <a href="{% url 'mapa_unificado' %}?contexto=ativas&amp;rota={{ rota.id }}" class="flex items-center gap-3 rounded-2xl border border-rose-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100" aria-hidden="true">🚌</span>
+                            <span class="min-w-0 flex-1"><strong class="block truncate text-sm text-slate-900">Rota #{{ rota.id }}{% if rota.veiculo %} · {{ rota.veiculo.placa }}{% endif %}</strong><span class="mt-0.5 block text-xs text-slate-600">Aguardando revisão de segurança</span></span><span class="text-rose-700" aria-hidden="true">→</span>
+                        </a>
+                        {% endfor %}
+                        {% if not notificacoes_instituicao_alunos and not notificacoes_instituicao_rotas %}
+                        <p class="rounded-2xl bg-white p-6 text-center text-sm text-slate-600 shadow-sm">Tudo em dia. Não há avisos pendentes.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
 
     {% if user.is_authenticated %}
         <div id="password-change-modal" class="fixed inset-0 z-[80] hidden items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="password-modal-title">
@@ -135,6 +215,109 @@
     {% endif %}
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    {% if exibir_sino_instituicao %}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const overlay=document.getElementById('institution-notification-overlay');
+            const bell=document.getElementById('institution-notification-bell');
+            const summary=document.getElementById('institution-notification-summary-view');
+            const list=document.getElementById('institution-notification-list-view');
+            const cards=[...document.querySelectorAll('[data-notification-summary]')];
+            const storageKey='faceguard-dismissed-institution-notifications';
+            let dismissed=new Set();
+            let hideTimer=null;
+            try { dismissed=new Set(JSON.parse(sessionStorage.getItem(storageKey)||'[]')); } catch (_) {}
+            const saveDismissed=()=>{try { sessionStorage.setItem(storageKey,JSON.stringify([...dismissed])); } catch (_) {}};
+            const cardIds=card=>(card.dataset.notificationIds||'').trim().split(/\s+/).filter(Boolean);
+            const showDialog=mode=>{
+                window.clearTimeout(hideTimer);
+                overlay.classList.remove('hidden');
+                overlay.classList.add('flex');
+                overlay.classList.remove('opacity-0','pointer-events-none');
+                summary.classList.toggle('hidden',mode!=='summary');
+                list.classList.toggle('hidden',mode!=='list');
+                overlay.setAttribute('aria-labelledby',mode==='summary'?'institution-notification-title':'institution-notification-list-title');
+                bell?.setAttribute('aria-expanded','true');
+            };
+            const hideDialog=()=>{
+                overlay.classList.add('opacity-0','pointer-events-none');
+                bell?.setAttribute('aria-expanded','false');
+                hideTimer=window.setTimeout(()=>{overlay.classList.add('hidden');overlay.classList.remove('flex');},300);
+            };
+            const remainingCards=()=>cards.filter(card=>!card.classList.contains('hidden'));
+            const dismissCard=card=>{
+                cardIds(card).forEach(id=>dismissed.add(id));
+                saveDismissed();
+                const cardRect=card.getBoundingClientRect(), bellRect=bell.getBoundingClientRect();
+                const x=bellRect.left+bellRect.width/2-(cardRect.left+cardRect.width/2);
+                const y=bellRect.top+bellRect.height/2-(cardRect.top+cardRect.height/2);
+                card.style.transition='transform 550ms cubic-bezier(.2,.8,.2,1), opacity 550ms ease';
+                card.style.transform=`translate(${x}px,${y}px) scale(.12)`;
+                card.style.opacity='0';
+                window.setTimeout(()=>{
+                    card.classList.add('hidden');
+                    card.style.transform='';
+                    card.style.opacity='';
+                    if(!remainingCards().length&&!summary.classList.contains('hidden'))hideDialog();
+                },560);
+            };
+            cards.forEach(card=>{
+                if(!cardIds(card).some(id=>!dismissed.has(id)))card.classList.add('hidden');
+                card.querySelector('[data-dismiss-notification-card]')?.addEventListener('click',()=>dismissCard(card));
+                card.querySelector('a')?.addEventListener('click',()=>{
+                    cardIds(card).forEach(id=>dismissed.add(id));
+                    saveDismissed();
+                });
+            });
+            if(remainingCards().length)showDialog('summary');
+            bell?.addEventListener('click',()=>showDialog('list'));
+            document.querySelectorAll('[data-close-notification-dialog]').forEach(button=>button.addEventListener('click',hideDialog));
+            overlay.addEventListener('click',event=>{if(event.target===overlay)hideDialog();});
+            document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!overlay.classList.contains('hidden'))hideDialog();});
+
+            const csrf=document.querySelector('#institution-notification-csrf [name="csrfmiddlewaretoken"]')?.value;
+            document.querySelectorAll('[data-student-notification]').forEach(link=>link.addEventListener('click',async event=>{
+                event.preventDefault();
+                link.setAttribute('aria-busy','true');
+                try {
+                    const response=await fetch(link.dataset.markSeenUrl,{method:'POST',headers:{'X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'}});
+                    if(!response.ok)throw new Error('Não foi possível atualizar a notificação.');
+                    window.location.assign(link.href);
+                } catch (error) {
+                    link.removeAttribute('aria-busy');
+                    window.alert(error.message);
+                }
+            }));
+
+            document.querySelectorAll('[data-route-countdown]').forEach(link=>{
+                const number=link.querySelector('[data-review-countdown-number]');
+                const label=link.querySelector('[data-review-countdown-label]');
+                const progress=link.querySelector('[data-review-countdown-progress]');
+                const circumference=94.25, started=performance.now(), duration=3000;
+                const timer=window.setInterval(()=>{
+                    const elapsed=Math.min(duration,performance.now()-started);
+                    const remaining=Math.ceil((duration-elapsed)/1000);
+                    number.textContent=String(Math.max(0,remaining));
+                    progress.style.strokeDashoffset=String(circumference*elapsed/duration);
+                    if(elapsed>=duration){
+                        window.clearInterval(timer);
+                        link.removeAttribute('aria-disabled');
+                        link.removeAttribute('tabindex');
+                        link.classList.remove('cursor-not-allowed','opacity-75');
+                        link.classList.add('hover:bg-rose-800');
+                        label.textContent='Revisar rotas pendentes';
+                    }
+                },50);
+                link.addEventListener('click',event=>{
+                    if(link.getAttribute('aria-disabled')==='true'){event.preventDefault();return;}
+                    cardIds(link.closest('[data-notification-summary]')).forEach(id=>dismissed.add(id));
+                    saveDismissed();
+                });
+            });
+        });
+    </script>
+    {% endif %}
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -249,7 +432,11 @@
             if (!button || button.disabled) return;
             button.disabled = true;
             button.setAttribute('aria-busy', 'true');
-            button.innerHTML = '<span class="inline-flex items-center gap-2"><span class="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true"></span>Enviando…</span>';
+            const isLogout = new URL(form.action, window.location.origin).pathname.replace(/\/+$/, '').endsWith('/logout');
+            if (isLogout) {
+                try { sessionStorage.removeItem('faceguard-dismissed-institution-notifications'); } catch (_) {}
+            }
+            button.innerHTML = `<span class="inline-flex items-center gap-2"><span class="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true"></span>${isLogout ? 'Saindo…' : 'Enviando…'}</span>`;
         });
     </script>
 

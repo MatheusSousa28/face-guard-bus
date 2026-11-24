@@ -12,6 +12,8 @@ class Aluno(models.Model):
     foto_perfil = models.ImageField(upload_to='perfil_alunos/', null=False, blank=False)
     #campo de aprovação de cadastro pela instituição
     is_aprovado = models.BooleanField(default=False)
+    instituicao_notificacao_vista = models.BooleanField(default=False, db_index=True)
+    responsavel_aprovacao_notificada = models.BooleanField(default=True)
     termo_consentimento = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
 

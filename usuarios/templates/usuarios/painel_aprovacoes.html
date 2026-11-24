@@ -26,7 +26,7 @@
         <div id="pending-empty" class="hidden p-8 text-center text-gray-600"></div>
         <div id="pending-list" class="divide-y divide-gray-100">
             {% for aluno in alunos_pendentes %}
-                <article data-pending-category="aluno" data-search="{{ aluno.id }} {{ aluno.nome }} {{ aluno.responsavel.usuario.get_full_name }} {{ aluno.responsavel.usuario.email }}" class="pending-card p-4 sm:px-6">
+                <article id="pending-aluno-{{ aluno.id }}" data-pending-category="aluno" data-search="{{ aluno.id }} {{ aluno.nome }} {{ aluno.responsavel.usuario.get_full_name }} {{ aluno.responsavel.usuario.email }}" class="pending-card p-4 transition-colors duration-700 sm:px-6">
                     <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                         <div class="flex min-w-0 items-center gap-3">
                             <span class="shrink-0 font-mono text-sm font-semibold text-gray-500">#{{ aluno.id }}</span>
@@ -178,6 +178,15 @@
         else if (!editModal.classList.contains('hidden')) closeModal(editModal);
     });
     (tabs.find(tab => tab.dataset.category === category) || tabs[0])?.click();
+    const foco = new URLSearchParams(window.location.search).get('foco');
+    if (foco && /^\d+$/.test(foco)) {
+        const card = document.getElementById(`pending-aluno-${foco}`);
+        if (card) {
+            card.scrollIntoView({behavior:'smooth',block:'start'});
+            card.classList.add('bg-amber-50','ring-2','ring-inset','ring-amber-400');
+            window.setTimeout(() => card.classList.remove('bg-amber-50','ring-2','ring-inset','ring-amber-400'), 3500);
+        }
+    }
 })();
 </script>
 {% endblock %}
