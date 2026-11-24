@@ -8,25 +8,25 @@
                     <div id="carrossel-interrupcoes" class="relative" role="group" aria-roledescription="carrossel" aria-label="Interrupções recentes">
                         {% for item in rotas_interrompidas %}
                         <article class="interrupcao-slide p-5 sm:p-6" role="group" aria-roledescription="slide" aria-label="Interrupção {{ forloop.counter }} de {{ forloop.revcounter }}" {% if not forloop.first %}hidden{% endif %}>
-                            <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]">
+                            <div class="grid gap-5 {% if item.rota.ativa %}lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]{% elif not item.rota.resolvida_por %}mx-auto w-full max-w-2xl{% endif %}">
                                 <div>
-                                    <div class="flex items-center gap-4">
+                                    <div class="flex items-center gap-4 {% if not item.rota.ativa and not item.rota.resolvida_por %}justify-center{% endif %}">
                                         {% if item.rota.veiculo.foto %}
                                             <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" data-cache-image="{{ item.rota.veiculo.foto.url }}" alt="Veículo {{ item.rota.veiculo.placa }}" class="h-16 w-16 rounded-2xl border border-slate-200 object-cover shadow-sm">
                                         {% else %}
                                             <span class="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-700"><img src="{% static 'img/icone_onibus.png' %}" alt="" class="h-9 w-9 object-contain brightness-0 invert"></span>
                                         {% endif %}
                                         <div class="min-w-0"><p class="text-xs font-bold uppercase tracking-wide text-blue-700">Rota #{{ item.rota.id }}</p><h5 class="truncate text-xl font-bold text-gray-900">{{ item.rota.veiculo.placa|default:'Veículo não informado' }}</h5><p class="truncate text-sm text-gray-500">{{ item.rota.veiculo.modelo|default:'Veículo indisponível' }}</p></div>
-                                        <span class="ml-auto hidden shrink-0 rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-800 sm:inline-flex">Interrompida</span>
+                                        <span class="{% if item.rota.ativa or item.rota.resolvida_por %}ml-auto {% endif %}hidden shrink-0 rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-800 sm:inline-flex">Interrompida</span>
                                     </div>
-                                    <div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3">
+                                    <div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3 {% if not item.rota.ativa and not item.rota.resolvida_por %}justify-center{% endif %}">
                                         {% if item.rota.motorista.foto_perfil %}
                                             <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" data-cache-image="{{ item.rota.motorista.foto_perfil.url }}" alt="Motorista {{ item.rota.motorista.usuario.first_name }}" class="h-11 w-11 rounded-full border-2 border-white object-cover shadow-sm">
                                         {% else %}
                                             <span class="flex h-11 w-11 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600">{{ item.rota.motorista.usuario.first_name|default:'?'|slice:':1' }}</span>
                                         {% endif %}
                                         <div class="min-w-0"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Motorista</p><p class="truncate text-sm font-semibold text-slate-900">{{ item.rota.motorista.usuario.first_name|default:'Não informado' }}</p></div>
-                                        <div class="ml-auto flex gap-2">
+                                        <div class="flex gap-2">
                                             <div class="rounded-lg border-b-2 border-emerald-500 bg-white px-3 py-2 text-center shadow-sm"><p class="text-lg font-bold text-slate-900">{{ item.alunos_abordo }}</p><p class="text-[10px] text-slate-500">A bordo</p></div>
                                             <div class="rounded-lg border-b-2 border-blue-500 bg-white px-3 py-2 text-center shadow-sm"><p class="text-lg font-bold text-slate-900">{% if item.ultima_localizacao %}{{ item.ultima_localizacao.timestamp|date:'H:i' }}{% else %}—{% endif %}</p><p class="text-[10px] text-slate-500">Último GPS</p></div>
                                         </div>
@@ -37,10 +37,10 @@
                                         <p class="mt-3 text-xs font-semibold text-gray-600">Revisada por {{ item.rota.resolvida_por.first_name|default:item.rota.resolvida_por.email }}{% if item.rota.observacao_resolucao %} · {{ item.rota.observacao_resolucao }}{% endif %}</p>
                                     {% else %}
                                         <div class="mt-3 rounded-xl border border-sky-100 bg-sky-50 p-3">
-                                            <p class="text-xs font-semibold text-sky-900">Encerrada automaticamente por falta de GPS; nenhum aluno estava a bordo.</p>
-                                            <form method="post" action="{% url 'confirmar_ciencia_rota_encerrada' item.rota.id %}" class="mt-3 flex flex-wrap items-center justify-between gap-3">
+                                            <p class="text-center text-xs font-semibold text-sky-900">Encerrada automaticamente por falta de GPS; nenhum aluno estava a bordo.</p>
+                                            <form method="post" action="{% url 'confirmar_ciencia_rota_encerrada' item.rota.id %}" class="mt-3 flex flex-wrap items-center justify-center gap-3">
                                                 {% csrf_token %}
-                                                <label class="flex items-start gap-2 text-xs text-sky-900"><input type="checkbox" name="confirmacao_ciencia" required class="mt-0.5">Estou ciente deste encerramento automático.</label>
+                                                <label class="flex items-start gap-2 text-xs text-sky-900"><input type="checkbox" name="confirmacao_ciencia" required class="mt-0.5 h-5 w-5 shrink-0 accent-blue-700">Estou ciente deste encerramento automático.</label>
                                                 <button type="submit" class="rounded-lg bg-blue-700 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-800">Confirmar ciência</button>
                                             </form>
                                         </div>
@@ -52,7 +52,7 @@
                                     <h6 class="mb-3 font-bold text-gray-900">Registrar verificação de segurança</h6>
                                     <label for="observacao-rota-{{ item.rota.id }}" class="sr-only">Registro da verificação</label>
                                     <textarea id="observacao-rota-{{ item.rota.id }}" name="observacao" required maxlength="1000" rows="3" class="w-full rounded-lg border border-gray-300 bg-white p-3 text-sm" placeholder="Descreva como a situação dos alunos foi verificada"></textarea>
-                                    <label class="mt-3 flex items-start gap-2 text-xs text-gray-700"><input type="checkbox" name="confirmacao_seguranca" required class="mt-0.5">Confirmo que a situação dos alunos foi verificada presencialmente.</label>
+                                    <label class="mt-3 flex items-start gap-2 text-xs text-gray-700"><input type="checkbox" name="confirmacao_seguranca" required class="mt-0.5 h-5 w-5 shrink-0 accent-rose-700">Confirmo que a situação dos alunos foi verificada presencialmente.</label>
                                     <button type="submit" class="mt-3 w-full rounded-lg bg-rose-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-rose-800">Confirmar revisão e encerrar</button>
                                 </form>
                                 {% endif %}

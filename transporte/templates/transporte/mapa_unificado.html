@@ -31,9 +31,8 @@
         <aside id="painel-lista-rotas" class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div class="flex items-center justify-between border-b p-4">
                 <h2 id="titulo-lista" class="font-bold text-gray-900">Rotas em andamento</h2>
-                <button id="alternar-painel" type="button" class="rounded-lg border px-3 py-1.5 text-sm font-semibold text-gray-700" aria-expanded="true">Recolher</button>
             </div>
-            <div id="conteudo-painel" class="p-4">
+            <div class="p-4">
                 <label class="mb-1 block text-sm font-semibold text-gray-700" for="pesquisa-rota">Pesquisar rota, ônibus ou motorista</label>
                 <input id="pesquisa-rota" type="search" class="mb-3 w-full rounded-lg border border-gray-300 p-2.5" placeholder="Código, placa ou nome">
                 <div id="filtros-historico" class="mb-3 hidden space-y-2">
@@ -118,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const initialTab=initialQuery.get('contexto')==='historico'?'historico':'ativas';
     const initialRoute=initialQuery.get('rota');
     const initialPage=Math.max(1,Number.parseInt(initialQuery.get('pagina')||'1',10)||1);
-    let tab = initialTab, selected = initialRoute, page = initialPage, pages = 1, renderedActivePage = null, refreshTimer, requestCounter = 0, collapsed = false, routeCards = [], mapRequestCounter = 0, pendingRouteLoad = null;
+    let tab = initialTab, selected = initialRoute, page = initialPage, pages = 1, renderedActivePage = null, refreshTimer, requestCounter = 0, routeCards = [], mapRequestCounter = 0, pendingRouteLoad = null;
     let mapFocusTimer=null, lastMapInteraction=0, lastActivePositions=[];
     const selectedByTab={ativas:initialTab==='ativas'?initialRoute:null,historico:initialTab==='historico'?initialRoute:null};
     const searchByTab={ativas:initialQuery.get('q')||'',historico:initialQuery.get('q')||''};
@@ -244,8 +243,10 @@ document.addEventListener('DOMContentLoaded', () => {
             ['⬆️','Embarques',payload.resumo?.embarques ?? '—','#10b981'],
             ['⬇️','Desembarques',payload.resumo?.desembarques ?? '—','#0ea5e9']
         ];
+        const historical=tab==='historico';
+        $('indicadores').className=historical?'mb-5 flex flex-wrap justify-center gap-3':'mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6';
         $('indicadores').innerHTML = stats.map(([icon,name,value,color]) =>
-            `<article class="group rounded-2xl border border-gray-200 border-b-4 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style="border-bottom-color:${color}"><div class="flex items-center justify-between gap-2"><p class="text-xs font-semibold text-gray-600">${name}</p><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-lg" aria-hidden="true">${icon}</span></div><p class="mt-2 text-2xl font-bold text-gray-900">${value}</p></article>`
+            `<article class="group w-full ${historical?'max-w-[240px] ':''}rounded-2xl border border-gray-200 border-b-4 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style="border-bottom-color:${color}"><div class="flex items-center justify-between gap-2"><p class="text-xs font-semibold text-gray-600">${name}</p><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-lg" aria-hidden="true">${icon}</span></div><p class="mt-2 text-2xl font-bold text-gray-900">${value}</p></article>`
         ).join('');
     }
     function renderCards(cards, append=false) {
@@ -573,7 +574,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if(event.target.closest('button,input,select,textarea,label,a,[data-rota]'))return;
         clearRouteSelection();
     });
-    $('alternar-painel').onclick=()=>{collapsed=!collapsed;$('conteudo-painel').classList.toggle('hidden',collapsed);$('alternar-painel').textContent=collapsed?'Expandir':'Recolher';$('alternar-painel').setAttribute('aria-expanded',String(!collapsed));requestAnimationFrame(()=>mapa.invalidateSize());};
     const reloadFiltered = () => {searchByTab[tab]=$('pesquisa-rota').value;statusByTab[tab]=$('filtro-situacao').value;datesByTab[tab]={inicio:$('data-inicio').value,fim:$('data-fim').value};page=1;selected=null;selectedByTab[tab]=null;syncRouteUrl();layerRoutes.clearLayers();$('detalhes-rota').classList.add('hidden');fetchData();};
     let searchTimer; $('pesquisa-rota').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(reloadFiltered,250);};
     $('filtro-situacao').onchange=reloadFiltered;
