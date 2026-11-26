@@ -76,7 +76,9 @@
         <form id="institution-notification-csrf" class="hidden">{% csrf_token %}</form>
         <div id="institution-notification-overlay" class="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-950/30 p-4 backdrop-blur-md transition-opacity duration-300" role="dialog" aria-modal="true" aria-labelledby="institution-notification-title">
             <div id="institution-notification-dialog" class="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/70 bg-slate-50 p-5 shadow-2xl sm:p-7">
-                <button type="button" data-close-notification-dialog aria-label="Fechar notificações" class="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white text-2xl leading-none text-slate-500 shadow-sm transition hover:bg-slate-200 hover:text-slate-900">&times;</button>
+                <button type="button" data-close-notification-dialog aria-label="Fechar notificações" disabled class="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-extrabold leading-none text-slate-700 shadow-sm transition hover:bg-slate-200 hover:text-slate-900 disabled:cursor-default">
+                    <span data-notification-countdown data-route-review-countdown>5</span><span data-notification-close-icon class="hidden text-2xl font-normal">&times;</span>
+                </button>
                 <div id="institution-notification-summary-view" class="flex flex-col gap-4">
                     <div class="order-1 text-center">
                         <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-2xl" aria-hidden="true">🔔</span>
@@ -105,10 +107,6 @@
                                 <h3 class="mt-1 text-lg font-bold text-slate-900">{{ notificacoes_instituicao_rotas|length }} rota{% if notificacoes_instituicao_rotas|length != 1 %}s{% endif %} aguardando revisão</h3>
                                 <p class="mt-1 text-sm text-slate-600">A verificação ajuda a confirmar que todos os alunos estão bem.</p>
                                 <button type="button" data-route-review-link data-route-url="{% url 'mapa_unificado' %}?contexto=ativas{% if notificacoes_instituicao_rotas|length == 1 %}&amp;rota={{ notificacoes_instituicao_rotas.0.id }}{% else %}&amp;situacao=interrompida{% endif %}" disabled class="mt-4 inline-flex cursor-not-allowed rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-bold text-white opacity-60 shadow-sm transition disabled:cursor-not-allowed">Ver rotas pendentes</button>
-                                <div data-route-review-countdown role="timer" aria-live="off" class="mt-3 flex items-center gap-2 text-sm font-medium text-slate-700">
-                                    <span class="flex h-8 w-8 items-center justify-center rounded-full border-2 border-black bg-white text-sm font-extrabold text-black" data-review-countdown-number>3</span>
-                                    <span data-review-countdown-label>Aguarde a contagem para abrir as rotas pendentes.</span>
-                                </div>
                             </div>
                         </div>
                     </article>
@@ -242,14 +240,22 @@
             const list=document.getElementById('institution-notification-list-view');
             const cards=[...document.querySelectorAll('[data-notification-summary]')];
             const dialog=document.getElementById('institution-notification-dialog');
+            const closeButton=document.querySelector('[data-close-notification-dialog]');
+            const closeCountdown=closeButton?.querySelector('[data-notification-countdown]');
+            const closeIcon=closeButton?.querySelector('[data-notification-close-icon]');
             const storageKey='faceguard-dismissed-institution-notifications';
             let dismissed=new Set();
             let hideTimer=null;
+            let countdownTimer=null;
             try { dismissed=new Set(JSON.parse(sessionStorage.getItem(storageKey)||'[]')); } catch (_) {}
             const saveDismissed=()=>{try { sessionStorage.setItem(storageKey,JSON.stringify([...dismissed])); } catch (_) {}};
             const cardIds=card=>(card.dataset.notificationIds||'').trim().split(/\s+/).filter(Boolean);
             const showDialog=mode=>{
                 window.clearTimeout(hideTimer);
+                window.clearInterval(countdownTimer);
+                dialog.style.transform='';
+                dialog.style.opacity='';
+                dialog.style.transition='';
                 overlay.classList.remove('hidden');
                 overlay.classList.add('flex');
                 overlay.classList.remove('opacity-0','pointer-events-none');
@@ -257,11 +263,45 @@
                 list.classList.toggle('hidden',mode!=='list');
                 overlay.setAttribute('aria-labelledby',mode==='summary'?'institution-notification-title':'institution-notification-list-title');
                 bell?.setAttribute('aria-expanded','true');
+                if(mode==='summary'){
+                    closeButton.disabled=true;
+                    closeCountdown?.classList.remove('hidden');
+                    closeIcon?.classList.add('hidden');
+                    let remaining=5;
+                    if(closeCountdown)closeCountdown.textContent=String(remaining);
+                    countdownTimer=window.setInterval(()=>{
+                        remaining--;
+                        if(remaining>0){
+                            if(closeCountdown)closeCountdown.textContent=String(remaining);
+                            return;
+                        }
+                        window.clearInterval(countdownTimer);
+                        closeCountdown?.classList.add('hidden');
+                        closeIcon?.classList.remove('hidden');
+                        closeButton.disabled=false;
+                        document.querySelectorAll('[data-route-review-link]').forEach(button=>{
+                            button.disabled=false;
+                            button.classList.remove('cursor-not-allowed','opacity-60');
+                            button.classList.add('hover:bg-rose-800');
+                        });
+                    },1000);
+                } else {
+                    closeButton.disabled=false;
+                    closeCountdown?.classList.add('hidden');
+                    closeIcon?.classList.remove('hidden');
+                }
             };
             const hideDialog=()=>{
+                window.clearInterval(countdownTimer);
                 overlay.classList.add('opacity-0','pointer-events-none');
                 bell?.setAttribute('aria-expanded','false');
-                hideTimer=window.setTimeout(()=>{overlay.classList.add('hidden');overlay.classList.remove('flex');},300);
+                hideTimer=window.setTimeout(()=>{
+                    overlay.classList.add('hidden');
+                    overlay.classList.remove('flex');
+                    dialog.style.transform='';
+                    dialog.style.opacity='';
+                    dialog.style.transition='';
+                },300);
             };
             const remainingCards=()=>cards.filter(card=>!card.classList.contains('hidden'));
             const dismissDialog=()=>{
@@ -273,12 +313,7 @@
                 dialog.style.transition='transform 550ms cubic-bezier(.2,.8,.2,1), opacity 550ms ease';
                 dialog.style.transform=`translate(${x}px,${y}px) scale(.12)`;
                 dialog.style.opacity='0';
-                window.setTimeout(()=>{
-                    dialog.style.transform='';
-                    dialog.style.opacity='';
-                    dialog.style.transition='';
-                    hideDialog();
-                },560);
+                window.setTimeout(hideDialog,560);
             };
             cards.forEach(card=>{
                 if(!cardIds(card).some(id=>!dismissed.has(id)))card.classList.add('hidden');
@@ -315,22 +350,7 @@
                 }
             }));
 
-            document.querySelectorAll('[data-route-review-countdown]').forEach(counter=>{
-                const number=counter.querySelector('[data-review-countdown-number]');
-                const label=counter.querySelector('[data-review-countdown-label]');
-                const button=counter.parentElement.querySelector('[data-route-review-link]');
-                let remaining=3;
-                const timer=window.setInterval(()=>{
-                    remaining=Math.max(0,remaining-1);
-                    number.textContent=String(remaining);
-                    if(remaining===0){
-                        window.clearInterval(timer);
-                        button.disabled=false;
-                        button.classList.remove('cursor-not-allowed','opacity-60');
-                        button.classList.add('hover:bg-rose-800');
-                        label.textContent='Você já pode continuar.';
-                    }
-                },1000);
+            document.querySelectorAll('[data-route-review-link]').forEach(button=>{
                 button.addEventListener('click',()=>{
                     if(button.disabled)return;
                     try { sessionStorage.setItem('faceguard-suppress-summary-once','1'); } catch (_) {}

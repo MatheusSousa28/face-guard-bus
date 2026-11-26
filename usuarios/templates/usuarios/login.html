@@ -98,7 +98,18 @@
         const loginButton = loginForm.querySelector('[type="submit"]');
         const loginInputs = [...loginForm.querySelectorAll('input[required]')];
         const updateLoginButton = () => { loginButton.disabled = !loginInputs.every(input => input.value.trim() && input.validity.valid); };
-        loginInputs.forEach(input => input.addEventListener('input', updateLoginButton)); updateLoginButton();
+        loginInputs.forEach(input => {
+            ['input', 'change', 'keyup', 'focus'].forEach(type => input.addEventListener(type, updateLoginButton));
+        });
+        loginForm.addEventListener('input', updateLoginButton);
+        loginForm.addEventListener('change', updateLoginButton);
+        window.addEventListener('pageshow', updateLoginButton);
+        window.addEventListener('focus', updateLoginButton);
+        document.addEventListener('visibilitychange', updateLoginButton);
+        updateLoginButton();
+        requestAnimationFrame(updateLoginButton);
+        window.setTimeout(updateLoginButton, 100);
+        window.setTimeout(updateLoginButton, 500);
         loginForm.addEventListener('submit', event => {
             if (!loginForm.checkValidity()) { event.preventDefault(); return; }
             loginButton.disabled = true;

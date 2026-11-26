@@ -239,6 +239,36 @@ class TransporteFluxosTests(TestCase):
         self.assertEqual({p['rota_id'] for p in payload['posicoes_ativas']}, {rota_1.id, rota_2.id})
         self.assertEqual(len(payload['rotas']), 2)
 
+    def test_rotas_ativas_sao_paginadas_no_servidor(self):
+        for _ in range(6):
+            self.criar_rota()
+        self.client.force_login(self.instituicao_usuario)
+
+        payload = self.client.get(
+            reverse('api_mapa_unificado'),
+            {'contexto': 'ativas', 'pagina': 2},
+        ).json()
+
+        self.assertEqual(payload['total'], 6)
+        self.assertEqual(payload['pagina'], 2)
+        self.assertEqual(payload['paginas'], 2)
+        self.assertEqual(len(payload['rotas']), 1)
+
+    def test_busca_dos_filtros_de_monitoramento_respeita_o_perfil(self):
+        self.client.force_login(self.responsavel_usuario)
+
+        alunos = self.client.get(
+            reverse('api_filtros_monitoramento'),
+            {'tipo': 'aluno', 'q': 'Aluno'},
+        ).json()['results']
+        motoristas = self.client.get(
+            reverse('api_filtros_monitoramento'),
+            {'tipo': 'motorista', 'q': 'Motorista'},
+        )
+
+        self.assertEqual(alunos, [{'id': self.aluno.pk, 'label': self.aluno.nome}])
+        self.assertEqual(motoristas.status_code, 403)
+
     def test_resumo_de_rotas_ativas_ignora_eventos_de_rotas_encerradas(self):
         ativa = self.criar_rota()
         encerrada = self.criar_rota()

@@ -68,26 +68,34 @@
                         <div id="filtro-situacao-menu" class="absolute left-0 right-0 top-full hidden overflow-hidden rounded-b-xl border border-t-0 border-slate-300 bg-white shadow-[0_10px_18px_rgba(15,23,42,0.16)]" role="listbox" aria-labelledby="situacao-label"></div>
                     </div>
                 </div>
-                <div class="mb-3 space-y-2">
-                    <label class="block text-sm font-semibold text-gray-700" for="filtro-aluno">Aluno</label>
-                    <input id="busca-aluno-filtro" type="search" placeholder="Pesquisar aluno" class="mb-1 w-full rounded-lg border border-gray-300 p-2 text-sm">
-                    <select id="filtro-aluno" size="4" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-[0_4px_12px_rgba(15,23,42,0.12)]">
-                        <option value="">Todos os alunos</option>
-                        {% for aluno in alunos_filtro %}<option value="{{ aluno.id }}">{{ aluno.nome }}</option>{% endfor %}
-                    </select>
+                <div class="mb-3" data-monitor-filter="aluno">
+                    <label class="mb-1 block text-sm font-semibold text-gray-700" for="busca-aluno-filtro">Aluno</label>
+                    <div class="relative">
+                        <input id="busca-aluno-filtro" type="search" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="opcoes-aluno-filtro" placeholder="Digite para pesquisar aluno" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-[0_4px_12px_rgba(15,23,42,0.12)] outline-none focus:ring-2 focus:ring-slate-300">
+                        <input id="filtro-aluno" type="hidden">
+                        <div id="opcoes-aluno-filtro" class="absolute left-0 right-0 top-full z-30 mt-1 hidden max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl" role="listbox"></div>
+                    </div>
                 </div>
                 {% if user.instituicao or user.is_superuser %}
                 <div class="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <button id="more-filters-toggle" type="button" aria-expanded="false" aria-controls="more-filters-panel" class="w-full rounded-lg bg-white px-3 py-2 text-left text-sm font-semibold text-slate-700 shadow-sm transition duration-200 hover:bg-slate-100 hover:shadow">Mais filtros</button>
                     <div id="more-filters-panel" class="mt-3 hidden space-y-3">
-                        <label class="block text-sm font-semibold text-gray-700">Motorista
-                            <input id="busca-motorista-filtro" type="search" placeholder="Pesquisar motorista" class="my-1 w-full rounded-lg border border-gray-300 p-2 text-sm">
-                            <select id="filtro-motorista" size="4" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-[0_4px_12px_rgba(15,23,42,0.12)]"><option value="">Todos os motoristas</option>{% for motorista in motoristas_filtro %}<option value="{{ motorista.id }}">{{ motorista.usuario.get_full_name }}</option>{% endfor %}</select>
-                        </label>
-                        <label class="block text-sm font-semibold text-gray-700">Ônibus
-                            <input id="busca-veiculo-filtro" type="search" placeholder="Pesquisar ônibus" class="my-1 w-full rounded-lg border border-gray-300 p-2 text-sm">
-                            <select id="filtro-veiculo" size="4" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-[0_4px_12px_rgba(15,23,42,0.12)]"><option value="">Todos os ônibus</option>{% for veiculo in veiculos_filtro %}<option value="{{ veiculo.id }}">{{ veiculo.modelo }} · {{ veiculo.placa }}</option>{% endfor %}</select>
-                        </label>
+                        <div data-monitor-filter="motorista">
+                            <label class="mb-1 block text-sm font-semibold text-gray-700" for="busca-motorista-filtro">Motorista</label>
+                            <div class="relative">
+                                <input id="busca-motorista-filtro" type="search" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="opcoes-motorista-filtro" placeholder="Digite para pesquisar motorista" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-[0_4px_12px_rgba(15,23,42,0.12)] outline-none focus:ring-2 focus:ring-slate-300">
+                                <input id="filtro-motorista" type="hidden">
+                                <div id="opcoes-motorista-filtro" class="absolute left-0 right-0 top-full z-30 mt-1 hidden max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl" role="listbox"></div>
+                            </div>
+                        </div>
+                        <div data-monitor-filter="veiculo">
+                            <label class="mb-1 block text-sm font-semibold text-gray-700" for="busca-veiculo-filtro">Ônibus</label>
+                            <div class="relative">
+                                <input id="busca-veiculo-filtro" type="search" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="opcoes-veiculo-filtro" placeholder="Digite para pesquisar ônibus" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-[0_4px_12px_rgba(15,23,42,0.12)] outline-none focus:ring-2 focus:ring-slate-300">
+                                <input id="filtro-veiculo" type="hidden">
+                                <div id="opcoes-veiculo-filtro" class="absolute left-0 right-0 top-full z-30 mt-1 hidden max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl" role="listbox"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 {% endif %}
@@ -138,6 +146,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const api = new URL('{% url "api_mapa_unificado" %}', location.origin);
+    const filterApi = new URL('{% url "api_filtros_monitoramento" %}', location.origin);
     const mapa = L.map('mapa-frota').setView([-15.7801, -47.9292], 12);
     const cartoApiKey = '{{ carto_api_key|default:""|escapejs }}';
     const tiles = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' + (cartoApiKey ? `?key=${encodeURIComponent(cartoApiKey)}` : '');
@@ -223,14 +232,54 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusByTab={ativas:initialTab==='ativas'?(initialQuery.get('situacao')||''):'',historico:initialTab==='historico'?(initialQuery.get('situacao')||''):''};
     const datesByTab={ativas:{inicio:'',fim:''},historico:{inicio:initialQuery.get('data_inicio')||'',fim:initialQuery.get('data_fim')||''}};
     ['aluno','motorista','veiculo'].forEach(key => {
-        const select=$(`filtro-${key}`);
-        if(!select)return;
-        select.value=initialQuery.get(key)||'';
-        $(`busca-${key}-filtro`)?.addEventListener('input', event => {
-            const query=event.target.value.trim().toLocaleLowerCase('pt-BR');
-            [...select.options].forEach((option,index)=>{if(index)option.hidden=!option.textContent.toLocaleLowerCase('pt-BR').includes(query);});
+        const input=$(`busca-${key}-filtro`), selectedFilter=$(`filtro-${key}`), options=$(`opcoes-${key}-filtro`);
+        if(!input || !selectedFilter || !options)return;
+        selectedFilter.value=initialQuery.get(key)||'';
+        let timer=null, controller=null;
+        const hideOptions=()=>{options.classList.add('hidden');input.setAttribute('aria-expanded','false');};
+        const renderOptions=items=>{
+            if(!items.length){
+                options.innerHTML='<p class="px-3 py-2 text-sm text-slate-500">Nenhum resultado encontrado.</p>';
+            } else {
+                options.innerHTML=items.map(item=>`<button type="button" role="option" data-filter-id="${safe(item.id)}" data-filter-label="${safe(item.label)}" class="block w-full px-3 py-2.5 text-left text-sm text-slate-800 transition hover:bg-slate-100 focus:bg-slate-100">${safe(item.label)}</button>`).join('');
+            }
+            options.classList.remove('hidden');
+            input.setAttribute('aria-expanded','true');
+        };
+        input.addEventListener('input',()=>{
+            clearTimeout(timer);
+            const hadSelection=Boolean(selectedFilter.value);
+            if(hadSelection){selectedFilter.value='';page=1;selected=null;selectedByTab[tab]=null;syncRouteUrl();}
+            const query=input.value.trim();
+            if(!query){hideOptions();if(hadSelection)fetchData();return;}
+            timer=setTimeout(async()=>{
+                controller?.abort();
+                controller=new AbortController();
+                options.innerHTML='<p class="px-3 py-2 text-sm text-slate-500">Buscando…</p>';
+                options.classList.remove('hidden');
+                input.setAttribute('aria-expanded','true');
+                try {
+                    const url=new URL(filterApi);
+                    url.search=new URLSearchParams({tipo:key,q:query}).toString();
+                    const response=await fetch(url,{headers:{'X-Requested-With':'XMLHttpRequest'},signal:controller.signal});
+                    if(!response.ok)throw new Error('Não foi possível carregar as opções.');
+                    const data=await response.json();
+                    renderOptions(data.results||[]);
+                } catch(error) {
+                    if(error.name!=='AbortError')renderOptions([]);
+                }
+            },250);
         });
-        select.addEventListener('change',()=>{page=1;selected=null;fetchData();});
+        options.addEventListener('click',event=>{
+            const option=event.target.closest('[data-filter-id]');
+            if(!option)return;
+            selectedFilter.value=option.dataset.filterId;
+            input.value=option.dataset.filterLabel;
+            page=1;selected=null;selectedByTab[tab]=null;
+            hideOptions();syncRouteUrl();fetchData();
+        });
+        input.addEventListener('keydown',event=>{if(event.key==='Escape')hideOptions();});
+        document.addEventListener('click',event=>{if(!event.target.closest(`[data-monitor-filter="${key}"]`))hideOptions();});
     });
     const routeColor = id => colors[(Number(id)-1)%colors.length];
     const imageCache = new Map();
@@ -298,8 +347,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if ($('pesquisa-rota').value.trim()) p.set('q', $('pesquisa-rota').value.trim());
         if ($('filtro-situacao').value) p.set('situacao', $('filtro-situacao').value);
         ['aluno','motorista','veiculo'].forEach(key => { const filter=$(`filtro-${key}`); if(filter?.value)p.set(key,filter.value); });
+        p.set('pagina', String(page));
         if (tab === 'historico') {
-            p.set('pagina', String(page));
             if ($('data-inicio').value) p.set('data_inicio', $('data-inicio').value);
             if ($('data-fim').value) p.set('data_fim', $('data-fim').value);
         }
@@ -340,6 +389,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return a;
         }, {running:0,noSignal:0,interrupted:0});
+        if(tab==='ativas'){
+            counts.running=payload.resumo?.rotas_em_andamento ?? counts.running;
+            counts.noSignal=payload.resumo?.rotas_sem_sinal ?? counts.noSignal;
+            counts.interrupted=payload.resumo?.rotas_interrompidas ?? counts.interrupted;
+        }
         const stats = tab === 'ativas' ? [
             ['🚌','Rotas em andamento',counts.running,'#2563eb'],
             ['📍','Ônibus em circulação',payload.posicoes_ativas.filter(p => metricRoutes.some(r => String(r.id) === String(p.rota_id))).length,'#4f46e5'],
@@ -382,15 +436,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 badge.textContent=status;
                 badge.className=`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${route.interrompida?'bg-rose-100 text-rose-800':'bg-emerald-100 text-emerald-800'}`;
             });
-            const start=routeCards.length?(page-1)*5+1:0, end=Math.min(page*5,routeCards.length);
-            $('contagem-rotas').textContent=`Exibindo ${start}–${end} de ${routeCards.length} rotas ativas`;
+            const start=window.totalRotasAtivas?(page-1)*5+1:0, end=Math.min(page*5,window.totalRotasAtivas||0);
+            $('contagem-rotas').textContent=`Exibindo ${start}–${end} de ${window.totalRotasAtivas||0} rotas ativas`;
             $('rotulo-pagina').textContent=`Página ${page} de ${Math.max(1,pages)}`;
             return;
         }
         if (!append) $('lista-rotas').innerHTML = '';
         if (!routeCards.length) $('lista-rotas').innerHTML = '<p class="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">Nenhuma rota encontrada com esses filtros.</p>';
         const visibleCards = tab === 'ativas'
-            ? routeCards.slice((page-1)*5,page*5)
+            ? routeCards
             : routeCards;
         visibleCards.forEach(r => {
             if (append && $('rota-card-' + r.id)) return;
@@ -407,8 +461,8 @@ document.addEventListener('DOMContentLoaded', () => {
             $('contagem-rotas').textContent = `Exibindo ${shown} rotas de ${window.totalRotasHistorico || 0}`;
             $('rotulo-pagina').textContent = `Página ${page} de ${Math.max(1,pages)}`;
         } else {
-            const start=routeCards.length?(page-1)*5+1:0, end=Math.min(page*5,routeCards.length);
-            $('contagem-rotas').textContent=`Exibindo ${start}–${end} de ${routeCards.length} rotas ativas`;
+            const start=window.totalRotasAtivas?(page-1)*5+1:0, end=Math.min(page*5,window.totalRotasAtivas||0);
+            $('contagem-rotas').textContent=`Exibindo ${start}–${end} de ${window.totalRotasAtivas||0} rotas ativas`;
             $('rotulo-pagina').textContent=`Página ${page} de ${Math.max(1,pages)}`;
         }
         if (tab==='ativas') renderedActivePage=page;
@@ -421,9 +475,10 @@ document.addEventListener('DOMContentLoaded', () => {
         $('estado-lista').textContent = 'Carregando rotas…';
         return fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r => {if(!r.ok) throw new Error('Não foi possível carregar os dados da frota.'); return r.json();}).then(data => {
             if (req !== requestCounter) return;
-            pages = tab === 'ativas' ? Math.max(1,Math.ceil(data.rotas.length/5)) : (data.paginas || 1);
+            pages = data.paginas || 1;
             window.totalRotasHistorico = data.total || 0;
-            $('paginacao-historico').classList.toggle('hidden', tab === 'historico' ? pages <= 1 && (data.total||0)<=5 : pages <= 1);
+            window.totalRotasAtivas = tab==='ativas' ? (data.total||0) : 0;
+            $('paginacao-historico').classList.toggle('hidden', pages <= 1);
             $('pagina-anterior').disabled = page <= 1;
             $('pagina-proxima').disabled = page >= pages;
             $('estado-lista').textContent = data.total ? `${data.total} rota(s) encontrada(s)` : '';
@@ -684,7 +739,7 @@ document.addEventListener('DOMContentLoaded', () => {
         syncRouteUrl();
         const pending=fetchData(), version=requestCounter;
         pending.catch(()=>{}).finally(()=>{if(version===requestCounter)setTabLoading(false);});
-        if(tab==='ativas') refreshTimer=setInterval(()=>{if(!pendingRouteLoad)fetchData();},5000);
+        if(tab==='ativas') refreshTimer=setInterval(()=>{if(!pendingRouteLoad)fetchData();},15000);
     }
     $('aba-ativas').onclick=()=>changeTab('ativas');
     $('aba-historico').onclick=()=>changeTab('historico');
