@@ -64,19 +64,41 @@
                         </select>
                         <button id="filtro-situacao-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="situacao-label filtro-situacao-valor" class="flex w-full items-center justify-between rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-left text-sm text-slate-700 shadow-[0_4px_12px_rgba(15,23,42,0.12)] outline-none transition focus-visible:ring-2 focus-visible:ring-slate-300">
                             <span id="filtro-situacao-valor">Todas as situações</span>
-                            <svg id="filtro-situacao-seta" class="ml-3 h-4 w-4 shrink-0 text-slate-500 transition-transform" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.22 7.22a.75.75 0 0 1 1.06 0L10 10.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 8.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
                         </button>
                         <div id="filtro-situacao-menu" class="absolute left-0 right-0 top-full hidden overflow-hidden rounded-b-xl border border-t-0 border-slate-300 bg-white shadow-[0_10px_18px_rgba(15,23,42,0.16)]" role="listbox" aria-labelledby="situacao-label"></div>
                     </div>
                 </div>
+                <div class="mb-3 space-y-2">
+                    <label class="block text-sm font-semibold text-gray-700" for="filtro-aluno">Aluno</label>
+                    <input id="busca-aluno-filtro" type="search" placeholder="Pesquisar aluno" class="mb-1 w-full rounded-lg border border-gray-300 p-2 text-sm">
+                    <select id="filtro-aluno" size="4" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-[0_4px_12px_rgba(15,23,42,0.12)]">
+                        <option value="">Todos os alunos</option>
+                        {% for aluno in alunos_filtro %}<option value="{{ aluno.id }}">{{ aluno.nome }}</option>{% endfor %}
+                    </select>
+                </div>
+                {% if user.instituicao or user.is_superuser %}
+                <div class="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <button id="more-filters-toggle" type="button" aria-expanded="false" aria-controls="more-filters-panel" class="w-full rounded-lg bg-white px-3 py-2 text-left text-sm font-semibold text-slate-700 shadow-sm transition duration-200 hover:bg-slate-100 hover:shadow">Mais filtros</button>
+                    <div id="more-filters-panel" class="mt-3 hidden space-y-3">
+                        <label class="block text-sm font-semibold text-gray-700">Motorista
+                            <input id="busca-motorista-filtro" type="search" placeholder="Pesquisar motorista" class="my-1 w-full rounded-lg border border-gray-300 p-2 text-sm">
+                            <select id="filtro-motorista" size="4" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-[0_4px_12px_rgba(15,23,42,0.12)]"><option value="">Todos os motoristas</option>{% for motorista in motoristas_filtro %}<option value="{{ motorista.id }}">{{ motorista.usuario.get_full_name }}</option>{% endfor %}</select>
+                        </label>
+                        <label class="block text-sm font-semibold text-gray-700">Ônibus
+                            <input id="busca-veiculo-filtro" type="search" placeholder="Pesquisar ônibus" class="my-1 w-full rounded-lg border border-gray-300 p-2 text-sm">
+                            <select id="filtro-veiculo" size="4" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-[0_4px_12px_rgba(15,23,42,0.12)]"><option value="">Todos os ônibus</option>{% for veiculo in veiculos_filtro %}<option value="{{ veiculo.id }}">{{ veiculo.modelo }} · {{ veiculo.placa }}</option>{% endfor %}</select>
+                        </label>
+                    </div>
+                </div>
+                {% endif %}
                 <p id="estado-lista" class="mb-2 text-sm text-gray-500" aria-live="polite"></p>
                 <div id="lista-rotas" class="max-h-[52vh] space-y-2 overflow-y-auto pr-1"></div>
                 <div id="paginacao-historico" class="mt-4 hidden border-t pt-3">
                     <p id="contagem-rotas" class="mb-3 text-center text-xs font-semibold text-gray-500" aria-live="polite"></p>
                     <div class="flex items-center justify-between gap-2">
-                        <button id="pagina-anterior" type="button" class="rounded-lg border px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">← Anterior</button>
+                        <button id="pagina-anterior" type="button" class="rounded-lg border px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">Anterior</button>
                         <span id="rotulo-pagina" class="text-xs font-medium text-gray-500"></span>
-                        <button id="pagina-proxima" type="button" class="rounded-lg border px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">Próxima →</button>
+                        <button id="pagina-proxima" type="button" class="rounded-lg border px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">Próxima</button>
                     </div>
                 </div>
             </div>
@@ -139,7 +161,6 @@ document.addEventListener('DOMContentLoaded', () => {
         trigger.classList.toggle('rounded-b-none',open);
         trigger.classList.toggle('border-b-0',open);
         trigger.classList.toggle('shadow-none',open);
-        $('filtro-situacao-seta').classList.toggle('rotate-180',open);
         menu.classList.toggle('hidden',!open);
     }
     function renderSituationOptions() {
@@ -188,12 +209,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const initialTab=initialQuery.get('contexto')==='historico'?'historico':'ativas';
     const initialRoute=initialQuery.get('rota');
     const initialPage=Math.max(1,Number.parseInt(initialQuery.get('pagina')||'1',10)||1);
+    $('more-filters-toggle')?.addEventListener('click', event => {
+        const button=event.currentTarget, panel=$('more-filters-panel');
+        const open=button.getAttribute('aria-expanded')!=='true';
+        button.setAttribute('aria-expanded',String(open));
+        panel.classList.toggle('hidden',!open);
+        panel.classList.toggle('animate-[fadeIn_.2s_ease-out]',open);
+    });
     let tab = initialTab, selected = initialRoute, page = initialPage, pages = 1, renderedActivePage = null, refreshTimer, requestCounter = 0, routeCards = [], mapRequestCounter = 0, pendingRouteLoad = null;
     let mapFocusTimer=null, lastMapInteraction=0, lastActivePositions=[];
     const selectedByTab={ativas:initialTab==='ativas'?initialRoute:null,historico:initialTab==='historico'?initialRoute:null};
     const searchByTab={ativas:initialQuery.get('q')||'',historico:initialQuery.get('q')||''};
     const statusByTab={ativas:initialTab==='ativas'?(initialQuery.get('situacao')||''):'',historico:initialTab==='historico'?(initialQuery.get('situacao')||''):''};
     const datesByTab={ativas:{inicio:'',fim:''},historico:{inicio:initialQuery.get('data_inicio')||'',fim:initialQuery.get('data_fim')||''}};
+    ['aluno','motorista','veiculo'].forEach(key => {
+        const select=$(`filtro-${key}`);
+        if(!select)return;
+        select.value=initialQuery.get(key)||'';
+        $(`busca-${key}-filtro`)?.addEventListener('input', event => {
+            const query=event.target.value.trim().toLocaleLowerCase('pt-BR');
+            [...select.options].forEach((option,index)=>{if(index)option.hidden=!option.textContent.toLocaleLowerCase('pt-BR').includes(query);});
+        });
+        select.addEventListener('change',()=>{page=1;selected=null;fetchData();});
+    });
     const routeColor = id => colors[(Number(id)-1)%colors.length];
     const imageCache = new Map();
     const cachedImageSources = new Map();
@@ -259,6 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const p = new URLSearchParams({contexto: tab === 'ativas' ? 'ativas' : 'historico'});
         if ($('pesquisa-rota').value.trim()) p.set('q', $('pesquisa-rota').value.trim());
         if ($('filtro-situacao').value) p.set('situacao', $('filtro-situacao').value);
+        ['aluno','motorista','veiculo'].forEach(key => { const filter=$(`filtro-${key}`); if(filter?.value)p.set(key,filter.value); });
         if (tab === 'historico') {
             p.set('pagina', String(page));
             if ($('data-inicio').value) p.set('data_inicio', $('data-inicio').value);
@@ -277,6 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else url.searchParams.delete('q');
         if($('filtro-situacao').value)url.searchParams.set('situacao',$('filtro-situacao').value);
         else url.searchParams.delete('situacao');
+        ['aluno','motorista','veiculo'].forEach(key => { const filter=$(`filtro-${key}`); if(filter?.value)url.searchParams.set(key,filter.value); else url.searchParams.delete(key); });
         if(tab==='historico'){
             if($('data-inicio').value)url.searchParams.set('data_inicio',$('data-inicio').value);
             else url.searchParams.delete('data_inicio');
@@ -304,15 +344,15 @@ document.addEventListener('DOMContentLoaded', () => {
             ['🚌','Rotas em andamento',counts.running,'#2563eb'],
             ['📍','Ônibus em circulação',payload.posicoes_ativas.filter(p => metricRoutes.some(r => String(r.id) === String(p.rota_id))).length,'#4f46e5'],
             ['👥','Alunos embarcados',payload.resumo?.alunos_abordo ?? '—','#059669'],
-            ['⬆️','Embarques realizados',payload.resumo?.embarques ?? '—','#10b981'],
-            ['⬇️','Desembarques realizados',payload.resumo?.desembarques ?? '—','#0ea5e9'],
+            ['🟢','Embarques realizados',payload.resumo?.embarques ?? '—','#10b981'],
+            ['🔵','Desembarques realizados',payload.resumo?.desembarques ?? '—','#0ea5e9'],
             ['⚠️','Interrompidas / sem sinal',counts.interrupted + counts.noSignal,'#e11d48']
         ] : [
             ['🧭','Rotas exibidas',payload.total,'#2563eb'],
             ['✅','Concluídas',payload.resumo?.concluidas ?? '—','#059669'],
             ['⚠️','Interrompidas',payload.resumo?.interrompidas ?? '—','#e11d48'],
-            ['⬆️','Embarques',payload.resumo?.embarques ?? '—','#10b981'],
-            ['⬇️','Desembarques',payload.resumo?.desembarques ?? '—','#0ea5e9']
+            ['🟢','Embarques',payload.resumo?.embarques ?? '—','#10b981'],
+            ['🔵','Desembarques',payload.resumo?.desembarques ?? '—','#0ea5e9']
         ];
         const historical=tab==='historico';
         $('indicadores').className=historical?'mb-5 grid grid-cols-5 gap-3 xl:mx-auto xl:w-5/6':'mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6';
@@ -545,7 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
         $('detalhes-rota').classList.remove('hidden');
         $('detalhes-rota').innerHTML = `<div class="flex flex-wrap items-center justify-between gap-4"><div class="flex min-w-0 items-center gap-3">${avatar(r.veiculo_foto,r.placa,'h-16 w-16 rounded-2xl')}<div><p class="text-xs font-bold uppercase tracking-wide text-blue-700">Rota #${r.id}</p><h2 class="font-display text-xl font-bold text-gray-900">${safe(r.placa)}</h2><p class="text-xs text-gray-500">${safe(r.veiculo)}</p></div></div><span class="rounded-full px-3 py-1.5 text-xs font-bold ${r.interrompida?'bg-rose-100 text-rose-800':r.ativa?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-gray-700'}">${r.interrompida?'Interrompida':r.ativa?'Em andamento':'Concluída'}</span></div>
         <div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3">${avatar(r.motorista_foto,r.motorista,'h-12 w-12')}<div><p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Motorista</p><p class="font-semibold text-slate-900">${safe(r.motorista)}</p></div><div class="ml-auto grid grid-cols-2 gap-x-5 gap-y-1 text-xs sm:grid-cols-3"><span>🟢 ${safe(r.inicio||'Início n/d')}</span><span>⏱ ${duration(r.duracao_segundos)}</span><span>📡 ${safe(r.gps_status)}</span><span>🏁 ${safe(r.fim||'Em andamento')}</span></div></div>
-         <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">${[['⬆️','Embarques',r.embarques,'#10b981','registros'],['⬇️','Desembarques',r.desembarques,'#0ea5e9','registros'],['👥','A bordo',`${board.length}/${maximumCapacity}`,'#059669','alunos a bordo / capacidade máxima'],['🧒','Alunos na rota',r.total_alunos,'#7c3aed','alunos únicos']].map(([icon,label,value,accent,description])=>`<article class="rounded-xl border border-gray-100 border-b-4 bg-white p-3 shadow-sm" style="border-bottom-color:${accent}"><div class="flex items-center justify-between"><span class="text-xs text-gray-500">${label}</span><span>${icon}</span></div><p class="mt-1 text-xl font-bold">${value}</p><p class="mt-0.5 text-[10px] text-gray-500">${description}</p></article>`).join('')}</div>
+         <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">${[['🟢','Embarques',r.embarques,'#10b981','registros'],['🔵','Desembarques',r.desembarques,'#0ea5e9','registros'],['👥','A bordo',`${board.length}/${maximumCapacity}`,'#059669','alunos a bordo / capacidade máxima'],['🧒','Alunos na rota',r.total_alunos,'#7c3aed','alunos únicos']].map(([icon,label,value,accent,description])=>`<article class="rounded-xl border border-gray-100 border-b-4 bg-white p-3 shadow-sm" style="border-bottom-color:${accent}"><div class="flex items-center justify-between"><span class="text-xs text-gray-500">${label}</span><span>${icon}</span></div><p class="mt-1 text-xl font-bold">${value}</p><p class="mt-0.5 text-[10px] text-gray-500">${description}</p></article>`).join('')}</div>
         <div class="mt-5 grid gap-5 lg:grid-cols-2"><section class="rounded-xl border p-4"><h3 class="mb-3 flex items-center gap-2 font-bold">🟢 A bordo agora <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">${board.length}</span></h3>${paginatedList(board,listKey('board'),studentList)}</section><section class="rounded-xl border p-4"><h3 class="mb-3 flex items-center gap-2 font-bold">🧒 Passaram pela rota <span class="rounded-full bg-violet-100 px-2 py-0.5 text-xs text-violet-800">${history.length}</span></h3>${paginatedList(history,listKey('history'),studentList)}</section></div>
         <section class="mt-5 rounded-xl border p-4"><h3 class="mb-3 font-bold">🕘 Eventos da rota <span class="text-xs font-normal text-gray-500">${data.eventos.length}</span></h3>${paginatedList(data.eventos,listKey('events'),eventList)}</section>
         ${r.ocorrencias?`<p class="mt-3 rounded bg-amber-50 p-3 text-sm text-amber-900">${r.ocorrencias} ocorrência(s) de face desconhecida registradas.</p>`:''}`;
@@ -570,15 +610,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const pageSize=5, totalPages=Math.ceil(items.length/pageSize), page=Math.min(detailPages.get(key)||1,totalPages);
         detailPages.set(key,page);
         const start=(page-1)*pageSize, controls=totalPages>1
-            ? `<div class="mt-3 flex items-center justify-between border-t pt-3"><button type="button" data-list-page="${key}" data-page="${page-1}" ${page===1?'disabled':''} class="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-40">← Anterior</button><span class="text-xs text-gray-500">Página ${page} de ${totalPages} · ${items.length} registros</span><button type="button" data-list-page="${key}" data-page="${page+1}" ${page===totalPages?'disabled':''} class="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-40">Próxima →</button></div>`
+            ? `<div class="mt-3 flex items-center justify-between border-t pt-3"><button type="button" data-list-page="${key}" data-page="${page-1}" ${page===1?'disabled':''} class="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-40">Anterior</button><span class="text-xs text-gray-500">Página ${page} de ${totalPages} · ${items.length} registros</span><button type="button" data-list-page="${key}" data-page="${page+1}" ${page===totalPages?'disabled':''} class="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-40">Próxima</button></div>`
             : '';
         return `${renderer(items.slice(start,start+pageSize))}${controls}`;
     }
     function studentList(students) {
-        return `<ul class="space-y-2">${students.map(s=>`<li class="flex items-center gap-3 rounded-xl border border-gray-100 p-2.5 text-sm">${avatar(s.foto,s.nome,'h-11 w-11')}<span class="min-w-0 flex-1"><strong class="block truncate text-gray-900">${safe(s.nome)}</strong><span class="mt-0.5 block text-[11px] text-gray-500">⬆️ ${safe(s.hora_embarque||'n/d')}${s.hora_desembarque?` · ⬇️ ${safe(s.hora_desembarque)}`:''}</span></span><span class="rounded-full px-2 py-1 text-[10px] font-bold ${s.a_bordo?'bg-green-100 text-green-800':'bg-gray-100 text-gray-700'}">${s.a_bordo?'A bordo':'Desceu'}</span></li>`).join('')}</ul>`;
+        return `<ul class="space-y-2">${students.map(s=>`<li class="flex items-center gap-3 rounded-xl border border-gray-100 p-2.5 text-sm">${avatar(s.foto,s.nome,'h-11 w-11')}<span class="min-w-0 flex-1"><strong class="block truncate text-gray-900">${safe(s.nome)}</strong><span class="mt-0.5 block text-[11px] text-gray-500">Embarque ${safe(s.hora_embarque||'n/d')}${s.hora_desembarque?` · Desembarque ${safe(s.hora_desembarque)}`:''}</span></span><span class="rounded-full px-2 py-1 text-[10px] font-bold ${s.a_bordo?'bg-green-100 text-green-800':'bg-gray-100 text-gray-700'}">${s.a_bordo?'A bordo':'Desceu'}</span></li>`).join('')}</ul>`;
     }
     function eventList(events) {
-        return `<ol class="space-y-2">${events.map(ev=>`<li class="flex items-center gap-3 rounded-lg bg-slate-50 p-2 text-sm">${avatar(ev.foto,ev.aluno,'h-9 w-9')}<span class="min-w-0 flex-1 truncate">${ev.tipo==='Embarque'?'⬆️':'⬇️'} ${safe(ev.aluno)}</span><time class="shrink-0 text-xs text-gray-500">${safe(ev.hora)}</time></li>`).join('')}</ol>`;
+        return `<ol class="space-y-2">${events.map(ev=>`<li class="flex items-center gap-3 rounded-lg bg-slate-50 p-2 text-sm">${avatar(ev.foto,ev.aluno,'h-9 w-9')}<span class="min-w-0 flex-1 truncate">${safe(ev.tipo)}: ${safe(ev.aluno)}</span><time class="shrink-0 text-xs text-gray-500">${safe(ev.hora)}</time></li>`).join('')}</ol>`;
     }
     document.addEventListener('click', event=>{
         const button=event.target.closest('[data-list-page]');

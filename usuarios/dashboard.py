@@ -93,6 +93,7 @@ def contexto_dashboard_responsavel(responsavel):
             ultimo_evento_rota=Subquery(ultimo_evento.values('rota_id')[:1]),
             evento_ativo_tipo=Subquery(evento_em_rota_ativa.values('tipo')[:1]),
             evento_ativo_data=Subquery(evento_em_rota_ativa.values('data_hora')[:1]),
+            evento_ativo_rota=Subquery(evento_em_rota_ativa.values('rota_id')[:1]),
         ).order_by('nome', 'pk')
     )
     alunos_aprovados_aviso = [

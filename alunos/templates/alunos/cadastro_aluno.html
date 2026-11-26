@@ -14,7 +14,8 @@
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Nome do Aluno</label>
-                <input type="text" name="nome" required minlength="2" maxlength="50" class="w-full px-4 py-2 border rounded focus:ring-blue-500">
+                <input type="text" name="nome" required minlength="2" maxlength="100" class="w-full px-4 py-2 border rounded focus:ring-blue-500">
+                <small class="text-gray-500">Até 100 caracteres · <span data-count>0</span>/100</small>
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Idade</label>
@@ -179,5 +180,10 @@
     window.addEventListener('pagehide', () => {
         if (streamAtual) streamAtual.getTracks().forEach(track => track.stop());
     });
+    const nomeAluno = document.querySelector('[name="nome"]');
+    const contadorNome = document.querySelector('[data-count]');
+    const atualizarContadorNome = () => { contadorNome.textContent = nomeAluno.value.length; };
+    nomeAluno.addEventListener('input', atualizarContadorNome);
+    atualizarContadorNome();
 </script>
 {% endblock %}

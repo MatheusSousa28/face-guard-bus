@@ -38,6 +38,7 @@ class Rota(models.Model):
     resolvida_em = models.DateTimeField(null=True, blank=True)
     observacao_resolucao = models.TextField(blank=True)
     instituicao_ciente_encerramento = models.BooleanField(default=False)
+    responsaveis_notificados_revisao = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Rota {self.id} - {self.veiculo.placa}"

@@ -78,7 +78,7 @@
     </section>
 </div>
 
-<template id="approval-vehicles-template"><fieldset class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4"><legend class="px-2 text-sm font-bold text-slate-800">Escolha pelo menos um veículo</legend><p class="mb-3 text-xs text-slate-600">O aluno só será vinculado ao confirmar a aprovação. A capacidade é informativa e não bloqueia vínculos.</p><label class="relative mb-3 block"><span class="sr-only">Buscar veículo</span><input data-vehicle-search type="search" placeholder="Buscar por modelo ou placa" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500"></label><div class="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">{% for veiculo in veiculos_disponiveis %}<label data-vehicle-option data-search="{{ veiculo.modelo }} {{ veiculo.placa }}" class="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-100 bg-white p-3 shadow-sm transition hover:border-amber-400 hover:bg-amber-50 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50"><input class="mt-1 shrink-0 accent-amber-600" type="checkbox" value="{{ veiculo.id }}"><span class="min-w-0"><strong class="block truncate text-sm text-slate-800">{{ veiculo.modelo }}</strong><span class="mt-0.5 block text-xs text-slate-600">Placa {{ veiculo.placa }}</span><span class="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">Capacidade informativa: {{ veiculo.capacidade }}</span></span></label>{% empty %}<p class="col-span-full rounded-xl border border-dashed border-rose-300 bg-white p-4 text-sm text-rose-700">Cadastre um veículo antes de aprovar alunos.</p>{% endfor %}</div><p data-vehicle-error class="mt-2 hidden text-sm font-semibold text-rose-700" role="alert">Selecione pelo menos um veículo para continuar.</p></fieldset></template>
+<template id="approval-vehicles-template"><fieldset class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4"><legend class="px-2 text-sm font-bold text-slate-800">Escolha pelo menos um veículo</legend><p class="mb-3 text-xs text-slate-600">O aluno só será vinculado ao confirmar a aprovação. A capacidade é informativa e não bloqueia vínculos.</p><label class="relative mb-3 block"><span class="sr-only">Buscar veículo</span><input data-vehicle-search type="search" placeholder="Buscar por modelo ou placa" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500"></label><div data-vehicle-pages class="grid max-h-80 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">{% for veiculo in veiculos_disponiveis %}<label data-vehicle-option data-search="{{ veiculo.modelo }} {{ veiculo.placa }}" class="hidden cursor-pointer items-start gap-3 rounded-xl border border-amber-100 bg-white p-3 shadow-sm transition hover:border-amber-400 hover:bg-amber-50 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50"><input class="mt-1 shrink-0 accent-amber-600" type="checkbox" value="{{ veiculo.id }}"><span class="min-w-0 flex-1"><strong class="block truncate text-sm text-slate-800">{{ veiculo.modelo }}</strong><span class="mt-0.5 block text-xs text-slate-600">Placa {{ veiculo.placa }}</span><span class="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">Capacidade informativa: {{ veiculo.capacidade }}</span></span>{% if veiculo.foto %}<img src="{{ veiculo.foto.url }}" alt="" class="h-16 w-16 shrink-0 rounded-xl object-cover">{% else %}<span class="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-2xl" aria-hidden="true">🚌</span>{% endif %}</label>{% empty %}<p class="col-span-full rounded-xl border border-dashed border-rose-300 bg-white p-4 text-sm text-rose-700">Cadastre um veículo antes de aprovar alunos.</p>{% endfor %}</div><div data-vehicle-pagination class="mt-3 hidden items-center justify-between rounded-xl border border-amber-100 bg-white p-2"><button type="button" data-vehicle-prev class="rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-amber-100 disabled:opacity-40">Anterior</button><span data-vehicle-page-label class="text-xs font-semibold text-slate-600"></span><button type="button" data-vehicle-next class="rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-amber-100 disabled:opacity-40">Próxima</button></div><p data-vehicle-error class="mt-2 hidden text-sm font-semibold text-rose-700" role="alert">Selecione pelo menos um veículo para continuar.</p></fieldset></template>
 
 <div id="pending-edit-modal" class="fixed inset-0 z-[90] hidden items-center justify-center overflow-y-auto bg-gray-900/60 p-4" role="dialog" aria-modal="true" aria-labelledby="pending-edit-title">
     <div class="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
@@ -166,13 +166,25 @@
                 const picker = confirmExtra.querySelector('fieldset');
                 const searchVehicles = confirmExtra.querySelector('[data-vehicle-search]');
                 const vehicleOptions = [...confirmExtra.querySelectorAll('[data-vehicle-option]')];
-                searchVehicles?.addEventListener('input', () => {
-                    const query = searchVehicles.value.trim().toLocaleLowerCase('pt-BR');
-                    vehicleOptions.forEach(option => option.classList.toggle(
-                        'hidden',
-                        !option.dataset.search.toLocaleLowerCase('pt-BR').includes(query),
-                    ));
-                });
+                const pagination = confirmExtra.querySelector('[data-vehicle-pagination]');
+                let vehiclePage = 1;
+                const renderVehiclePage = () => {
+                    const query = searchVehicles?.value.trim().toLocaleLowerCase('pt-BR') || '';
+                    const filtered = vehicleOptions.filter(option => option.dataset.search.toLocaleLowerCase('pt-BR').includes(query));
+                    const totalPages = Math.max(1, Math.ceil(filtered.length / 4));
+                    vehiclePage = Math.min(vehiclePage, totalPages);
+                    vehicleOptions.forEach(option => option.classList.add('hidden'));
+                    filtered.slice((vehiclePage - 1) * 4, vehiclePage * 4).forEach(option => option.classList.remove('hidden'));
+                    pagination?.classList.toggle('hidden', filtered.length <= 4);
+                    pagination?.classList.toggle('flex', filtered.length > 4);
+                    confirmExtra.querySelector('[data-vehicle-page-label]').textContent = `Página ${vehiclePage} de ${totalPages}`;
+                    confirmExtra.querySelector('[data-vehicle-prev]').disabled = vehiclePage === 1;
+                    confirmExtra.querySelector('[data-vehicle-next]').disabled = vehiclePage === totalPages;
+                };
+                searchVehicles?.addEventListener('input', () => { vehiclePage = 1; renderVehiclePage(); });
+                confirmExtra.querySelector('[data-vehicle-prev]')?.addEventListener('click', () => { vehiclePage--; renderVehiclePage(); });
+                confirmExtra.querySelector('[data-vehicle-next]')?.addEventListener('click', () => { vehiclePage++; renderVehiclePage(); });
+                renderVehiclePage();
                 confirmExtra.dataset.requiresVehicles = picker ? 'true' : 'false';
             }
         } else {

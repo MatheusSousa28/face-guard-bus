@@ -39,8 +39,8 @@ def cadastro_aluno(request):
             messages.error(request, "Aceite o termo de consentimento para realizar o cadastro.")
             return redirect('cadastro_aluno')
 
-        if len(nome) < 2 or len(nome) > 50:
-            messages.error(request, 'O nome deve ter entre 2 e 50 caracteres.')
+        if len(nome) < 2 or len(nome) > 100:
+            messages.error(request, 'O nome deve ter entre 2 e 100 caracteres.')
             return redirect('cadastro_aluno')
 
         try:

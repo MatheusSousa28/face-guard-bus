@@ -9,7 +9,6 @@
             <p class="mt-2 text-gray-600">Acompanhe os cadastros e os registros de transporte dos seus alunos.</p>
         </div>
         <div class="flex flex-wrap gap-3">
-            <a href="{% url 'mapa_unificado' %}" class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-white px-4 py-3 font-semibold text-blue-800 transition hover:bg-blue-50">Abrir mapa</a>
             <a href="{% url 'cadastro_aluno' %}" class="inline-flex items-center justify-center rounded-xl bg-blue-700 px-5 py-3 font-bold text-white shadow-sm transition hover:bg-blue-800">+ Cadastrar aluno</a>
         </div>
     </header>
@@ -19,8 +18,8 @@
         {% for aviso in avisos_rotas_interrompidas %}
         <article class="flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sky-950 shadow-sm sm:flex-row sm:items-center sm:p-5" role="status">
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-xl shadow-sm" aria-hidden="true">🛡️</span>
-            <div class="min-w-0 flex-1"><p class="font-bold">A instituição está verificando uma rota</p><p class="mt-1 text-sm text-sky-900">A rota de {{ aviso.alunos|join:', ' }} precisa de revisão. A equipe da instituição já foi avisada e está cuidando da situação; você não precisa tomar nenhuma providência agora.</p></div>
-            <a href="{% url 'mapa_unificado' %}?contexto=ativas&amp;rota={{ aviso.rota.id }}" class="inline-flex shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-bold text-sky-900 transition hover:bg-sky-100">Acompanhar com tranquilidade</a>
+            <div class="min-w-0 flex-1"><p class="font-bold">A instituição está verificando uma rota</p><p class="mt-1 text-sm text-sky-900">A rota em que {{ aviso.alunos|join:', ' }} está precisa de revisão. A equipe da instituição já foi avisada e está cuidando da situação; você não precisa tomar nenhuma providência agora.</p></div>
+            <a href="{% url 'mapa_unificado' %}?contexto=ativas&amp;rota={{ aviso.rota.id }}" class="inline-flex shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-bold text-sky-900 transition hover:bg-sky-100">Acompanhar</a>
         </article>
         {% endfor %}
     </section>
@@ -82,7 +81,7 @@
 
                 <div class="mt-4 flex flex-wrap gap-2">
                     <a href="{% url 'editar_aluno_responsavel' aluno.id %}" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">Editar dados</a>
-                    {% if aluno.ultimo_evento_rota %}<a href="{% url 'mapa_unificado' %}?rota={{ aluno.ultimo_evento_rota }}" class="rounded-lg bg-blue-700 px-3 py-2 text-sm font-bold text-white transition hover:bg-blue-800">Ver rota</a>{% else %}<a href="{% url 'mapa_unificado' %}" class="rounded-lg bg-blue-700 px-3 py-2 text-sm font-bold text-white transition hover:bg-blue-800">Abrir mapa</a>{% endif %}
+                    {% if aluno.evento_ativo_tipo %}<a href="{% url 'mapa_unificado' %}?contexto=ativas&amp;rota={{ aluno.evento_ativo_rota }}" class="rounded-lg bg-blue-700 px-3 py-2 text-sm font-bold text-white transition hover:bg-blue-800">Ver rota</a>{% endif %}
                 </div>
             </article>
             {% endfor %}
@@ -99,7 +98,7 @@
 
     <nav aria-label="Atalhos" class="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-slate-900 p-5 text-white sm:p-6">
         <div><h2 class="font-display text-lg font-bold">Precisa de mais informações?</h2><p class="mt-1 text-sm text-slate-300">Abra o mapa para consultar as rotas disponíveis para seus alunos.</p></div>
-        <a href="{% url 'mapa_unificado' %}" class="rounded-lg bg-white px-4 py-2.5 font-bold text-slate-900 transition hover:bg-blue-50">Acompanhar no mapa →</a>
+        <a href="{% url 'mapa_unificado' %}" class="rounded-lg bg-white px-4 py-2.5 font-bold text-slate-900 transition hover:bg-blue-50">Acompanhar no mapa</a>
     </nav>
 </div>
 {% endblock %}

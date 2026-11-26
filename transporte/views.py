@@ -124,8 +124,8 @@ def resolver_rota_interrompida(request, rota_id):
         return redirect('home')
 
     observacao = request.POST.get('observacao', '').strip()
-    if not observacao or len(observacao) > 1000:
-        messages.error(request, 'Informe uma observação válida para registrar a revisão da rota.')
+    if not observacao or len(observacao) > 500:
+        messages.error(request, 'Informe uma observação de até 500 caracteres para registrar a revisão da rota.')
         return redirect('home')
     if request.POST.get('confirmacao_seguranca') != 'on':
         messages.error(request, 'Confirme que a situação dos alunos foi verificada antes de encerrar a rota.')
@@ -144,8 +144,10 @@ def resolver_rota_interrompida(request, rota_id):
         rota.resolvida_por = request.user
         rota.resolvida_em = agora
         rota.observacao_resolucao = observacao
+        rota.responsaveis_notificados_revisao = False
         rota.save(update_fields=[
             'ativa', 'fim', 'resolvida_por', 'resolvida_em', 'observacao_resolucao',
+            'responsaveis_notificados_revisao',
         ])
 
     messages.success(request, 'A rota interrompida foi encerrada após revisão.')
@@ -380,6 +382,18 @@ def api_frota_mapa_unificada(request):
     contexto = request.GET.get('contexto', 'ativas')
     termo = request.GET.get('q', '').strip()[:100]
     estado = request.GET.get('situacao', '').strip()[:40]
+    aluno_id = request.GET.get('aluno', '').strip()[:20]
+    motorista_id = request.GET.get('motorista', '').strip()[:20]
+    veiculo_id = request.GET.get('veiculo', '').strip()[:20]
+    if aluno_id.isdigit():
+        aluno_rota = Q(veiculo__alunos_autorizados__id=aluno_id) | Exists(
+            Evento.objects.filter(rota_id=OuterRef('pk'), aluno_id=aluno_id, autorizado=True)
+        )
+        rotas = rotas.filter(aluno_rota)
+    if motorista_id.isdigit() and (is_admin or not is_responsavel):
+        rotas = rotas.filter(motorista_id=motorista_id)
+    if veiculo_id.isdigit() and (is_admin or not is_responsavel):
+        rotas = rotas.filter(veiculo_id=veiculo_id)
     data_inicio = request.GET.get('data_inicio', '').strip()[:10]
     data_fim = request.GET.get('data_fim', '').strip()[:10]
 
@@ -710,6 +724,17 @@ def tela_mapa_unificado(request):
     contexto = {}
     if hasattr(request.user, 'instituicao') or request.user.is_superuser:
         contexto = obter_contexto_monitoramento()
+        contexto['alunos_filtro'] = Aluno.objects.filter(
+            is_aprovado=True, deleted_at__isnull=True,
+        ).order_by('nome', 'pk').values('id', 'nome')
+        contexto['motoristas_filtro'] = Motorista.objects.filter(
+            usuario__is_aprovado=True, usuario__is_active=True, deleted_at__isnull=True,
+        ).order_by('usuario__first_name', 'usuario__last_name').select_related('usuario')
+        contexto['veiculos_filtro'] = Veiculo.objects.all().order_by('modelo', 'placa')
+    elif hasattr(request.user, 'responsavel'):
+        contexto['alunos_filtro'] = Aluno.objects.filter(
+            responsavel=request.user.responsavel, deleted_at__isnull=True,
+        ).order_by('nome', 'pk').values('id', 'nome')
     contexto['carto_api_key'] = settings.CARTO_API_KEY
     return render(request, 'transporte/mapa_unificado.html', contexto)
 
