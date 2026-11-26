@@ -14,6 +14,7 @@ from django.utils import timezone
 from alunos.models import Aluno
 from monitoramento.models import Evento
 from transporte.models import Localizacao, Rota, Veiculo
+from usuarios.monitoramento import tempo_decorrido_pt
 from usuarios.models import Instituicao, Motorista, Responsavel
 
 
@@ -218,7 +219,7 @@ class TransporteFluxosTests(TestCase):
         self.assertContains(response, 'id="proxima-interrupcao"')
         self.assertEqual(response.content.decode().count('class="interrupcao-slide'), 2)
 
-    def test_mapa_sem_rota_selecionada_mostra_todos_os_onibus_ativos(self):
+    def test_mapa_sem_rota_selecionada_nao_busca_posicoes_dos_onibus(self):
         rota_1 = self.criar_rota()
         Localizacao.objects.create(rota=rota_1, latitude=-15.78, longitude=-47.92)
         veiculo_2 = Veiculo.objects.create(
@@ -236,8 +237,46 @@ class TransporteFluxosTests(TestCase):
         payload = response.json()
         self.assertIsNone(payload['rota'])
         self.assertEqual(payload['trajeto'], [])
-        self.assertEqual({p['rota_id'] for p in payload['posicoes_ativas']}, {rota_1.id, rota_2.id})
+        self.assertEqual(payload['posicoes_ativas'], [])
         self.assertEqual(len(payload['rotas']), 2)
+
+    def test_mapa_busca_a_posicao_apenas_da_rota_selecionada(self):
+        rota_1 = self.criar_rota()
+        Localizacao.objects.create(rota=rota_1, latitude=-15.78, longitude=-47.92)
+        rota_2 = self.criar_rota()
+        Localizacao.objects.create(rota=rota_2, latitude=-15.77, longitude=-47.91)
+        self.client.force_login(self.instituicao_usuario)
+
+        payload = self.client.get(
+            reverse('api_mapa_unificado'),
+            {'contexto': 'ativas', 'rota': rota_2.pk},
+        ).json()
+
+        self.assertEqual(payload['rota']['id'], rota_2.pk)
+        self.assertEqual([p['rota_id'] for p in payload['posicoes_ativas']], [rota_2.pk])
+
+    def test_api_atualiza_posicao_somente_da_rota_solicitada(self):
+        rota = self.criar_rota()
+        localizacao = Localizacao.objects.create(
+            rota=rota, latitude=-15.78, longitude=-47.92,
+        )
+        self.client.force_login(self.instituicao_usuario)
+
+        response = self.client.get(
+            reverse('api_posicao_rota', args=[rota.pk]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['rota_id'], rota.pk)
+        self.assertEqual(response.json()['posicao']['latitude'], float(localizacao.latitude))
+
+    def test_tempo_sem_atualizacao_e_exibido_em_portugues(self):
+        agora = timezone.now()
+
+        self.assertEqual(
+            tempo_decorrido_pt(agora - timedelta(days=14), agora),
+            '2 semanas',
+        )
 
     def test_rotas_ativas_sao_paginadas_no_servidor(self):
         for _ in range(6):
@@ -246,13 +285,15 @@ class TransporteFluxosTests(TestCase):
 
         payload = self.client.get(
             reverse('api_mapa_unificado'),
-            {'contexto': 'ativas', 'pagina': 2},
+            {'contexto': 'ativas', 'pagina': 2, 'somente_lista': '1'},
         ).json()
 
         self.assertEqual(payload['total'], 6)
         self.assertEqual(payload['pagina'], 2)
         self.assertEqual(payload['paginas'], 2)
         self.assertEqual(len(payload['rotas']), 1)
+        self.assertEqual(payload['posicoes_ativas'], [])
+        self.assertEqual(payload['resumo'], {})
 
     def test_busca_dos_filtros_de_monitoramento_respeita_o_perfil(self):
         self.client.force_login(self.responsavel_usuario)

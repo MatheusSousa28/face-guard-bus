@@ -5,6 +5,21 @@ from transporte.models import Rota
 from transporte.services import obter_estado_gps, processar_rotas_sem_gps
 
 
+def tempo_decorrido_pt(inicio, fim):
+    segundos = max(0, int((fim - inicio).total_seconds()))
+    unidades = (
+        (604800, 'semana', 'semanas'),
+        (86400, 'dia', 'dias'),
+        (3600, 'hora', 'horas'),
+        (60, 'minuto', 'minutos'),
+    )
+    for quantidade, singular, plural in unidades:
+        valor = segundos // quantidade
+        if valor:
+            return f'{valor} {singular if valor == 1 else plural}'
+    return 'menos de um minuto'
+
+
 def obter_contexto_monitoramento():
     """Retorna os dados compartilhados do resumo institucional de frota."""
     processar_rotas_sem_gps()
@@ -50,6 +65,10 @@ def obter_contexto_monitoramento():
         return {
             'rota': rota,
             'ultima_localizacao': ultima_localizacao,
+            'tempo_sem_atualizacao': (
+                tempo_decorrido_pt(ultima_localizacao.timestamp, agora)
+                if ultima_localizacao else None
+            ),
             'estado_gps': estado_gps,
             'gps_atualizado': estado_gps == 'atualizado',
             'alunos_abordo': alunos_abordo,

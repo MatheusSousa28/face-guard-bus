@@ -13,6 +13,7 @@ urlpatterns = [
     path('api/reconhecimento/', views.api_reconhecimento, name='api_reconhecimento'),
     path('catraca/', views.simulador_catraca, name='simulador_catraca'),
     path('api/mapa-unificado/', views.api_frota_mapa_unificada, name='api_mapa_unificado'),
+    path('api/monitoramento/rotas/<int:rota_id>/posicao/', views.api_posicao_rota, name='api_posicao_rota'),
     path('api/monitoramento/filtros/', views.api_filtros_monitoramento, name='api_filtros_monitoramento'),
     path('painel/veiculos/', views.painel_veiculos, name='painel_veiculos'),
     path('painel/veiculos/api/alunos/', views.api_alunos_para_veiculo, name='api_alunos_para_veiculo'),

@@ -147,6 +147,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const api = new URL('{% url "api_mapa_unificado" %}', location.origin);
     const filterApi = new URL('{% url "api_filtros_monitoramento" %}', location.origin);
+    const positionApiTemplate = '{% url "api_posicao_rota" 0 %}';
     const mapa = L.map('mapa-frota').setView([-15.7801, -47.9292], 12);
     const cartoApiKey = '{{ carto_api_key|default:""|escapejs }}';
     const tiles = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' + (cartoApiKey ? `?key=${encodeURIComponent(cartoApiKey)}` : '');
@@ -225,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
         panel.classList.toggle('hidden',!open);
         panel.classList.toggle('animate-[fadeIn_.2s_ease-out]',open);
     });
-    let tab = initialTab, selected = initialRoute, page = initialPage, pages = 1, renderedActivePage = null, refreshTimer, requestCounter = 0, routeCards = [], mapRequestCounter = 0, pendingRouteLoad = null;
+    let tab = initialTab, selected = initialRoute, page = initialPage, pages = 1, renderedActivePage = null, refreshTimer, selectedPositionTimer, requestCounter = 0, listRequestCounter = 0, selectedPositionRequestCounter = 0, selectedPositionInFlight = false, routeCards = [], mapRequestCounter = 0, pendingRouteLoad = null;
     let mapFocusTimer=null, lastMapInteraction=0, lastActivePositions=[];
     const selectedByTab={ativas:initialTab==='ativas'?initialRoute:null,historico:initialTab==='historico'?initialRoute:null};
     const searchByTab={ativas:initialQuery.get('q')||'',historico:initialQuery.get('q')||''};
@@ -276,7 +277,10 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedFilter.value=option.dataset.filterId;
             input.value=option.dataset.filterLabel;
             page=1;selected=null;selectedByTab[tab]=null;
-            hideOptions();syncRouteUrl();fetchData();
+            stopSelectedPositionPolling();
+            layerRoutes.clearLayers();layerBuses.clearLayers();
+            $('detalhes-rota').classList.add('hidden');
+            hideOptions();syncRouteUrl();showRouteListLoading();fetchData();
         });
         input.addEventListener('keydown',event=>{if(event.key==='Escape')hideOptions();});
         document.addEventListener('click',event=>{if(!event.target.closest(`[data-monitor-filter="${key}"]`))hideOptions();});
@@ -396,7 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const stats = tab === 'ativas' ? [
             ['🚌','Rotas em andamento',counts.running,'#2563eb'],
-            ['📍','Ônibus em circulação',payload.posicoes_ativas.filter(p => metricRoutes.some(r => String(r.id) === String(p.rota_id))).length,'#4f46e5'],
+            ['📍','Ônibus em circulação',payload.resumo?.onibus_em_circulacao ?? payload.posicoes_ativas.filter(p => metricRoutes.some(r => String(r.id) === String(p.rota_id))).length,'#4f46e5'],
             ['👥','Alunos embarcados',payload.resumo?.alunos_abordo ?? '—','#059669'],
             ['🟢','Embarques realizados',payload.resumo?.embarques ?? '—','#10b981'],
             ['🔵','Desembarques realizados',payload.resumo?.desembarques ?? '—','#0ea5e9'],
@@ -467,14 +471,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (tab==='ativas') renderedActivePage=page;
     }
-    function fetchData({append=false}={}) {
-        const req = ++requestCounter;
+    function showRouteListLoading() {
+        routeCards=[];
+        renderedActivePage=null;
+        $('estado-lista').textContent='';
+        $('paginacao-historico').classList.add('hidden');
+        $('lista-rotas').innerHTML='<div class="flex min-h-28 flex-col items-center justify-center gap-3 text-sm text-slate-500" role="status" aria-label="Carregando rotas"><span class="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-700"></span><span>Carregando rotas</span></div>';
+    }
+    function fetchData({append=false,listOnly=false}={}) {
+        const req = listOnly ? ++listRequestCounter : ++requestCounter;
         const p = params();
-        if (selected) p.set('rota', selected);
+        if(listOnly)p.set('somente_lista','1');
+        if (!listOnly && selected) p.set('rota', selected);
         const url = new URL(api); url.search = p.toString();
-        $('estado-lista').textContent = 'Carregando rotas…';
+        if(listOnly) $('estado-lista').textContent='Atualizando rotas…';
         return fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r => {if(!r.ok) throw new Error('Não foi possível carregar os dados da frota.'); return r.json();}).then(data => {
-            if (req !== requestCounter) return;
+            if (listOnly ? req !== listRequestCounter : req !== requestCounter) return;
             pages = data.paginas || 1;
             window.totalRotasHistorico = data.total || 0;
             window.totalRotasAtivas = tab==='ativas' ? (data.total||0) : 0;
@@ -482,8 +494,9 @@ document.addEventListener('DOMContentLoaded', () => {
             $('pagina-anterior').disabled = page <= 1;
             $('pagina-proxima').disabled = page >= pages;
             $('estado-lista').textContent = data.total ? `${data.total} rota(s) encontrada(s)` : '';
-            showStats(data.rotas, data);
+            if(!listOnly)showStats(data.rotas, data);
             renderCards(data.rotas, append);
+            if (listOnly) return;
             lastActivePositions=tab==='ativas'?data.posicoes_ativas:[];
             drawVehicles(tab === 'ativas' ? data.posicoes_ativas : []);
             if (selected) {
@@ -495,15 +508,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 else throw new Error('Não foi possível carregar os detalhes da rota.');
             } else {
                 $('detalhes-rota').classList.add('hidden');
-                $('mensagem-mapa').textContent = tab === 'ativas' ? (data.posicoes_ativas.length ? 'Todas as rotas ativas com localização estão no mapa. Selecione um cartão para ver detalhes.' : 'Nenhum ônibus ativo com localização disponível.') : 'Selecione uma rota histórica para carregar o trajeto completo.';
+                $('mensagem-mapa').textContent = tab === 'ativas' ? 'Selecione uma rota para exibir sua posição e trajeto no mapa.' : 'Selecione uma rota histórica para carregar o trajeto completo.';
                 if (tab === 'ativas' && data.posicoes_ativas.length && !mapFocusTimer) fitVehicles(data.posicoes_ativas);
                 else if (tab === 'historico') { layerRoutes.clearLayers(); }
             }
         }).catch(e => {
-            if (req === requestCounter) {
+            if (listOnly ? req === listRequestCounter : req === requestCounter) {
                 $('estado-lista').textContent = e.message;
-                if (selected) $('mensagem-mapa').textContent = 'Não foi possível carregar esta rota. Tente novamente.';
-                if(pendingRouteLoad && pendingRouteLoad.id===String(selected)){
+                if (!listOnly && selected) $('mensagem-mapa').textContent = 'Não foi possível carregar esta rota. Tente novamente.';
+                if(!listOnly && pendingRouteLoad && pendingRouteLoad.id===String(selected)){
                     pendingRouteLoad=null;
                     setMapLoading(false);
                 }
@@ -576,6 +589,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             pendingRouteLoad=null;
             setMapLoading(false);
+            if(tab==='ativas')startSelectedPositionPolling();
         }));
     }
     function focusRoute(data,animate=false) {
@@ -639,7 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const maximumCapacity=Number(r.capacidade)||0;
         $('detalhes-rota').classList.remove('hidden');
         $('detalhes-rota').innerHTML = `<div class="flex flex-wrap items-center justify-between gap-4"><div class="flex min-w-0 items-center gap-3">${avatar(r.veiculo_foto,r.placa,'h-16 w-16 rounded-2xl')}<div><p class="text-xs font-bold uppercase tracking-wide text-blue-700">Rota #${r.id}</p><h2 class="font-display text-xl font-bold text-gray-900">${safe(r.placa)}</h2><p class="text-xs text-gray-500">${safe(r.veiculo)}</p></div></div><span class="rounded-full px-3 py-1.5 text-xs font-bold ${r.interrompida?'bg-rose-100 text-rose-800':r.ativa?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-gray-700'}">${r.interrompida?'Interrompida':r.ativa?'Em andamento':'Concluída'}</span></div>
-        <div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3">${avatar(r.motorista_foto,r.motorista,'h-12 w-12')}<div><p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Motorista</p><p class="font-semibold text-slate-900">${safe(r.motorista)}</p></div><div class="ml-auto grid grid-cols-2 gap-x-5 gap-y-1 text-xs sm:grid-cols-3"><span>🟢 ${safe(r.inicio||'Início n/d')}</span><span>⏱ ${duration(r.duracao_segundos)}</span><span>📡 ${safe(r.gps_status)}</span><span>🏁 ${safe(r.fim||'Em andamento')}</span></div></div>
+         <div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3">${avatar(r.motorista_foto,r.motorista,'h-12 w-12')}<div><p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Motorista</p><p class="font-semibold text-slate-900">${safe(r.motorista)}</p></div><div class="ml-auto grid grid-cols-2 gap-x-5 gap-y-1 text-xs sm:grid-cols-3"><span>🟢 ${safe(r.inicio||'Início n/d')}</span><span>⏱ ${duration(r.duracao_segundos)}</span><span data-selected-gps-status>📡 ${safe(r.gps_status)}</span><span>🏁 ${safe(r.fim||'Em andamento')}</span></div></div>
          <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">${[['🟢','Embarques',r.embarques,'#10b981','registros'],['🔵','Desembarques',r.desembarques,'#0ea5e9','registros'],['👥','A bordo',`${board.length}/${maximumCapacity}`,'#059669','alunos a bordo / capacidade máxima'],['🧒','Alunos na rota',r.total_alunos,'#7c3aed','alunos únicos']].map(([icon,label,value,accent,description])=>`<article class="rounded-xl border border-gray-100 border-b-4 bg-white p-3 shadow-sm" style="border-bottom-color:${accent}"><div class="flex items-center justify-between"><span class="text-xs text-gray-500">${label}</span><span>${icon}</span></div><p class="mt-1 text-xl font-bold">${value}</p><p class="mt-0.5 text-[10px] text-gray-500">${description}</p></article>`).join('')}</div>
         <div class="mt-5 grid gap-5 lg:grid-cols-2"><section class="rounded-xl border p-4"><h3 class="mb-3 flex items-center gap-2 font-bold">🟢 A bordo agora <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">${board.length}</span></h3>${paginatedList(board,listKey('board'),studentList)}</section><section class="rounded-xl border p-4"><h3 class="mb-3 flex items-center gap-2 font-bold">🧒 Passaram pela rota <span class="rounded-full bg-violet-100 px-2 py-0.5 text-xs text-violet-800">${history.length}</span></h3>${paginatedList(history,listKey('history'),studentList)}</section></div>
         <section class="mt-5 rounded-xl border p-4"><h3 class="mb-3 font-bold">🕘 Eventos da rota <span class="text-xs font-normal text-gray-500">${data.eventos.length}</span></h3>${paginatedList(data.eventos,listKey('events'),eventList)}</section>
@@ -682,17 +696,68 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selected) fetchData();
     });
     function selectRoute(id) {
+        stopSelectedPositionPolling();
         selected = String(id);
         selectedByTab[tab]=selected;
         syncRouteUrl();
         const version=++mapRequestCounter;
         pendingRouteLoad={id:selected,version};
         if(mapFocusTimer){clearTimeout(mapFocusTimer);mapFocusTimer=null;}
+        layerBuses.clearLayers();
         setMapLoading(true);
-        fetchData();
+        fetchData().then(()=>{
+            if(tab==='ativas' && String(selected)===String(id) && !pendingRouteLoad)startSelectedPositionPolling();
+        });
+    }
+    function stopSelectedPositionPolling() {
+        if(selectedPositionTimer)clearInterval(selectedPositionTimer);
+        selectedPositionTimer=null;
+        selectedPositionRequestCounter++;
+        selectedPositionInFlight=false;
+    }
+    function refreshSelectedPosition() {
+        if(tab!=='ativas' || !selected || selectedPositionInFlight)return;
+        const routeId=String(selected), request=++selectedPositionRequestCounter;
+        selectedPositionInFlight=true;
+        const endpoint=new URL(positionApiTemplate,location.origin);
+        endpoint.pathname=endpoint.pathname.replace('/0/',`/${encodeURIComponent(routeId)}/`);
+        fetch(endpoint,{headers:{'X-Requested-With':'XMLHttpRequest'}})
+            .then(response=>{if(!response.ok)throw new Error('Não foi possível atualizar a posição da rota.');return response.json();})
+            .then(data=>{
+                if(request!==selectedPositionRequestCounter || String(selected)!==routeId || tab!=='ativas')return;
+                if(!data.ativa || data.interrompida){
+                    stopSelectedPositionPolling();
+                    fetchData();
+                    return;
+                }
+                const gpsStatus=$('detalhes-rota').querySelector('[data-selected-gps-status]');
+                if(gpsStatus)gpsStatus.textContent=`📡 ${data.gps_status==='atualizado'?'GPS atualizado':'Sem sinal'}${data.posicao?` às ${data.posicao.atualizado_em}`:''}`;
+                if(data.posicao){
+                    const route=routeCards.find(item=>String(item.id)===routeId);
+                    drawVehicles([{
+                        rota_id:data.rota_id,
+                        latitude:data.posicao.latitude,
+                        longitude:data.posicao.longitude,
+                        atualizado_em:data.posicao.atualizado_em,
+                        placa:route?.placa||'',
+                        motorista:route?.motorista||'',
+                        veiculo_foto:route?.veiculo_foto||'',
+                        motorista_foto:route?.motorista_foto||''
+                    }]);
+                }
+            })
+            .catch(()=>{})
+            .finally(()=>{if(request===selectedPositionRequestCounter)selectedPositionInFlight=false;});
+    }
+    function startSelectedPositionPolling() {
+        stopSelectedPositionPolling();
+        if(tab!=='ativas' || !selected || !lastSelectedRouteData?.rota?.ativa || lastSelectedRouteData.rota.interrompida)return;
+        refreshSelectedPosition();
+        selectedPositionTimer=setInterval(refreshSelectedPosition,3000);
     }
     function clearRouteSelection() {
         if(!selected)return;
+        stopSelectedPositionPolling();
         selected=null;
         selectedByTab[tab]=null;
         pendingRouteLoad=null;
@@ -700,6 +765,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mapRequestCounter++;
         setMapLoading(false);
         if(mapFocusTimer){clearTimeout(mapFocusTimer);mapFocusTimer=null;}
+        layerBuses.clearLayers();
         $('detalhes-rota').classList.add('hidden');
         $('alertas-rota')?.classList.add('hidden');
         layerRoutes.clearLayers();
@@ -713,6 +779,7 @@ document.addEventListener('DOMContentLoaded', () => {
             datesByTab[tab]={inicio:$('data-inicio').value,fim:$('data-fim').value};
         }
         tab=which;selected=selectedByTab[tab];page=initial?initialPage:1;routeCards=[];
+        stopSelectedPositionPolling();
         $('pesquisa-rota').value=searchByTab[tab];
         $('aba-ativas').setAttribute('aria-selected',String(tab==='ativas'));
         $('aba-historico').setAttribute('aria-selected',String(tab==='historico'));
@@ -731,6 +798,7 @@ document.addEventListener('DOMContentLoaded', () => {
         $('data-inicio').value=datesByTab[tab].inicio;
         $('data-fim').value=datesByTab[tab].fim;
         layerRoutes.clearLayers();
+        layerBuses.clearLayers();
         clearInterval(refreshTimer);
         mapRequestCounter++;
         pendingRouteLoad=selected?{id:String(selected),version:mapRequestCounter}:null;
@@ -738,8 +806,11 @@ document.addEventListener('DOMContentLoaded', () => {
         setTabLoading(true,tab==='ativas'?'Carregando rotas em andamento e posições dos ônibus.':'Carregando as cinco rotas mais recentes.');
         syncRouteUrl();
         const pending=fetchData(), version=requestCounter;
-        pending.catch(()=>{}).finally(()=>{if(version===requestCounter)setTabLoading(false);});
-        if(tab==='ativas') refreshTimer=setInterval(()=>{if(!pendingRouteLoad)fetchData();},15000);
+        pending.catch(()=>{}).finally(()=>{
+            if(version===requestCounter)setTabLoading(false);
+            if(tab==='ativas' && selected && !pendingRouteLoad)startSelectedPositionPolling();
+        });
+        if(tab==='ativas') refreshTimer=setInterval(()=>fetchData({listOnly:true}),15000);
     }
     $('aba-ativas').onclick=()=>changeTab('ativas');
     $('aba-historico').onclick=()=>changeTab('historico');
@@ -747,12 +818,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if(event.target.closest('button,input,select,textarea,label,a,[data-rota]'))return;
         clearRouteSelection();
     });
-    const reloadFiltered = () => {searchByTab[tab]=$('pesquisa-rota').value;statusByTab[tab]=$('filtro-situacao').value;datesByTab[tab]={inicio:$('data-inicio').value,fim:$('data-fim').value};page=1;selected=null;selectedByTab[tab]=null;syncRouteUrl();layerRoutes.clearLayers();$('detalhes-rota').classList.add('hidden');fetchData();};
-    let searchTimer; $('pesquisa-rota').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(reloadFiltered,250);};
+    const reloadFiltered = () => {showRouteListLoading();stopSelectedPositionPolling();searchByTab[tab]=$('pesquisa-rota').value;statusByTab[tab]=$('filtro-situacao').value;datesByTab[tab]={inicio:$('data-inicio').value,fim:$('data-fim').value};page=1;selected=null;selectedByTab[tab]=null;syncRouteUrl();layerRoutes.clearLayers();layerBuses.clearLayers();$('detalhes-rota').classList.add('hidden');fetchData();};
+    let searchTimer; $('pesquisa-rota').oninput=()=>{clearTimeout(searchTimer);showRouteListLoading();searchTimer=setTimeout(reloadFiltered,250);};
     $('filtro-situacao').onchange=reloadFiltered;
     $('data-inicio').onchange=$('data-fim').onchange=reloadFiltered;
-    $('pagina-anterior').onclick=()=>{if(page>1){page--;selected=null;selectedByTab[tab]=null;syncRouteUrl();fetchData();}};
-    $('pagina-proxima').onclick=()=>{if(page<pages){page++;selected=null;selectedByTab[tab]=null;syncRouteUrl();fetchData();}};
+    $('pagina-anterior').onclick=()=>{if(page>1){showRouteListLoading();stopSelectedPositionPolling();page--;selected=null;selectedByTab[tab]=null;layerBuses.clearLayers();syncRouteUrl();fetchData();}};
+    $('pagina-proxima').onclick=()=>{if(page<pages){showRouteListLoading();stopSelectedPositionPolling();page++;selected=null;selectedByTab[tab]=null;layerBuses.clearLayers();syncRouteUrl();fetchData();}};
     const interruptionSlides=[...document.querySelectorAll('.interrupcao-slide')];
     if(interruptionSlides.length>1){
         let currentSlide=0;

@@ -403,6 +403,7 @@ def api_frota_mapa_unificada(request):
 
     agora = timezone.now()
     resumo = {}
+    somente_lista = request.GET.get('somente_lista') == '1' and contexto != 'historico'
     total_ativas = 0
     pagina = 1
     paginas_ativas = 1
@@ -462,8 +463,6 @@ def api_frota_mapa_unificada(request):
             rotas = rotas.filter(busca)
         rotas = rotas.annotate(
             _ultima_gps_timestamp=Subquery(ultima_localizacao_qs.values('timestamp')[:1]),
-            _ultima_gps_latitude=Subquery(ultima_localizacao_qs.values('latitude')[:1]),
-            _ultima_gps_longitude=Subquery(ultima_localizacao_qs.values('longitude')[:1]),
         )
         if estado == 'sem_sinal':
             limite_sinal = agora - timedelta(seconds=90)
@@ -474,36 +473,41 @@ def api_frota_mapa_unificada(request):
             )
         rotas_filtradas = rotas
         total_ativas = rotas_filtradas.count()
-        resumo['rotas_em_andamento'] = rotas_filtradas.filter(interrompida=False).count()
-        resumo['rotas_interrompidas'] = rotas_filtradas.filter(interrompida=True).count()
-        resumo['rotas_sem_sinal'] = rotas_filtradas.filter(
-            interrompida=False,
-        ).filter(
-            Q(_ultima_gps_timestamp__isnull=True)
-            | Q(_ultima_gps_timestamp__lt=agora - timedelta(seconds=90))
-        ).count()
+        if not somente_lista:
+            resumo['rotas_em_andamento'] = rotas_filtradas.filter(interrompida=False).count()
+            resumo['rotas_interrompidas'] = rotas_filtradas.filter(interrompida=True).count()
+            resumo['rotas_sem_sinal'] = rotas_filtradas.filter(
+                interrompida=False,
+            ).filter(
+                Q(_ultima_gps_timestamp__isnull=True)
+                | Q(_ultima_gps_timestamp__lt=agora - timedelta(seconds=90))
+            ).count()
+            resumo['onibus_em_circulacao'] = rotas_filtradas.filter(
+                interrompida=False,
+                _ultima_gps_timestamp__gte=agora - timedelta(seconds=90),
+            ).count()
         try:
             pagina = max(1, int(request.GET.get('pagina', '1')))
         except (TypeError, ValueError):
             pagina = 1
         paginas_ativas = max(1, (total_ativas + 4) // 5)
         pagina = min(pagina, paginas_ativas)
-        resumo['embarques'] = Evento.objects.filter(
-            rota__in=rotas_filtradas, tipo='embarque', autorizado=True,
-        ).count()
-        resumo['desembarques'] = Evento.objects.filter(
-            rota__in=rotas_filtradas, tipo='desembarque', autorizado=True,
-        ).count()
-        ultimo_evento_aluno = Evento.objects.filter(
-            rota_id=OuterRef('rota_id'), aluno_id=OuterRef('aluno_id'),
-            aluno__isnull=False,
-        ).order_by('-data_hora', '-pk')
-        eventos_a_bordo = Evento.objects.filter(
-            rota__in=rotas_filtradas, aluno__isnull=False,
-        ).filter(pk=Subquery(ultimo_evento_aluno.values('pk')[:1]), tipo='embarque').count()
-        resumo['alunos_abordo'] = eventos_a_bordo
+        if not somente_lista:
+            resumo['embarques'] = Evento.objects.filter(
+                rota__in=rotas_filtradas, tipo='embarque', autorizado=True,
+            ).count()
+            resumo['desembarques'] = Evento.objects.filter(
+                rota__in=rotas_filtradas, tipo='desembarque', autorizado=True,
+            ).count()
+            ultimo_evento_aluno = Evento.objects.filter(
+                rota_id=OuterRef('rota_id'), aluno_id=OuterRef('aluno_id'),
+                aluno__isnull=False,
+            ).order_by('-data_hora', '-pk')
+            eventos_a_bordo = Evento.objects.filter(
+                rota__in=rotas_filtradas, aluno__isnull=False,
+            ).filter(pk=Subquery(ultimo_evento_aluno.values('pk')[:1]), tipo='embarque').count()
+            resumo['alunos_abordo'] = eventos_a_bordo
         total_historico = 0
-        posicoes_qs = rotas_filtradas.order_by('-inicio', '-pk')
         rotas = list(
             rotas_filtradas.order_by('-inicio', '-pk')[
                 (pagina - 1) * 5:pagina * 5
@@ -575,32 +579,39 @@ def api_frota_mapa_unificada(request):
         }
 
     rotas_json = [rotulo_rota(item) for item in rotas]
-    posicoes_ativas = []
-    posicoes_qs = posicoes_qs if contexto != 'historico' else []
-    for item in posicoes_qs:
-        if not item.veiculo_id:
-            continue
-        if not item._ultima_gps_timestamp:
-            continue
-        posicoes_ativas.append({
-            'rota_id': item.id,
-            'latitude': float(item._ultima_gps_latitude),
-            'longitude': float(item._ultima_gps_longitude),
-            'veiculo': str(item.veiculo),
-            'placa': item.veiculo.placa,
-            'cor': item.veiculo.cor_avatar,
-            'veiculo_foto': url_imagem(item.veiculo.foto),
-            'motorista_foto': url_imagem(item.motorista.foto_perfil) if item.motorista_id else '',
-            'motorista': (
-                f"{item.motorista.usuario.first_name} {item.motorista.usuario.last_name}".strip()
-                if item.motorista_id else 'Não informado'
-            ),
-            'gps_status': 'interrompida' if item.interrompida else (
-                'atualizado' if agora - item._ultima_gps_timestamp <= timedelta(seconds=90)
-                else 'sem_sinal'
-            ),
-            'atualizado_em': timezone.localtime(item._ultima_gps_timestamp).strftime('%H:%M:%S'),
+    if somente_lista:
+        return JsonResponse({
+            'rotas': rotas_json,
+            'posicoes_ativas': [],
+            'contexto': contexto,
+            'total': total_ativas,
+            'resumo': {},
+            'pagina': pagina,
+            'paginas': paginas_ativas,
         })
+    posicoes_ativas = []
+    if rota and rota.ativa and rota.veiculo_id:
+        ultima_posicao = rota.coordenadas.order_by('-timestamp', '-pk').first()
+        if ultima_posicao:
+            posicoes_ativas.append({
+                'rota_id': rota.id,
+                'latitude': float(ultima_posicao.latitude),
+                'longitude': float(ultima_posicao.longitude),
+                'veiculo': str(rota.veiculo),
+                'placa': rota.veiculo.placa,
+                'cor': rota.veiculo.cor_avatar,
+                'veiculo_foto': url_imagem(rota.veiculo.foto),
+                'motorista_foto': url_imagem(rota.motorista.foto_perfil) if rota.motorista_id else '',
+                'motorista': (
+                    f"{rota.motorista.usuario.first_name} {rota.motorista.usuario.last_name}".strip()
+                    if rota.motorista_id else 'Não informado'
+                ),
+                'gps_status': 'interrompida' if rota.interrompida else (
+                    'atualizado' if agora - ultima_posicao.timestamp <= timedelta(seconds=90)
+                    else 'sem_sinal'
+                ),
+                'atualizado_em': timezone.localtime(ultima_posicao.timestamp).strftime('%H:%M:%S'),
+            })
 
     if rota is None:
         return JsonResponse({
@@ -758,6 +769,46 @@ def api_frota_mapa_unificada(request):
             'longitude': float(pontos[-1].longitude),
             'atualizado_em': timezone.localtime(pontos[-1].timestamp).strftime('%H:%M:%S'),
         } if pontos and rota.ativa and not rota.interrompida and estado_gps == 'atualizado' else None),
+    })
+
+
+@login_required(login_url='login')
+def api_posicao_rota(request, rota_id):
+    usuario = request.user
+    is_admin = hasattr(usuario, 'instituicao') or usuario.is_superuser
+    is_responsavel = hasattr(usuario, 'responsavel')
+    if not (is_admin or is_responsavel):
+        return JsonResponse({'error': 'Acesso negado'}, status=403)
+
+    rota_qs = Rota.objects.filter(pk=rota_id)
+    if is_responsavel and not is_admin:
+        rota_qs = rota_qs.filter(
+            Q(veiculo__alunos_autorizados__responsavel=usuario.responsavel)
+            | Exists(Evento.objects.filter(
+                rota_id=OuterRef('pk'),
+                aluno__responsavel=usuario.responsavel,
+                autorizado=True,
+            )),
+        ).distinct()
+    rota = rota_qs.first()
+    if rota is None:
+        return JsonResponse({'error': 'Rota não encontrada.'}, status=404)
+
+    ultima_posicao = rota.coordenadas.order_by('-timestamp', '-pk').first()
+    gps_recente = bool(
+        ultima_posicao
+        and timezone.now() - ultima_posicao.timestamp <= timedelta(seconds=90)
+    )
+    return JsonResponse({
+        'rota_id': rota.pk,
+        'ativa': rota.ativa,
+        'interrompida': rota.interrompida,
+        'gps_status': 'atualizado' if gps_recente else 'sem_sinal',
+        'posicao': {
+            'latitude': float(ultima_posicao.latitude),
+            'longitude': float(ultima_posicao.longitude),
+            'atualizado_em': timezone.localtime(ultima_posicao.timestamp).strftime('%H:%M:%S'),
+        } if ultima_posicao else None,
     })
 
 
